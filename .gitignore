@@ -1,0 +1,16 @@
+# Build output
+/bin/
+/dist/
+/fyne-cross/
+*.exe
+*.test
+*.out
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Local Claude Code config (machine-specific permission grants)
+.claude/
