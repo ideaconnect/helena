@@ -55,6 +55,8 @@ type MainUI struct {
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
 
+	shortcuts []shortcutSpec
+
 	root fyne.CanvasObject
 }
 
@@ -86,6 +88,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		}
 		m.updateURLPreview()
 	}
+	m.URL.OnSubmitted = func(_ string) { m.send() }
 
 	m.urlPreview = widget.NewLabel("")
 	m.urlPreview.TextStyle = fyne.TextStyle{Italic: true}
@@ -160,21 +163,23 @@ func NewMainUI(sess *session.Session) *MainUI {
 	wsBtn := widget.NewButton("Workspaces…", m.editWorkspaces)
 	envBtn := widget.NewButton("Environments…", m.editEnvironments)
 	settingsBtn := widget.NewButton("Settings…", m.editSettings)
+	helpBtn := widget.NewButton("?", m.showShortcuts)
 	toolbar := container.NewHBox(
 		widget.NewLabel("Workspace:"), m.Workspace, wsBtn,
 		widget.NewLabel("Env:"), m.Environment, envBtn,
-		settingsBtn,
+		settingsBtn, helpBtn,
 	)
 	exportBtn := widget.NewButton("Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)
 	addressBar := container.NewBorder(nil, nil, m.Method, saveSendBox, m.URL)
 	top := container.NewVBox(toolbar, addressBar, m.urlPreview)
 
+	newColBtn := widget.NewButton("+ New", m.actionNewCollection)
 	openBtn := widget.NewButton("Open…", m.openCollection)
 	importBtn := widget.NewButton("Import…", m.actionImport)
 	sidebarHeader := container.NewBorder(nil, nil,
 		widget.NewLabelWithStyle("Collections", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewHBox(openBtn, importBtn))
+		container.NewHBox(newColBtn, openBtn, importBtn))
 	itemActions := container.NewHBox(
 		widget.NewButton("+ Req", m.actionNewRequest),
 		widget.NewButton("+ Folder", m.actionNewFolder),
@@ -203,8 +208,12 @@ func NewMainUI(sess *session.Session) *MainUI {
 // Root returns the assembled root canvas object.
 func (m *MainUI) Root() fyne.CanvasObject { return m.root }
 
-// SetWindow records the parent window used for dialogs.
-func (m *MainUI) SetWindow(w fyne.Window) { m.win = w }
+// SetWindow records the parent window used for dialogs and registers the
+// application keyboard shortcuts against its canvas.
+func (m *MainUI) SetWindow(w fyne.Window) {
+	m.win = w
+	m.registerShortcuts()
+}
 
 func (m *MainUI) buildTree() *widget.Tree {
 	t := widget.NewTree(
