@@ -1,0 +1,17 @@
+info:
+  name: POST /anything
+  type: http
+  seq: 2
+http:
+  method: POST
+  url: '{{base_url}}/anything'
+  headers:
+    - name: Content-Type
+      value: application/json
+  body:
+    type: json
+    data: |
+      {
+        "name": "Ada",
+        "lang": "en"
+      }

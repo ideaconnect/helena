@@ -1,0 +1,13 @@
+info:
+  name: GET /anything
+  type: http
+  seq: 1
+http:
+  method: GET
+  url: '{{base_url}}/anything'
+  params:
+    - name: lang
+      value: en
+  headers:
+    - name: Accept
+      value: application/json

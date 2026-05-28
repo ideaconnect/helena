@@ -1,0 +1,6 @@
+info:
+  name: default
+  type: environment
+vars:
+  - name: base_url
+    value: https://httpbin.org
