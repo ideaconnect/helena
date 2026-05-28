@@ -29,13 +29,25 @@ func main() {
 		sess, _ = session.New("")
 	}
 
+	ui.ApplyTheme(a, sess.Settings().Theme)
+
 	w := a.NewWindow("Helena")
 	w.SetIcon(icon)
-	w.Resize(fyne.NewSize(1100, 720))
+	if ww, wh := sess.WindowSize(); ww > 0 && wh > 0 {
+		w.Resize(fyne.NewSize(float32(ww), float32(wh)))
+	} else {
+		w.Resize(fyne.NewSize(1100, 720))
+	}
 	w.CenterOnScreen()
 
 	mainUI := ui.NewMainUI(sess)
 	mainUI.SetWindow(w)
 	w.SetContent(mainUI.Root())
+
+	a.Lifecycle().SetOnStopped(func() {
+		size := w.Canvas().Size()
+		sess.SetWindowSize(int(size.Width), int(size.Height))
+	})
+
 	w.ShowAndRun()
 }

@@ -80,8 +80,7 @@ func TestPostJSONBodyAndHeaders(t *testing.T) {
 }
 
 func TestUnresolvedVariablesError(t *testing.T) {
-	c := New(model.DefaultSettings())
-	_, err := c.BuildRequest(context.Background(),
+	_, err := Build(context.Background(),
 		model.Request{Method: model.GET, URL: "{{base}}/{{missing}}"},
 		vars.New(map[string]string{"base": "http://x"}))
 	if err == nil || !strings.Contains(err.Error(), "missing") {
@@ -109,6 +108,31 @@ func TestRedirectPolicy(t *testing.T) {
 	}
 	if follow.StatusCode != 200 || string(follow.Body) != "final" {
 		t.Errorf("follow status=%d body=%q", follow.StatusCode, follow.Body)
+	}
+}
+
+func TestPostFormBodyFallsBackToContent(t *testing.T) {
+	var gotBody, gotCT string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		gotBody, gotCT = string(b), r.Header.Get("Content-Type")
+	}))
+	defer ts.Close()
+
+	c := New(model.DefaultSettings())
+	req := model.Request{
+		Method: model.POST,
+		URL:    ts.URL + "/f",
+		Body:   model.Body{Type: model.BodyForm, Content: "a=1&b=hello"},
+	}
+	if _, err := c.Do(context.Background(), req, nil); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if gotBody != "a=1&b=hello" {
+		t.Errorf("body = %q, want %q", gotBody, "a=1&b=hello")
+	}
+	if gotCT != "application/x-www-form-urlencoded" {
+		t.Errorf("content-type = %q", gotCT)
 	}
 }
 

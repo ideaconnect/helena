@@ -50,9 +50,11 @@ func New(s model.Settings) *Client {
 	return &Client{settings: s, http: hc}
 }
 
-// BuildRequest resolves variables and assembles an *http.Request. It returns an
-// error naming any unresolved {{variables}} so the caller can surface them.
-func (c *Client) BuildRequest(ctx context.Context, r model.Request, res *vars.Resolver) (*http.Request, error) {
+// Build resolves variables and assembles an *http.Request. It returns an error
+// naming any unresolved {{variables}} so the caller can surface them. Build is
+// independent of any Client / settings — it's the pure "what would this
+// request look like on the wire" path used by Do and by the exporter package.
+func Build(ctx context.Context, r model.Request, res *vars.Resolver) (*http.Request, error) {
 	if res == nil {
 		res = vars.New()
 	}
@@ -64,7 +66,7 @@ func (c *Client) BuildRequest(ctx context.Context, r model.Request, res *vars.Re
 	}
 
 	rawURL := resolve(r.URL)
-	body, contentType, err := c.buildBody(r, resolve)
+	body, contentType, err := buildBody(r, resolve)
 	if err != nil {
 		return nil, err
 	}
@@ -134,7 +136,7 @@ func (c *Client) BuildRequest(ctx context.Context, r model.Request, res *vars.Re
 
 // Do builds and executes the request, fully reading the response body.
 func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*Response, error) {
-	req, err := c.BuildRequest(ctx, r, res)
+	req, err := Build(ctx, r, res)
 	if err != nil {
 		return nil, err
 	}
@@ -167,18 +169,23 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	return out, nil
 }
 
-func (c *Client) buildBody(r model.Request, resolve func(string) string) (body []byte, contentType string, err error) {
+func buildBody(r model.Request, resolve func(string) string) (body []byte, contentType string, err error) {
 	switch r.Body.Type {
 	case "", model.BodyNone:
 		return nil, "", nil
 	case model.BodyJSON, model.BodyXML, model.BodyText:
 		return []byte(resolve(r.Body.Content)), r.Body.Type.ContentType(), nil
 	case model.BodyForm:
-		form := url.Values{}
-		for _, f := range model.EnabledPairs(r.Body.Form) {
-			form.Add(resolve(f.Key), resolve(f.Value))
+		if len(r.Body.Form) > 0 {
+			form := url.Values{}
+			for _, f := range model.EnabledPairs(r.Body.Form) {
+				form.Add(resolve(f.Key), resolve(f.Value))
+			}
+			return []byte(form.Encode()), model.BodyForm.ContentType(), nil
 		}
-		return []byte(form.Encode()), model.BodyForm.ContentType(), nil
+		// No structured form fields set — fall back to the raw Content so the
+		// body-content editor works for form-urlencoded too.
+		return []byte(resolve(r.Body.Content)), model.BodyForm.ContentType(), nil
 	case model.BodyMultipart:
 		return nil, "", fmt.Errorf("multipart bodies are not supported yet")
 	default:

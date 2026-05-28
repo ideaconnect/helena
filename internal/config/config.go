@@ -17,11 +17,30 @@ type Workspace struct {
 	Collections []string `yaml:"collections,omitempty"`
 }
 
+// UIOpenRequest identifies the currently open request by collection directory
+// path plus the in-collection node path (e.g. "f0/r1"). Storing by path rather
+// than index keeps restoration stable across collection reordering.
+type UIOpenRequest struct {
+	Collection string `yaml:"collection,omitempty"`
+	NodePath   string `yaml:"path,omitempty"`
+}
+
+// UIState holds restorable session state: which collection/environment/request
+// the user had open, and the last window size.
+type UIState struct {
+	ActiveCollection string            `yaml:"activeCollection,omitempty"`
+	ActiveEnv        map[string]string `yaml:"activeEnv,omitempty"` // collection dir -> env name
+	OpenRequest      *UIOpenRequest    `yaml:"openRequest,omitempty"`
+	WindowWidth      int               `yaml:"windowWidth,omitempty"`
+	WindowHeight     int               `yaml:"windowHeight,omitempty"`
+}
+
 // Config is Helena's persisted application state.
 type Config struct {
 	Workspaces []Workspace    `yaml:"workspaces"`
 	Active     int            `yaml:"active"`
 	Settings   model.Settings `yaml:"settings"`
+	UI         UIState        `yaml:"ui,omitempty"`
 }
 
 // Default returns a Config with a single empty "Default" workspace.

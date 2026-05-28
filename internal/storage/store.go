@@ -23,28 +23,48 @@ const (
 // Save writes the collection to dir using the OpenCollection YAML layout,
 // creating directories as needed: opencollection.yml at the root, one file per
 // environment under environments/, and request/folder files (folders become
-// subdirectories with a folder.yml).
+// subdirectories with a folder.yml). After writing, orphan files and folders
+// not produced by this save are removed.
 func Save(c model.Collection, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
+
+	// Preserve any unknown top-level fields from a prior load.
 	root := ocCollectionFile{Info: ocInfo{Name: c.Name, Type: "collection"}}
+	if existing, err := readCollectionFile(filepath.Join(dir, collectionFile)); err == nil {
+		root.Extra = existing.Extra
+		// Merge Info.Extra (unknown info fields) too.
+		root.Info.Extra = existing.Info.Extra
+		root.Info.Tags = existing.Info.Tags
+	}
 	if err := writeYAML(filepath.Join(dir, collectionFile), root); err != nil {
 		return err
 	}
 
+	envDir := filepath.Join(dir, environmentsDir)
+	envKeep := map[string]bool{}
 	if len(c.Environments) > 0 {
-		envDir := filepath.Join(dir, environmentsDir)
 		if err := os.MkdirAll(envDir, 0o755); err != nil {
 			return err
 		}
 		used := map[string]bool{}
 		for i, e := range c.Environments {
 			name := uniqueName(slug(e.Name, fmt.Sprintf("env-%d", i+1)), used)
-			if err := writeYAML(filepath.Join(envDir, name+ymlExt), envToFile(e, i+1)); err != nil {
+			envKeep[name+ymlExt] = true
+			ef := envToFile(e, i+1)
+			// Preserve unknown fields from a prior environment file with the same slug.
+			if prev, err := readEnvFile(filepath.Join(envDir, name+ymlExt)); err == nil {
+				ef.Extra = prev.Extra
+				ef.Info.Extra = prev.Info.Extra
+			}
+			if err := writeYAML(filepath.Join(envDir, name+ymlExt), ef); err != nil {
 				return err
 			}
 		}
+	}
+	if err := sweepDir(envDir, envKeep); err != nil {
+		return err
 	}
 
 	return saveItems(dir, c.Folders, c.Requests)
@@ -56,19 +76,41 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 		strings.TrimSuffix(folderFile, ymlExt):     true,
 		environmentsDir:                            true,
 	}
+	keep := map[string]bool{
+		collectionFile:  true,
+		folderFile:      true,
+		environmentsDir: true,
+	}
+
 	for i, r := range requests {
 		name := uniqueName(slug(r.Name, fmt.Sprintf("request-%d", i+1)), used)
-		if err := writeYAML(filepath.Join(dir, name+ymlExt), requestToFile(r, i+1)); err != nil {
+		keep[name+ymlExt] = true
+		rf := requestToFile(r, i+1)
+		// Preserve unknown fields from a prior request file with the same slug.
+		if prev, err := readRequestFile(filepath.Join(dir, name+ymlExt)); err == nil {
+			rf.Extra = prev.Extra
+			rf.Info.Extra = prev.Info.Extra
+			rf.Info.Tags = prev.Info.Tags
+			if rf.HTTP != nil && prev.HTTP != nil {
+				rf.HTTP.Extra = prev.HTTP.Extra
+			}
+		}
+		if err := writeYAML(filepath.Join(dir, name+ymlExt), rf); err != nil {
 			return err
 		}
 	}
 	for i, f := range folders {
 		name := uniqueName(slug(f.Name, fmt.Sprintf("folder-%d", i+1)), used)
+		keep[name] = true
 		sub := filepath.Join(dir, name)
 		if err := os.MkdirAll(sub, 0o755); err != nil {
 			return err
 		}
 		ff := ocFolderFile{Info: ocInfo{Name: f.Name, Type: "folder", Seq: i + 1}}
+		if prev, err := readFolderFile(filepath.Join(sub, folderFile)); err == nil {
+			ff.Extra = prev.Extra
+			ff.Info.Extra = prev.Info.Extra
+		}
 		if err := writeYAML(filepath.Join(sub, folderFile), ff); err != nil {
 			return err
 		}
@@ -76,7 +118,78 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 			return err
 		}
 	}
+	return sweepDir(dir, keep)
+}
+
+// sweepDir removes .yml files and folder-style subdirectories in dir that
+// aren't in keep. Other entries (the environments/ directory, random files the
+// user added) are left untouched.
+func sweepDir(dir string, keep map[string]bool) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if keep[name] {
+			continue
+		}
+		full := filepath.Join(dir, name)
+		if e.IsDir() {
+			// Only delete subdirectories that look like collection folders.
+			if _, err := os.Stat(filepath.Join(full, folderFile)); err == nil {
+				if err := os.RemoveAll(full); err != nil {
+					return err
+				}
+			}
+			continue
+		}
+		if strings.HasSuffix(name, ymlExt) {
+			if err := os.Remove(full); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
+}
+
+func readRequestFile(path string) (ocRequestFile, error) {
+	var rf ocRequestFile
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return rf, err
+	}
+	return rf, yaml.Unmarshal(data, &rf)
+}
+
+func readFolderFile(path string) (ocFolderFile, error) {
+	var ff ocFolderFile
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ff, err
+	}
+	return ff, yaml.Unmarshal(data, &ff)
+}
+
+func readCollectionFile(path string) (ocCollectionFile, error) {
+	var cf ocCollectionFile
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return cf, err
+	}
+	return cf, yaml.Unmarshal(data, &cf)
+}
+
+func readEnvFile(path string) (ocEnvironmentFile, error) {
+	var ef ocEnvironmentFile
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ef, err
+	}
+	return ef, yaml.Unmarshal(data, &ef)
 }
 
 // Load reads a collection from an OpenCollection YAML directory. Item IDs are

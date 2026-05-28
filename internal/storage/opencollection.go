@@ -1,74 +1,89 @@
 package storage
 
-import "github.com/idct/helena/internal/model"
+import (
+	"gopkg.in/yaml.v3"
+
+	"github.com/idct/helena/internal/model"
+)
 
 // OpenCollection YAML DTOs mirror the on-disk schema documented at
 // https://docs.usebruno.com/opencollection-yaml. They are kept separate from
 // the domain model so the two can evolve independently.
 //
-// Not yet mapped (round-tripped): auth, runtime scripts/assertions, per-request
-// settings, docs, graphql/multipart body payloads, and the query/path param
-// distinction. These are dropped on save for now.
+// Each DTO carries an `Extra map[string]yaml.Node `yaml:",inline"`` catch-all
+// so unknown fields from externally-created collections (auth, runtime scripts,
+// per-request settings, docs, custom keys on headers/params, …) round-trip
+// through a load → save cycle without being lost.
 
 type ocInfo struct {
-	Name string   `yaml:"name"`
-	Type string   `yaml:"type,omitempty"` // http | folder | collection | environment
-	Seq  int      `yaml:"seq,omitempty"`
-	Tags []string `yaml:"tags,omitempty"`
+	Name  string               `yaml:"name"`
+	Type  string               `yaml:"type,omitempty"` // http | folder | collection | environment
+	Seq   int                  `yaml:"seq,omitempty"`
+	Tags  []string             `yaml:"tags,omitempty"`
+	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocKV struct {
-	Name     string `yaml:"name"`
-	Value    string `yaml:"value"`
-	Disabled bool   `yaml:"disabled,omitempty"`
+	Name     string               `yaml:"name"`
+	Value    string               `yaml:"value"`
+	Disabled bool                 `yaml:"disabled,omitempty"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocParam struct {
-	Name     string `yaml:"name"`
-	Value    string `yaml:"value"`
-	Type     string `yaml:"type,omitempty"` // query | path
-	Disabled bool   `yaml:"disabled,omitempty"`
+	Name     string               `yaml:"name"`
+	Value    string               `yaml:"value"`
+	Type     string               `yaml:"type,omitempty"` // query | path
+	Disabled bool                 `yaml:"disabled,omitempty"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocBody struct {
-	Type string `yaml:"type"`
-	Data string `yaml:"data,omitempty"`
+	Type  string               `yaml:"type"`
+	Data  string               `yaml:"data,omitempty"`
+	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocHTTP struct {
-	Method  string    `yaml:"method"`
-	URL     string    `yaml:"url"`
-	Headers []ocKV    `yaml:"headers,omitempty"`
-	Params  []ocParam `yaml:"params,omitempty"`
-	Body    *ocBody   `yaml:"body,omitempty"`
+	Method  string               `yaml:"method"`
+	URL     string               `yaml:"url"`
+	Headers []ocKV               `yaml:"headers,omitempty"`
+	Params  []ocParam            `yaml:"params,omitempty"`
+	Body    *ocBody              `yaml:"body,omitempty"`
+	Extra   map[string]yaml.Node `yaml:",inline"` // catches auth and other http-level fields
 }
 
 type ocRequestFile struct {
-	Info ocInfo  `yaml:"info"`
-	HTTP *ocHTTP `yaml:"http,omitempty"`
+	Info  ocInfo               `yaml:"info"`
+	HTTP  *ocHTTP              `yaml:"http,omitempty"`
+	Extra map[string]yaml.Node `yaml:",inline"` // catches runtime, settings, docs, …
 }
 
 type ocFolderFile struct {
-	Info ocInfo `yaml:"info"`
+	Info  ocInfo               `yaml:"info"`
+	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocCollectionFile struct {
-	Info ocInfo `yaml:"info"`
+	Info  ocInfo               `yaml:"info"`
+	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocEnvVar struct {
-	Name     string `yaml:"name"`
-	Value    string `yaml:"value"`
-	Disabled bool   `yaml:"disabled,omitempty"`
-	Secret   bool   `yaml:"secret,omitempty"`
+	Name     string               `yaml:"name"`
+	Value    string               `yaml:"value"`
+	Disabled bool                 `yaml:"disabled,omitempty"`
+	Secret   bool                 `yaml:"secret,omitempty"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
-// ocEnvironmentFile is a best-effort mapping: the environment-file schema is not
-// fully pinned down in the public docs, so verify against the spec before
-// relying on cross-tool interop.
+// ocEnvironmentFile: the environment-file schema is not fully pinned down in
+// the public docs yet, so this is a best-effort mapping; the Extra catch-all
+// preserves whatever else is in the file.
 type ocEnvironmentFile struct {
-	Info ocInfo     `yaml:"info"`
-	Vars []ocEnvVar `yaml:"vars,omitempty"`
+	Info  ocInfo               `yaml:"info"`
+	Vars  []ocEnvVar           `yaml:"vars,omitempty"`
+	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
 func requestToFile(r model.Request, seq int) ocRequestFile {

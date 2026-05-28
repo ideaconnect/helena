@@ -1,9 +1,13 @@
 // Package session ties persisted config to collections loaded from disk and
-// exposes them for the UI: workspace switching, a tree navigation model, and
-// the active collection/environment used to resolve {{variables}}.
+// exposes them for the UI: workspace switching, a tree navigation model, the
+// active collection/environment used to resolve {{variables}}, and restorable
+// UI state (open request, window size, …).
 package session
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/idct/helena/internal/config"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/storage"
@@ -15,6 +19,7 @@ type Session struct {
 	cfgPath   string
 	cfg       config.Config
 	cols      []model.Collection // collections loaded for the active workspace
+	dirs      []string           // source directory of each loaded collection, aligned with cols
 	activeCol int                // index into cols, or -1 when none
 	activeEnv map[int]string     // collection index -> active environment name
 }
@@ -26,24 +31,44 @@ func New(cfgPath string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Session{cfgPath: cfgPath, cfg: cfg, activeEnv: map[int]string{}}
+	s := &Session{cfgPath: cfgPath, cfg: cfg}
 	s.reload()
 	return s, nil
 }
 
 func (s *Session) reload() {
 	s.cols = nil
+	s.dirs = nil
 	for _, dir := range s.activeWorkspace().Collections {
 		c, err := storage.Load(dir)
 		if err != nil {
 			continue // skip collections that no longer load; surfaced in UI later
 		}
 		s.cols = append(s.cols, c)
+		s.dirs = append(s.dirs, dir)
 	}
+
+	// Restore active collection from persisted UI state, falling back to first.
+	s.activeCol = -1
 	if len(s.cols) > 0 {
 		s.activeCol = 0
-	} else {
-		s.activeCol = -1
+		if target := s.cfg.UI.ActiveCollection; target != "" {
+			for i, d := range s.dirs {
+				if d == target {
+					s.activeCol = i
+					break
+				}
+			}
+		}
+	}
+
+	// Rebuild the per-collection active env map (index-keyed) from the
+	// persisted path-keyed map.
+	s.activeEnv = map[int]string{}
+	for i, dir := range s.dirs {
+		if name, ok := s.cfg.UI.ActiveEnv[dir]; ok {
+			s.activeEnv[i] = name
+		}
 	}
 }
 
@@ -89,7 +114,9 @@ func (s *Session) OpenCollection(dir string) error {
 	w := &s.cfg.Workspaces[s.cfg.Active]
 	w.Collections = append(w.Collections, dir)
 	s.cols = append(s.cols, c)
+	s.dirs = append(s.dirs, dir)
 	s.activeCol = len(s.cols) - 1
+	s.cfg.UI.ActiveCollection = dir
 	return s.persist()
 }
 
@@ -107,11 +134,18 @@ func (s *Session) Tree() *Tree { return &Tree{cols: s.cols} }
 func (s *Session) ActiveCollection() int { return s.activeCol }
 
 // SetActiveCollection sets which collection the environment selector and
-// resolver apply to (-1 for none).
+// resolver apply to (-1 for none), and persists the choice.
 func (s *Session) SetActiveCollection(i int) {
-	if i >= -1 && i < len(s.cols) {
-		s.activeCol = i
+	if i < -1 || i >= len(s.cols) {
+		return
 	}
+	s.activeCol = i
+	if i >= 0 {
+		s.cfg.UI.ActiveCollection = s.dirs[i]
+	} else {
+		s.cfg.UI.ActiveCollection = ""
+	}
+	_ = s.persist()
 }
 
 // CollectionEnvironmentNames lists the environment names of the active collection.
@@ -135,13 +169,26 @@ func (s *Session) ActiveEnvName() string {
 	return s.activeEnv[s.activeCol]
 }
 
-// SetActiveEnv sets the active environment (by name) for the active collection.
-// An empty name means "no environment".
+// SetActiveEnv sets the active environment (by name) for the active collection,
+// syncs the path-keyed persistence map, and saves.
 func (s *Session) SetActiveEnv(name string) {
 	if s.activeEnv == nil {
 		s.activeEnv = map[int]string{}
 	}
 	s.activeEnv[s.activeCol] = name
+
+	if s.cfg.UI.ActiveEnv == nil {
+		s.cfg.UI.ActiveEnv = map[string]string{}
+	}
+	if s.activeCol >= 0 && s.activeCol < len(s.dirs) {
+		dir := s.dirs[s.activeCol]
+		if name == "" {
+			delete(s.cfg.UI.ActiveEnv, dir)
+		} else {
+			s.cfg.UI.ActiveEnv[dir] = name
+		}
+	}
+	_ = s.persist()
 }
 
 // ActiveEnvironment returns a pointer to the active environment, or nil.
@@ -199,9 +246,64 @@ func (s *Session) SaveActiveCollection() error {
 	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
 		return nil
 	}
-	dirs := s.activeWorkspace().Collections
-	if s.activeCol >= len(dirs) {
-		return nil
+	return storage.Save(s.cols[s.activeCol], s.dirs[s.activeCol])
+}
+
+// Settings returns the current application settings.
+func (s *Session) Settings() model.Settings { return s.cfg.Settings }
+
+// SetSettings replaces the application settings and persists them.
+func (s *Session) SetSettings(st model.Settings) {
+	s.cfg.Settings = st
+	_ = s.persist()
+}
+
+// SetOpenRequest remembers the currently open request by collection path + the
+// in-collection node path. Empty id clears it. Persists.
+func (s *Session) SetOpenRequest(nodeID string) {
+	if nodeID == "" {
+		s.cfg.UI.OpenRequest = nil
+		_ = s.persist()
+		return
 	}
-	return storage.Save(s.cols[s.activeCol], dirs[s.activeCol])
+	idx := strings.IndexByte(nodeID, '/')
+	if idx < 0 {
+		return
+	}
+	ci, err := strconv.Atoi(nodeID[:idx])
+	if err != nil || ci < 0 || ci >= len(s.dirs) {
+		return
+	}
+	s.cfg.UI.OpenRequest = &config.UIOpenRequest{
+		Collection: s.dirs[ci],
+		NodePath:   nodeID[idx+1:],
+	}
+	_ = s.persist()
+}
+
+// OpenRequest reconstructs the persisted open-request node ID against the
+// currently loaded collections, or returns "" if it can't be resolved.
+func (s *Session) OpenRequest() string {
+	or := s.cfg.UI.OpenRequest
+	if or == nil {
+		return ""
+	}
+	for i, d := range s.dirs {
+		if d == or.Collection {
+			return strconv.Itoa(i) + "/" + or.NodePath
+		}
+	}
+	return ""
+}
+
+// SetWindowSize stores the window size for restoration on next launch.
+func (s *Session) SetWindowSize(w, h int) {
+	s.cfg.UI.WindowWidth = w
+	s.cfg.UI.WindowHeight = h
+	_ = s.persist()
+}
+
+// WindowSize returns the persisted window size, or (0, 0) if unset.
+func (s *Session) WindowSize() (int, int) {
+	return s.cfg.UI.WindowWidth, s.cfg.UI.WindowHeight
 }
