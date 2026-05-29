@@ -315,6 +315,20 @@ func (s *Session) ClearEnvOverlay() {
 	s.overlayMu.Unlock()
 }
 
+// RestoreEnvOverlay replaces the overlay with a copy of snap, dropping
+// every entry not present there. The chain runner uses this with a
+// SnapshotEnvOverlay() taken before chain.Resolve to undo writes a
+// failing chain made — so a chain that succeeded partway through and
+// then errored doesn't leak script-set values into the next Send.
+func (s *Session) RestoreEnvOverlay(snap map[string]string) {
+	s.overlayMu.Lock()
+	s.overlay = make(map[string]string, len(snap))
+	for k, v := range snap {
+		s.overlay[k] = v
+	}
+	s.overlayMu.Unlock()
+}
+
 // SnapshotEnvOverlay returns a copy of the overlay so callers (the Send
 // pipeline, Resolver scopes) don't race against concurrent
 // SetEnvOverlay calls. Safe to call from any goroutine; the underlying
@@ -359,17 +373,49 @@ func (s *Session) SnapshotActiveEnvVars() map[string]string {
 // request named "Login" inside the folder named "Auth". A leading "/"
 // is tolerated. Matching is case-sensitive on the display name. Returns
 // (req, true) on the first match, or (zero, false) when nothing
-// matches. Used by [internal/chain] to resolve `ChainStep.Request`.
+// matches.
+//
+// Live-tree call: walks s.cols directly. Workers that run for the
+// duration of a Send should use [Session.SnapshotChainFinder] instead
+// so they don't race against UI-thread mutations of the active
+// collection.
 func (s *Session) FindRequestByPath(ref string) (model.Request, bool) {
 	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
 		return model.Request{}, false
 	}
-	parts := strings.Split(strings.TrimPrefix(ref, "/"), "/")
-	for i := range parts {
-		parts[i] = strings.TrimSpace(parts[i])
+	parts := splitChainPath(ref)
+	if len(parts) == 0 {
+		return model.Request{}, false
 	}
 	col := &s.cols[s.activeCol]
-	return findRequestInContainer(col.Folders, col.Requests, parts)
+	r, ok := findRequestInContainer(col.Folders, col.Requests, parts)
+	if !ok {
+		return model.Request{}, false
+	}
+	return cloneRequestForChain(r), true
+}
+
+// splitChainPath strips leading slashes, splits on "/", trims
+// whitespace per segment, drops empty segments (so trailing or
+// duplicated slashes are tolerated), and REJECTS the whole path if
+// any segment is "." or ".." — chain refs use display names, not
+// filesystem-style relatives, so those segments are always a sign of
+// a malformed input. A rejected path returns nil so callers surface a
+// clean miss instead of a surprising match.
+func splitChainPath(ref string) []string {
+	raw := strings.Split(strings.TrimPrefix(ref, "/"), "/")
+	out := make([]string, 0, len(raw))
+	for _, p := range raw {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if p == "." || p == ".." {
+			return nil
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // findRequestInContainer recurses into folders and matches against
@@ -396,6 +442,147 @@ func findRequestInContainer(folders []model.Folder, requests []model.Request, pa
 		}
 	}
 	return model.Request{}, false
+}
+
+// cloneRequestForChain deep-copies the slice-backed fields of a
+// Request returned from the active-collection walk so the worker
+// goroutine can't race against UI-thread edits to the live collection
+// (params/headers row writes, body.Form edits, chain-step edits).
+// Struct-level fields are value-copied by the `r model.Request`
+// signature already.
+func cloneRequestForChain(r model.Request) model.Request {
+	r.Params = append([]model.KeyValue(nil), r.Params...)
+	r.Headers = append([]model.KeyValue(nil), r.Headers...)
+	r.Body.Form = append([]model.KeyValue(nil), r.Body.Form...)
+	r.Chain = append([]model.ChainStep(nil), r.Chain...)
+	return r
+}
+
+// AllRequestPaths returns every chain-ref-style request path within
+// the active collection. Used by the UI's Chain tab to populate an
+// autocomplete dropdown so users get suggestions instead of typos
+// surfacing as runtime errors. Paths are returned in tree order;
+// folders alone are not emitted (only their leaf requests). Returns
+// nil when no collection is loaded.
+func (s *Session) AllRequestPaths() []string {
+	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
+		return nil
+	}
+	col := &s.cols[s.activeCol]
+	var out []string
+	collectRequestPaths(col.Folders, col.Requests, "", &out)
+	return out
+}
+
+func collectRequestPaths(folders []model.Folder, requests []model.Request, prefix string, out *[]string) {
+	for _, r := range requests {
+		*out = append(*out, joinChainSegment(prefix, r.Name))
+	}
+	for _, f := range folders {
+		collectRequestPaths(f.Folders, f.Requests, joinChainSegment(prefix, f.Name), out)
+	}
+}
+
+func joinChainSegment(prefix, name string) string {
+	if prefix == "" {
+		return name
+	}
+	return prefix + "/" + name
+}
+
+// SnapshotChainFinder returns a snapshot of the active collection
+// reusable from the worker goroutine: it owns its own copies of the
+// folders/requests trees plus every request's slice-backed fields, and
+// pre-flattens each request's Auth via the same ancestor walk Send
+// uses for the leaf. Returns nil when no collection is loaded — the
+// caller should treat that as "no chain steps resolvable".
+//
+// The returned finder is safe to use concurrently with arbitrary
+// UI-thread mutations of the live Session because it doesn't reach
+// back into s.cols at all. Capture once at Send entry, hand to
+// chain.Resolve.
+func (s *Session) SnapshotChainFinder() *ChainFinderSnapshot {
+	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
+		return nil
+	}
+	col := s.cols[s.activeCol]
+	snap := &ChainFinderSnapshot{
+		folders:  cloneFoldersWithAuth(col.Folders, []model.Auth{col.Auth}),
+		requests: cloneRequestsWithAuth(col.Requests, []model.Auth{col.Auth}),
+	}
+	return snap
+}
+
+// ChainFinderSnapshot satisfies chain.RequestFinder and owns a deep
+// copy of the active collection at construction time. It pre-resolves
+// each request's Auth via auth.Resolve(own, ancestors) so chain steps
+// inherit the same way the leaf does (the Send-time leaf flattening at
+// shell.go uses EffectiveAuth; this snapshot does the same walk per
+// request).
+type ChainFinderSnapshot struct {
+	folders  []model.Folder
+	requests []model.Request
+}
+
+// FindRequestByPath is the chain.RequestFinder implementation. Uses
+// the same splitChainPath rules as the live Session method.
+func (f *ChainFinderSnapshot) FindRequestByPath(ref string) (model.Request, bool) {
+	if f == nil {
+		return model.Request{}, false
+	}
+	parts := splitChainPath(ref)
+	if len(parts) == 0 {
+		return model.Request{}, false
+	}
+	return findRequestInContainer(f.folders, f.requests, parts)
+}
+
+// cloneFoldersWithAuth deep-copies the folder tree and pre-flattens
+// each descendant request's Auth via auth.Resolve against the
+// ancestor chain. ancestors is the outer→inner Auth list of every
+// container above this level (collection root first, then enclosing
+// folders, then this folder itself).
+func cloneFoldersWithAuth(in []model.Folder, ancestors []model.Auth) []model.Folder {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]model.Folder, len(in))
+	for i, f := range in {
+		// Push this folder's auth as the new innermost ancestor for
+		// its descendants.
+		child := append(append([]model.Auth(nil), ancestors...), f.Auth)
+		out[i] = model.Folder{
+			ID:       f.ID,
+			Name:     f.Name,
+			Auth:     f.Auth,
+			Folders:  cloneFoldersWithAuth(f.Folders, child),
+			Requests: cloneRequestsWithAuth(f.Requests, child),
+		}
+	}
+	return out
+}
+
+// cloneRequestsWithAuth deep-copies the request list and replaces
+// each request's Auth with the ancestor-resolved Auth so the chain
+// runner gets a request whose Auth is already flat (Basic/Bearer/etc
+// or None — never Inherit).
+func cloneRequestsWithAuth(in []model.Request, ancestors []model.Auth) []model.Request {
+	if len(in) == 0 {
+		return nil
+	}
+	// Walk ancestors innermost-first for auth.Resolve, which expects
+	// inner-first order.
+	rev := make([]model.Auth, len(ancestors))
+	for i, a := range ancestors {
+		rev[len(ancestors)-1-i] = a
+	}
+	out := make([]model.Request, len(in))
+	for i, r := range in {
+		r = cloneRequestForChain(r)
+		r.Auth = auth.Resolve(r.Auth, rev)
+		out[i] = r
+	}
+	return out
 }
 
 // SaveActiveCollection writes the active collection back to its source directory.

@@ -69,7 +69,10 @@ func (m *MainUI) rebuildChainRows() {
 }
 
 // buildChainRow renders one row of the Chain editor: an Alias entry on
-// the left, a Request-path entry on the right, and a × delete button.
+// the left, a Request-path SelectEntry on the right, and a × delete
+// button. The ref widget is a SelectEntry (editable combo) seeded with
+// every other request in the active collection so users get
+// path autocomplete instead of finding their typos at Send time.
 // Writes back into currentRequest.Chain by index; idx is captured by
 // each OnChanged closure.
 func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
@@ -82,7 +85,7 @@ func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
 			m.currentRequest.Chain[idx].Alias = s
 		}
 	}
-	ref := widget.NewEntry()
+	ref := widget.NewSelectEntry(m.chainRefSuggestions())
 	ref.SetPlaceHolder("Folder/Request name")
 	ref.SetText(step.Request)
 	ref.OnChanged = func(s string) {
@@ -98,4 +101,38 @@ func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
 	})
 	return container.NewBorder(nil, nil, nil, del,
 		container.NewGridWithColumns(2, alias, ref))
+}
+
+// chainRefSuggestions returns every other request's chain-ref path in
+// the active collection, excluding the request the user is currently
+// editing (that one would form an obvious cycle).
+func (m *MainUI) chainRefSuggestions() []string {
+	all := m.sess.AllRequestPaths()
+	if m.currentRequest == nil {
+		return all
+	}
+	currentName := m.currentRequest.Name
+	out := make([]string, 0, len(all))
+	for _, p := range all {
+		// Skip exact match by name path — a request can't chain to itself.
+		// We don't know the full chain-path of the current request without
+		// a tree walk, but the cheapest heuristic (skip any suggestion whose
+		// last segment matches the current request's Name) catches the
+		// trivial self-cycle case.
+		if last := lastSegment(p); last == currentName {
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// lastSegment returns the substring after the final '/'.
+func lastSegment(path string) string {
+	for i := len(path) - 1; i >= 0; i-- {
+		if path[i] == '/' {
+			return path[i+1:]
+		}
+	}
+	return path
 }

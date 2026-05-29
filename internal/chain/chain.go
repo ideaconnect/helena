@@ -20,10 +20,32 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/idct/helena/internal/model"
 )
+
+// MaxChainDepth caps the recursion depth of chain expansion. A
+// pathological imported collection could otherwise declare an arbitrarily
+// deep linear chain (A → B → C → … → Z) and turn one user click into
+// dozens of serial HTTP calls.
+const MaxChainDepth = 8
+
+// MaxChainSteps caps the total number of ExecuteOnce calls a single
+// chain.Resolve can issue. Together with MaxChainDepth this bounds the
+// fan-out a hostile YAML can trigger (an alphabet-spanning A → [B1..Bn]
+// with each Bi → [C1..Cn] otherwise fans into n*n requests).
+const MaxChainSteps = 32
+
+// MaxChainConsoleLines is the soft cap on console output the runner
+// accumulates across every chain step. Past this point further lines
+// are dropped and a single "[chain console truncated]" marker is added.
+const MaxChainConsoleLines = 1024
+
+// aliasRe matches a JS identifier — what dotted access `chain.<alias>`
+// supports without quoting.
+var aliasRe = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
 
 // View is the snapshot of one executed request — what its sibling
 // chain steps and the leaf will see via `chain.<alias>.{request,response}`.
@@ -88,30 +110,46 @@ type RequestFinder interface {
 // it via the same Executor with the returned map.
 //
 // Returns an error if any chain step fails to execute, if any step
-// references an unknown request path, or if a cycle is detected. The
-// error names the offending alias / path so the user can fix it.
+// references an unknown request path, if a cycle is detected, or if
+// the chain exceeds MaxChainDepth / MaxChainSteps. The error names the
+// offending alias / path so the user can fix it.
 func Resolve(ctx context.Context, leaf model.Request, finder RequestFinder, exec Executor) (map[string]View, []string, error) {
 	visiting := map[string]bool{}
 	if leaf.ID != "" {
 		visiting[leaf.ID] = true
 	}
 	var console []string
-	chainMap, err := resolveSteps(ctx, leaf.Chain, finder, exec, visiting, &console)
+	stepCount := 0
+	chainMap, err := resolveSteps(ctx, leaf.Chain, finder, exec, visiting, &console, 0, &stepCount)
 	return chainMap, console, err
 }
 
 // resolveSteps expands the supplied chain entries for one request,
 // executing each step (and its own chain transitively) before the
 // next. The visiting set is shared across the recursion so cycles
-// anywhere in the graph are caught.
-func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFinder, exec Executor, visiting map[string]bool, console *[]string) (map[string]View, error) {
+// anywhere in the graph are caught. depth is the current recursion
+// level (0 = leaf's direct chain); stepCount tallies total
+// ExecuteOnce calls across the whole Resolve and is shared via
+// pointer so caps apply globally.
+func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFinder, exec Executor, visiting map[string]bool, console *[]string, depth int, stepCount *int) (map[string]View, error) {
+	if depth >= MaxChainDepth {
+		return nil, fmt.Errorf("chain: depth exceeds limit %d (likely a runaway nested chain)", MaxChainDepth)
+	}
 	out := make(map[string]View, len(steps))
 	for _, step := range steps {
-		if step.Alias == "" {
+		blankAlias := step.Alias == ""
+		blankRef := step.Request == ""
+		if blankAlias && blankRef {
+			return nil, fmt.Errorf("chain: a step is missing both alias and request reference")
+		}
+		if blankAlias {
 			return nil, fmt.Errorf("chain: step is missing an alias (request %q)", step.Request)
 		}
-		if step.Request == "" {
+		if blankRef {
 			return nil, fmt.Errorf("chain: alias %q has no request reference", step.Alias)
+		}
+		if !aliasRe.MatchString(step.Alias) {
+			return nil, fmt.Errorf("chain: alias %q is not a valid JS identifier (use letters, digits, _, $; must not start with a digit)", step.Alias)
 		}
 		if _, dup := out[step.Alias]; dup {
 			return nil, fmt.Errorf("chain: duplicate alias %q in the same request's chain", step.Alias)
@@ -126,12 +164,16 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		if sub.ID != "" {
 			visiting[sub.ID] = true
 		}
-		subChainMap, err := resolveSteps(ctx, sub.Chain, finder, exec, visiting, console)
+		subChainMap, err := resolveSteps(ctx, sub.Chain, finder, exec, visiting, console, depth+1, stepCount)
 		if err != nil {
 			return nil, err
 		}
+		if *stepCount >= MaxChainSteps {
+			return nil, fmt.Errorf("chain: step count exceeds limit %d (likely a fan-out attempt)", MaxChainSteps)
+		}
+		*stepCount++
 		view, lines, err := exec.ExecuteOnce(ctx, sub, subChainMap)
-		*console = append(*console, lines...)
+		appendBounded(console, lines)
 		if err != nil {
 			return nil, fmt.Errorf("chain step %q (%s): %w", step.Alias, sub.Name, err)
 		}
@@ -141,4 +183,20 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		out[step.Alias] = view
 	}
 	return out, nil
+}
+
+// appendBounded appends lines to *console, dropping any past
+// MaxChainConsoleLines and inserting a single truncation marker the
+// first time the cap is hit. Keeps the cumulative chain console
+// bounded even when individual scripts emit gigabytes of logs.
+func appendBounded(console *[]string, lines []string) {
+	for _, l := range lines {
+		if len(*console) >= MaxChainConsoleLines {
+			if len(*console) == MaxChainConsoleLines {
+				*console = append(*console, "[chain console truncated]")
+			}
+			return
+		}
+		*console = append(*console, l)
+	}
 }

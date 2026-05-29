@@ -306,8 +306,13 @@ func mergeKVFromObject(existing []model.KeyValue, obj *goja.Object) []model.KeyV
 // chainToObject builds the script-side `chain` global from the chain
 // map supplied by [internal/chain]. Each alias becomes a property
 // whose value is `{ request: {...}, response: {...} }` mirroring the
-// top-level request/response surface — including lazy JSON/XML parsers
-// — so users can write `chain.login.response.json.token` naturally.
+// top-level request/response surface. JSON / XML parsing on each
+// chain entry's response is **lazy** — accessed via JS getter
+// properties so a leaf script that only touches
+// `chain.login.response.body` doesn't pay the full json.Unmarshal /
+// XML walk cost for every chained predecessor (which can dominate
+// Send time when chains have many large-bodied steps).
+//
 // A nil/empty map binds an empty object so scripts can still safely
 // `Object.keys(chain)` without a type check.
 func chainToObject(vm *goja.Runtime, chain map[string]ChainView) *goja.Object {
@@ -319,9 +324,68 @@ func chainToObject(vm *goja.Runtime, chain map[string]ChainView) *goja.Object {
 		_ = req.Set("url", view.Request.URL)
 		_ = req.Set("body", string(view.Request.Body))
 		_ = entry.Set("request", req)
-		_ = entry.Set("response", responseToObject(vm, view.Response))
+		_ = entry.Set("response", lazyResponseToObject(vm, view.Response))
 		_ = obj.Set(alias, entry)
 	}
+	return obj
+}
+
+// lazyResponseToObject is responseToObject with JSON / XML bodies
+// behind goja accessor properties: the body bytes are decoded only on
+// the first read, then cached on a closure so subsequent reads are
+// constant-time. Used for chain entries where most callers ignore the
+// parsed bodies entirely — the top-level response global stays eager
+// (responseToObject) because the user opted into it by writing a
+// post-response script.
+func lazyResponseToObject(vm *goja.Runtime, in ResponseInput) *goja.Object {
+	obj := vm.NewObject()
+	_ = obj.Set("status", in.StatusCode)
+	_ = obj.Set("statusText", in.Status)
+	body := string(in.Body)
+	_ = obj.Set("body", body)
+	_ = obj.Set("text", body)
+
+	headers := vm.NewObject()
+	for k, vs := range in.Headers {
+		if len(vs) == 0 {
+			continue
+		}
+		_ = headers.Set(textproto.CanonicalMIMEHeaderKey(k), vs[0])
+	}
+	_ = obj.Set("headers", headers)
+
+	// JSON getter — parses on first access, caches the result.
+	var jsonCache goja.Value
+	jsonGetter := func(goja.FunctionCall) goja.Value {
+		if jsonCache != nil {
+			return jsonCache
+		}
+		if parsed, ok := tryParseJSON(in.Body); ok {
+			jsonCache = vm.ToValue(parsed)
+		} else {
+			jsonCache = goja.Undefined()
+		}
+		return jsonCache
+	}
+	_ = obj.DefineAccessorProperty("json", vm.ToValue(jsonGetter), nil,
+		goja.FLAG_FALSE, goja.FLAG_TRUE)
+
+	// XML getter — same pattern.
+	var xmlCache goja.Value
+	xmlGetter := func(goja.FunctionCall) goja.Value {
+		if xmlCache != nil {
+			return xmlCache
+		}
+		if parsed, ok := tryParseXML(in.Body); ok {
+			xmlCache = vm.ToValue(parsed)
+		} else {
+			xmlCache = goja.Undefined()
+		}
+		return xmlCache
+	}
+	_ = obj.DefineAccessorProperty("xml", vm.ToValue(xmlGetter), nil,
+		goja.FLAG_FALSE, goja.FLAG_TRUE)
+
 	return obj
 }
 

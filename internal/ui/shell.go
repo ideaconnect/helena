@@ -51,13 +51,13 @@ func (b sessionEnvBridge) Get(name string) (string, bool) {
 
 func (b sessionEnvBridge) Set(name, value string) { b.s.SetEnvOverlay(name, value) }
 
-// sessionRequestFinder adapts *session.Session to chain.RequestFinder
-// so the chain runner can resolve "Folder/Name" paths to the actual
-// requests in the active collection.
-type sessionRequestFinder struct{ s *session.Session }
+// nilFinder is a chain.RequestFinder used when no collection is loaded —
+// every lookup returns false. Lets chain.Resolve still walk the leaf's
+// (empty) chain without crashing.
+type nilFinder struct{}
 
-func (f sessionRequestFinder) FindRequestByPath(ref string) (model.Request, bool) {
-	return f.s.FindRequestByPath(ref)
+func (nilFinder) FindRequestByPath(string) (model.Request, bool) {
+	return model.Request{}, false
 }
 
 // chainExecutor is the single execution path for both chain steps and
@@ -681,7 +681,14 @@ func (m *MainUI) send() {
 	))
 	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
 	exec := chainExecutor{rt: rt, client: client, envSnap: envSnap, sess: m.sess}
-	finder := sessionRequestFinder{s: m.sess}
+	// Snapshot the active collection on the UI goroutine so the
+	// chain runner reads from a frozen-at-Send-entry copy with
+	// pre-flattened Auth — never races against UI-thread tree edits
+	// and never sends a chain step with AuthInherit.
+	var finder chain.RequestFinder = nilFinder{}
+	if snap := m.sess.SnapshotChainFinder(); snap != nil {
+		finder = snap
+	}
 
 	m.Status.SetText("Sending…")
 	m.Send.Disable()
@@ -691,10 +698,16 @@ func (m *MainUI) send() {
 	// mutation in the status line later.
 	originalMethod, originalURL := req.Method, req.URL
 
+	// Snapshot the overlay BEFORE the chain runs so we can roll back
+	// any helena.env.set writes the chain landed if it then errored.
+	// Failing chains shouldn't leak partial state into the next Send.
+	preOverlay := m.sess.SnapshotEnvOverlay()
+
 	go func() {
 		defer func() {
 			if r := recover(); r != nil {
 				msg := fmt.Sprintf("Send panic: %v", r)
+				m.sess.RestoreEnvOverlay(preOverlay)
 				fyne.Do(func() {
 					m.Send.Enable()
 					m.Status.SetText(msg)
@@ -705,6 +718,7 @@ func (m *MainUI) send() {
 
 		chainMap, chainConsole, chainErr := chain.Resolve(ctx, req, finder, exec)
 		if chainErr != nil {
+			m.sess.RestoreEnvOverlay(preOverlay)
 			fyne.Do(func() {
 				m.Send.Enable()
 				m.Status.SetText("Chain error: " + chainErr.Error())

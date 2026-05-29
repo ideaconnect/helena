@@ -122,6 +122,27 @@ Don't recreate decisions captured there — read the task notes first.
     `internal/httpclient` behind the `EnvBridge` and `ResponseInput`
     boundaries, so adding a binding that drags either dependency into
     the package is a regression.
+14. **Chain execution is single-goroutine serial; alias scope is
+    per-request.** The chain runner walks each request's
+    `Chain []ChainStep` depth-first, calling `Executor.ExecuteOnce`
+    once per step before moving on. Concurrency is sequential within
+    one Send: no parallel chain steps, no shared mutable runner
+    state. The `chain.<alias>` map a request's scripts see contains
+    **only that request's own declared aliases** — a chain step
+    never sees its predecessors' aliases. Cycle detection is by
+    `Request.ID` (runtime-assigned by storage.Load; stable within a
+    session, reset on reload). Depth, total step count, and
+    cumulative console output are capped at `MaxChainDepth` /
+    `MaxChainSteps` / `MaxChainConsoleLines` so an imported
+    collection can't turn one click into thousands of HTTP calls.
+    Failure of any phase aborts the chain AND rolls back the env
+    overlay to its pre-Send snapshot, so a partial chain leaves no
+    overlay residue. Auth flattening happens once on the UI thread
+    via `Session.SnapshotChainFinder`; chain steps inherit folder /
+    collection auth identically to the leaf. Don't reintroduce a
+    code path where chain steps run with raw `AuthInherit`, or
+    where overlay writes survive a chain failure — both undo
+    user-facing contracts.
 
 ## Keep the docs in sync
 

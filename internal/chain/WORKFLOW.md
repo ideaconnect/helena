@@ -96,6 +96,76 @@ during `{{var}}` expansion. The leaf's own pre-script runs against
 the same overlay too, so a chain step's `helena.env.set("TOKEN", …)`
 is visible to the leaf's pre-script under the same name.
 
+## Overlay rollback on failure
+
+The Send goroutine snapshots the overlay BEFORE invoking
+`chain.Resolve` and calls `Session.RestoreEnvOverlay(preOverlay)` on
+any chain error (including panics caught by the top-level recover).
+This means a chain that runs steps 1, 2, 3 successfully — each
+writing TOKEN, CSRF, USER — and then errors at step 4, leaves the
+overlay in its pre-Send state. The user sees the error and presses
+Send on something legitimate; that next request's `{{TOKEN}}`
+template doesn't pick up the half-applied attacker-controlled value.
+
+The rollback is intentionally **at the chain boundary**, not per
+step: succeeding chain steps that the leaf eventually needs (e.g.
+TOKEN written by Login so Profile can read `{{TOKEN}}`) survive,
+because the leaf executes only AFTER `chain.Resolve` returns with no
+error. The overlay snapshot is only restored on the error path.
+
+## Diamond pattern: shared predecessor runs once per branch
+
+For `A → [B, C]` where both `B.Chain` and `C.Chain` reference `D`,
+the runner executes `D` twice — once while resolving `B`'s chain
+(landing in `B`'s alias map under whatever name `B` gave it) and
+once while resolving `C`'s chain. The `visiting` set deletes the
+entry on the way out of each subtree, so `D` is not flagged as a
+cycle when re-entered through a different branch.
+
+There is **no cross-branch dedupe** by design: each request's chain
+map is per-request scope, and a single shared `View` would have to
+land under different aliases in `B`'s and `C`'s maps. If you want
+"run D once and let both branches see it", hoist `D` up to `A`'s
+own chain (where it has a single alias) and reference
+`chain.<aliasInA>` from inside `B`/`C`'s scripts.
+
+Users who put a heavy `Bootstrap` step into multiple branches will
+see that endpoint hit `N` times per Send — the depth + step caps
+keep the worst case bounded but the per-branch repetition is real.
+Document this when adding chain to a shared "before all" request.
+
+## Caps the runner enforces
+
+| Limit | Constant | What happens on exceed |
+| ----- | -------- | --------------------- |
+| Nesting depth | `MaxChainDepth` (8) | `chain: depth exceeds limit 8 …` |
+| Total step count per Resolve | `MaxChainSteps` (32) | `chain: step count exceeds limit 32 …` |
+| Cumulative console lines | `MaxChainConsoleLines` (1024) | Drops further lines; appends `[chain console truncated]` once. |
+
+Each cap is a per-Resolve counter — distinct Sends start fresh. The
+caps are conservative for legitimate use (no realistic user-authored
+chain exceeds depth 8 or 32 total steps) and tight against
+imported-collection abuse.
+
+## Auth on chain steps
+
+`Session.SnapshotChainFinder` is called once on the UI thread before
+the worker goroutine launches. It clones the active collection's
+folders + requests, and as it does so it **pre-flattens each
+request's `Auth` via `auth.Resolve(own, ancestors)`** — the same
+walk Send applies to the leaf via `EffectiveAuth`. So a chain step
+that was stored with `Auth.Type == AuthInherit` (the common case
+when the user didn't set per-request auth) carries the parent
+folder's or collection's Auth into the chained Send.
+
+This guarantee was added after the 7.4 review found that bare
+`FindRequestByPath` returned a Request whose `Auth` was the raw
+loaded value, so chained requests fired without authentication. If
+you change the chain-step execution path, preserve the snapshot
+finder's auth-flattening — without it, the most common chain shape
+(Login inherits OAuth2 from Auth folder, Profile chains Login)
+silently breaks.
+
 ## Failure shapes the user sees
 
 The UI surfaces chain failures via `m.Status.SetText("Chain error: …")`

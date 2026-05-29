@@ -55,6 +55,9 @@ func (s *Session) AddFolder(parentID, name string) (string, error) {
 }
 
 // RenameItem renames the collection, folder, or request at nodeID and saves.
+// For folder / request renames, also rewrites every peer request's
+// ChainStep.Request paths whose prefix matched the old name path so chain
+// references survive the rename intact.
 func (s *Session) RenameItem(nodeID, name string) error {
 	if strings.TrimSpace(name) == "" {
 		return fmt.Errorf("name cannot be empty")
@@ -63,6 +66,11 @@ func (s *Session) RenameItem(nodeID, name string) error {
 	if !ok {
 		return fmt.Errorf("invalid node: %q", nodeID)
 	}
+
+	// Capture the pre-rename chain-ref path so we can cascade
+	// matching ChainStep.Request entries after the rename lands.
+	oldPath := s.nodeNamePath(nodeID)
+
 	switch kind {
 	case "c":
 		if idx < 0 || idx >= len(s.cols) {
@@ -82,7 +90,117 @@ func (s *Session) RenameItem(nodeID, name string) error {
 		}
 		(*requestsP)[idx].Name = name
 	}
+
+	if (kind == "f" || kind == "r") && oldPath != "" {
+		oldParts := strings.Split(oldPath, "/")
+		newParts := append([]string(nil), oldParts...)
+		newParts[len(newParts)-1] = name
+		ci := nodeCollectionIndex(nodeID)
+		if ci >= 0 && ci < len(s.cols) {
+			cascadeChainRefs(&s.cols[ci], oldParts, newParts)
+		}
+	}
+
 	return s.SaveActiveCollection()
+}
+
+// nodeNamePath returns the chain-ref-style slash-separated display
+// name path for nodeID, excluding the collection root. "0/f1/r2" →
+// "Auth/Login". Returns "" when nodeID is the bare collection segment
+// or can't be resolved against the live tree.
+func (s *Session) nodeNamePath(nodeID string) string {
+	if nodeID == "" {
+		return ""
+	}
+	segs := strings.Split(nodeID, "/")
+	if len(segs) < 2 {
+		return ""
+	}
+	ci, err := strconv.Atoi(segs[0])
+	if err != nil || ci < 0 || ci >= len(s.cols) {
+		return ""
+	}
+	folders := s.cols[ci].Folders
+	requests := s.cols[ci].Requests
+	var parts []string
+	for i := 1; i < len(segs); i++ {
+		seg := segs[i]
+		switch {
+		case strings.HasPrefix(seg, "f"):
+			fi, err := strconv.Atoi(seg[1:])
+			if err != nil || fi < 0 || fi >= len(folders) {
+				return ""
+			}
+			parts = append(parts, folders[fi].Name)
+			folders, requests = folders[fi].Folders, folders[fi].Requests
+		case strings.HasPrefix(seg, "r"):
+			ri, err := strconv.Atoi(seg[1:])
+			if err != nil || ri < 0 || ri >= len(requests) {
+				return ""
+			}
+			parts = append(parts, requests[ri].Name)
+		}
+	}
+	return strings.Join(parts, "/")
+}
+
+// nodeCollectionIndex extracts the leading collection segment from
+// nodeID, returning -1 on malformed input.
+func nodeCollectionIndex(nodeID string) int {
+	segs := strings.Split(nodeID, "/")
+	if len(segs) == 0 {
+		return -1
+	}
+	ci, err := strconv.Atoi(segs[0])
+	if err != nil {
+		return -1
+	}
+	return ci
+}
+
+// cascadeChainRefs walks every request under col and rewrites any
+// ChainStep.Request whose split path begins with oldParts to use
+// newParts as the new prefix. The tail (any segments past the prefix)
+// is preserved unchanged. Matching is case-sensitive on display names.
+func cascadeChainRefs(col *model.Collection, oldParts, newParts []string) {
+	rewriteRequests(col.Requests, oldParts, newParts)
+	rewriteFoldersChain(col.Folders, oldParts, newParts)
+}
+
+func rewriteFoldersChain(folders []model.Folder, oldParts, newParts []string) {
+	for i := range folders {
+		rewriteRequests(folders[i].Requests, oldParts, newParts)
+		rewriteFoldersChain(folders[i].Folders, oldParts, newParts)
+	}
+}
+
+func rewriteRequests(requests []model.Request, oldParts, newParts []string) {
+	for i := range requests {
+		for j := range requests[i].Chain {
+			ref := requests[i].Chain[j].Request
+			if ref == "" {
+				continue
+			}
+			parts := splitChainPath(ref)
+			if !hasPrefix(parts, oldParts) {
+				continue
+			}
+			rewrote := append(append([]string(nil), newParts...), parts[len(oldParts):]...)
+			requests[i].Chain[j].Request = strings.Join(rewrote, "/")
+		}
+	}
+}
+
+func hasPrefix(s, prefix []string) bool {
+	if len(s) < len(prefix) {
+		return false
+	}
+	for i, p := range prefix {
+		if s[i] != p {
+			return false
+		}
+	}
+	return true
 }
 
 // DeleteItem removes the folder or request at nodeID and saves. Collections

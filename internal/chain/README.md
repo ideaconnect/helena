@@ -58,13 +58,49 @@ token already plumbed through.
   Aliases never bleed across levels.
 - **Order matches the YAML.** Steps execute in the order they appear
   under `chain:`.
+- **Diamond pattern executes the shared predecessor once per branch.**
+  For `A → [B, C]` where both `B` and `C` chain to `D`, the runner
+  executes `D` once under `B`'s branch and once under `C`'s branch —
+  there is no cross-branch dedupe. Each occurrence lands under its own
+  alias with its own captured response. This keeps per-request alias
+  scope predictable; if you want a single `D` invocation that both `B`
+  and `C` share, hoist `D` up to `A`'s own chain and reference its
+  alias from inside `B`/`C`'s scripts via `chain.<aliasInA>`.
+- **Aliases must be JS identifiers.** Only `[A-Za-z_$][A-Za-z0-9_$]*`
+  names pass validation, because the documented script access is the
+  dot form `chain.<alias>.response.*`. A hyphen or leading digit
+  surfaces a clean error at resolve time rather than a confusing
+  script-eval failure.
 - **Cycle detection.** A request that (transitively) lists itself
   produces a clear `chain: cycle detected through "<name>"` error
   rather than a stack overflow. The check uses a visiting set keyed
   by `Request.ID` (assigned fresh on load).
-- **Failure aborts the chain.** Any pre-script, HTTP, or post-script
-  error at any step stops execution; the leaf is not sent. The error
-  names the offending step's alias so the user can fix it.
+- **Depth + total-step caps.** `MaxChainDepth` (8) bounds the deepest
+  linear nesting; `MaxChainSteps` (32) bounds the total number of
+  `ExecuteOnce` calls one Resolve can issue. Both surface as plain
+  errors so an imported collection can't turn one Send into thousands
+  of HTTP requests. Tune the constants if you have a legitimate need
+  for deeper chains.
+- **Console accumulator is capped.** Cumulative console output across
+  chain steps is bounded at `MaxChainConsoleLines` (1024); past that
+  point further lines are dropped and a single
+  `[chain console truncated]` marker is inserted.
+- **Failure aborts the chain AND rolls back env overlay writes.** Any
+  pre-script, HTTP, or post-script error at any step stops execution;
+  the leaf is not sent, and any `helena.env.set` calls made by chain
+  steps that succeeded before the failure are reverted to the
+  overlay's pre-Send snapshot. Failed chains leave no residue.
+- **Chain steps inherit Auth.** Chain steps go through the same
+  ancestor walk as the leaf — the snapshot finder pre-flattens each
+  predecessor's `Auth` against its folder + collection chain. A
+  request whose own Auth is `Inherit` carries its parent folder's
+  Bearer/OAuth2 into the chained Send, just like sending it directly
+  from the tree would.
+- **Chain step URL/method mutations are not surfaced in the UI.** The
+  status-line `· sent <METHOD> <URL>` suffix only fires for the LEAF
+  request. A chain step's pre-script can rewrite its own
+  `request.url`, but the only place that mutation is visible is the
+  step's own `console.log` output, which lands in the Console panel.
 
 ## Public API
 

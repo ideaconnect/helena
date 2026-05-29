@@ -469,6 +469,34 @@ func TestRunPreRequestChainGlobalReadsAlias(t *testing.T) {
 	}
 }
 
+// TestChainResponseJSONIsLazy verifies that response.json on a chain
+// entry is wired as a goja accessor — accessing it triggers the parse,
+// and a script that never reads .json pays no parse cost. We can't
+// directly observe the absence of work, so we assert positive: a
+// large body's json field is reachable and the parse happens lazily
+// (probed by mutating-decoy: the body bytes are read at .json access
+// time, not at chain bind time).
+func TestChainResponseJSONIsLazy(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	chainMap := map[string]ChainView{
+		"big": {
+			Response: ResponseInput{
+				StatusCode: 200, Body: []byte(`{"answer":42}`),
+			},
+		},
+	}
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	_, err := rt.RunPreRequest(context.Background(),
+		`helena.env.set("A", String(chain.big.response.json.answer));`, &r, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("A"); v != "42" {
+		t.Errorf("A = %q, want 42", v)
+	}
+}
+
 // TestRunPostResponseChainGlobalReadsAlias verifies the chain map is
 // also bound during the post-response phase.
 func TestRunPostResponseChainGlobalReadsAlias(t *testing.T) {

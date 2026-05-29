@@ -2,6 +2,7 @@ package chain
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -224,3 +225,104 @@ var errFakeExec = stubErr("executor failed")
 type stubErr string
 
 func (s stubErr) Error() string { return string(s) }
+
+// TestResolveDepthCap verifies the runner refuses to descend past
+// MaxChainDepth and surfaces a clean error instead of a stack overflow.
+func TestResolveDepthCap(t *testing.T) {
+	// Build a linear chain of depth MaxChainDepth+2: leaf → r0 → r1 → … → rN.
+	finder := fakeFinder{}
+	for i := 0; i < MaxChainDepth+2; i++ {
+		name := fmt.Sprintf("r%d", i)
+		next := fmt.Sprintf("r%d", i+1)
+		var chain []model.ChainStep
+		if i < MaxChainDepth+1 {
+			chain = []model.ChainStep{{Alias: "next", Request: next}}
+		}
+		finder[name] = model.Request{ID: name, Name: name, Chain: chain}
+	}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{{Alias: "next", Request: "r0"}}}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec())
+	if err == nil || !strings.Contains(err.Error(), "depth") {
+		t.Errorf("err = %v, want depth-limit error", err)
+	}
+}
+
+// TestResolveStepCountCap verifies the runner refuses to execute past
+// MaxChainSteps total steps and surfaces a clean error.
+func TestResolveStepCountCap(t *testing.T) {
+	// Build a wide fan-out: leaf chains to b0..b(MaxChainSteps+5).
+	finder := fakeFinder{}
+	leaf := model.Request{ID: "L", Name: "Leaf"}
+	for i := 0; i < MaxChainSteps+5; i++ {
+		name := fmt.Sprintf("b%d", i)
+		finder[name] = model.Request{ID: name, Name: name}
+		leaf.Chain = append(leaf.Chain, model.ChainStep{Alias: fmt.Sprintf("b%d", i), Request: name})
+	}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec())
+	if err == nil || !strings.Contains(err.Error(), "step count") {
+		t.Errorf("err = %v, want step-count limit error", err)
+	}
+}
+
+// TestResolveAliasMustBeJSIdentifier verifies an alias like "foo-bar"
+// or "1login" or "class" is rejected so users get a clear error rather
+// than silently producing a broken `chain['foo-bar']` shape.
+func TestResolveAliasMustBeJSIdentifier(t *testing.T) {
+	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
+	exec := newRecordingExec()
+	for _, bad := range []string{"foo-bar", "1login", "with space", "with.dot"} {
+		leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+			{Alias: bad, Request: "X"},
+		}}
+		_, _, err := Resolve(context.Background(), leaf, finder, exec)
+		if err == nil || !strings.Contains(err.Error(), "not a valid JS identifier") {
+			t.Errorf("alias %q: err = %v, want JS-identifier error", bad, err)
+		}
+	}
+}
+
+// TestResolveBothBlankRowGivesTightError verifies a step where BOTH
+// alias and request are blank surfaces the tighter "missing both"
+// error instead of a "missing alias (request \"\")" line.
+func TestResolveBothBlankRowGivesTightError(t *testing.T) {
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "", Request: ""},
+	}}
+	_, _, err := Resolve(context.Background(), leaf, fakeFinder{}, newRecordingExec())
+	if err == nil || !strings.Contains(err.Error(), "missing both") {
+		t.Errorf("err = %v, want both-blank error", err)
+	}
+}
+
+// TestResolveConsoleAccumulatorTruncates verifies that a chain step
+// whose ExecuteOnce returns many console lines doesn't grow the
+// accumulator past MaxChainConsoleLines, and a truncation marker is
+// added exactly once.
+func TestResolveConsoleAccumulatorTruncates(t *testing.T) {
+	noisy := model.Request{ID: "N", Name: "Noisy"}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "noisy", Request: "Noisy"},
+	}}
+	exec := &noisyExec{count: MaxChainConsoleLines + 200}
+	_, console, err := Resolve(context.Background(), leaf, fakeFinder{"Noisy": noisy}, exec)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(console) > MaxChainConsoleLines+1 {
+		t.Errorf("console len = %d, want ≤ %d", len(console), MaxChainConsoleLines+1)
+	}
+	if console[MaxChainConsoleLines] != "[chain console truncated]" {
+		t.Errorf("expected truncation marker at index %d, got %q", MaxChainConsoleLines, console[MaxChainConsoleLines])
+	}
+}
+
+// noisyExec returns `count` console lines per ExecuteOnce.
+type noisyExec struct{ count int }
+
+func (n *noisyExec) ExecuteOnce(context.Context, model.Request, map[string]View) (View, []string, error) {
+	lines := make([]string, n.count)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("line %d", i)
+	}
+	return View{Response: ResponseView{StatusCode: 200}}, lines, nil
+}

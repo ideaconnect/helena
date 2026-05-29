@@ -36,8 +36,20 @@ between requests. The only shared state is the `EnvBridge`.
 ```go
 func New(env EnvBridge) *Runtime
 
-func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Request) (Result, error)
-func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.Request, in ResponseInput) (Result, error)
+func (rt *Runtime) RunPreRequest(
+    ctx context.Context,
+    script string,
+    r *model.Request,
+    chain map[string]ChainView,
+) (Result, error)
+
+func (rt *Runtime) RunPostResponse(
+    ctx context.Context,
+    script string,
+    r model.Request,
+    in ResponseInput,
+    chain map[string]ChainView,
+) (Result, error)
 
 type EnvBridge interface {
     Get(name string) (string, bool)
@@ -55,8 +67,22 @@ type ResponseInput struct {
     Body       []byte
 }
 
+type ChainView struct {
+    Request  ChainRequestView
+    Response ResponseInput
+}
+
+type ChainRequestView struct {
+    Method string
+    URL    string
+    Body   []byte
+}
+
 const ScriptTimeout = 5 * time.Second
 ```
+
+A nil `chain` argument binds an empty `chain` global so scripts can
+safely `Object.keys(chain).length` without a type check.
 
 ## Script surface
 
@@ -117,9 +143,9 @@ Each entry has two sub-objects:
 | Property | Type | Notes |
 | -------- | ---- | ----- |
 | `chain.<alias>.request.method` | string | The method the predecessor was sent with (post-pre-script mutations). |
-| `chain.<alias>.request.url` | string | Final URL after variable resolution. |
-| `chain.<alias>.request.body` | string | Wire body. |
-| `chain.<alias>.response.*` | object | Identical shape to the top-level `response` global (status, statusText, headers, body, text, json, xml). |
+| `chain.<alias>.request.url` | string | URL the script set on the predecessor's `request.url` before Send — `{{vars}}` are NOT expanded here; httpclient resolves them as the predecessor's request goes out and doesn't write the resolved form back into the model. |
+| `chain.<alias>.request.body` | string | The predecessor's `request.body` after pre-script writeback. For form-urlencoded / multipart bodies whose canonical source is `Body.Form`, this string is empty — httpclient builds the wire body from `Body.Form` and that encoded form is not echoed back here. Read `chain.<alias>.request.form` (if Helena adds it) or `response.body` round-trips for the encoded form. |
+| `chain.<alias>.response.*` | object | Identical shape to the top-level `response` global (status, statusText, headers, body, text, json, xml). **`json` and `xml` are lazy** — parsed on first access and cached, so a leaf script that only reads `chain.login.response.body` doesn't pay the parse cost. |
 
 Alias scope is **per request** — when request B runs as part of A's
 chain, B's own scripts see only B's declared aliases, never A's. A
