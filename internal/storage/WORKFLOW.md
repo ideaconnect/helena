@@ -60,9 +60,10 @@ of the keys Helena knows).
 7. Call `saveItems(dir, c.Folders, c.Requests)`:
    - Walk requests; for each, slug + dedupe filename, build `ocRequestFile`
      via `requestToFile`, layer in `Extra` from any prior file (including
-     `HTTP.Extra` which is where auth blocks live, and `Scripts.Extra` which
-     is where keys other tools nested inside the `scripts:` block live),
-     write.
+     `HTTP.Extra` which is where auth blocks live, `Scripts.Extra` which
+     is where keys other tools nested inside the `scripts:` block live,
+     and per-`Chain` entry `Extra` paired by alias so tool-authored
+     description / metadata keys survive), write.
    - Walk folders; for each, slug + dedupe directory name, create the dir,
      build `ocFolderFile`, layer in `Extra` from prior `folder.yml`, write,
      and recurse into `saveItems(sub, f.Folders, f.Requests)`.

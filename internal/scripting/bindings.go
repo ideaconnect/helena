@@ -303,6 +303,28 @@ func mergeKVFromObject(existing []model.KeyValue, obj *goja.Object) []model.KeyV
 	return out
 }
 
+// chainToObject builds the script-side `chain` global from the chain
+// map supplied by [internal/chain]. Each alias becomes a property
+// whose value is `{ request: {...}, response: {...} }` mirroring the
+// top-level request/response surface — including lazy JSON/XML parsers
+// — so users can write `chain.login.response.json.token` naturally.
+// A nil/empty map binds an empty object so scripts can still safely
+// `Object.keys(chain)` without a type check.
+func chainToObject(vm *goja.Runtime, chain map[string]ChainView) *goja.Object {
+	obj := vm.NewObject()
+	for alias, view := range chain {
+		entry := vm.NewObject()
+		req := vm.NewObject()
+		_ = req.Set("method", view.Request.Method)
+		_ = req.Set("url", view.Request.URL)
+		_ = req.Set("body", string(view.Request.Body))
+		_ = entry.Set("request", req)
+		_ = entry.Set("response", responseToObject(vm, view.Response))
+		_ = obj.Set(alias, entry)
+	}
+	return obj
+}
+
 // responseToObject reflects the response into a goja object exposed to
 // post-response scripts. JSON parsing is attempted regardless of
 // Content-Type so APIs that return JSON without a header still get

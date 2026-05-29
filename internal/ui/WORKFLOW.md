@@ -104,49 +104,63 @@ Enter keyboard shortcut.
    `fyne.CurrentApp().OpenURL` when an authorization_code flow needs
    the user to approve scopes.
 5. Build a `scripting.Runtime` via
-   `scripting.New(sessionEnvBridge{s: m.sess})`. The bridge's `Get`
-   reads through `Session.Resolver().Lookup` (overlay over active env)
-   and `Set` calls `Session.SetEnvOverlay`. The runtime is cheap to
-   construct; we make one per Send so any session changes between Sends
-   are picked up automatically.
+   `scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})`. The
+   bridge's `Get` reads through the captured env snapshot + live
+   overlay; `Set` calls `Session.SetEnvOverlay`. Wrap it in a
+   `chainExecutor{rt, client, envSnap, sess}` and a
+   `sessionRequestFinder{m.sess}` — these are the two adapters the
+   chain runner needs.
 6. Status -> "Sending…", Send button disabled, CORS banner hidden — all on
    the UI goroutine.
-7. **Spawn a goroutine.** Inside, first run the pre-request hook:
-   - If `req.Scripts.IsEmpty()` is true, skip the runtime entirely.
-   - Otherwise `rt.RunPreRequest(ctx, req.Scripts.PreRequest, &req)`.
-     A non-nil error short-circuits the Send: post the error to the
-     Raw response panel, dump any captured console lines into the
-     Script Console panel, re-enable Send, and return. **The request
-     is never sent when the pre-script fails.**
-   - On success, build the resolver from the captured `envSnap` plus
-     a fresh `m.sess.SnapshotEnvOverlay()` so any `helena.env.set`
-     calls the pre-script made become visible to `httpclient.Build`
-     without the worker having to call `m.sess.Resolver()` (which
-     would race against UI-thread env mutations).
-8. Call `client.Do(ctx, req, resolver)`. This blocks on the network
-   and must not run on the UI goroutine.
-9. If Do returned a response and `PostResponse` is non-empty, run
-   `rt.RunPostResponse(ctx, req.Scripts.PostResponse, req,
-   scripting.ResponseInput{...})`. Errors from the post-script don't
-   block the response from being shown — they're appended to the
-   status line ("200 OK · … · post-script: …"). Mutations on the
-   request inside the post-script are ignored — the request has
-   already gone over the wire.
-10. Inside the goroutine, marshal results back via `fyne.Do(func() { ... })`.
-   `fyne.Do` is the only safe way to touch widgets from a non-UI goroutine;
-   it schedules the callback onto Fyne's event loop.
-11. The `fyne.Do` body:
-    - Re-enables Send and renders the pre + post console lines into
-      `scriptConsole`.
-    - On error: selects the Raw tab, sets the status line, dumps the error text
-      into the Raw entry, clears Pretty and Headers.
-    - On success: fills `responseRaw`, `headersText`; runs
-      `responsefmt.PrettyJSON` / `PrettyXML` based on Content-Type to fill
-      Pretty when applicable; selects Pretty or Raw depending on whether
-      pretty-printing succeeded.
-    - Sets status to `"<Status> · <size> · <duration>"`, possibly
-      suffixed with `· post-script: <err>`.
-    - If `resp.CORSWarning != ""`, shows the orange `corsBanner`.
+7. **Spawn a goroutine.** Inside, the chain runner executes any
+   declared before-hooks first:
+   - Call `chain.Resolve(ctx, req, finder, exec)`. The runner walks
+     `req.Chain` in order, recursively resolves each predecessor's
+     own `Chain`, executes them via `exec.ExecuteOnce` (which is the
+     same single execution path used for the leaf — see step 8), and
+     accumulates an alias→View map plus the console output of every
+     step. Returns the leaf's chainMap (the aliases the leaf's own
+     scripts can read), the accumulated console, and the first
+     error. See [internal/chain/WORKFLOW.md](../chain/WORKFLOW.md).
+   - On error, surface `"Chain error: …"` in the status + Raw panel,
+     re-enable Send, and return. **The leaf is never executed when
+     the chain fails.**
+8. Run the leaf via the SAME `exec.ExecuteOnce(ctx, req, chainMap)`.
+   Inside one ExecuteOnce call:
+   - Deep-copy Headers / Params / Body.Form so the worker can't race
+     UI-thread edits to the live currentRequest slices.
+   - Run the pre-script with the supplied chainMap bound as
+     `chain.<alias>`. Pre-script failure returns a fatal error (no
+     HTTP).
+   - Build the resolver from `envSnap` + a fresh
+     `Session.SnapshotEnvOverlay()` so any `helena.env.set` from
+     chain steps or this pre-script is visible to `httpclient.Build`.
+   - Call `client.Do(ctx, req, resolver)`. HTTP failure returns a
+     fatal error.
+   - Build the chain.View from the successful response (carries
+     Size, Duration, CORSWarning for the leaf-display path).
+   - Run the post-script with the chainMap. Post-script failure
+     returns a *non-fatal* error — the View is fully populated, so
+     the UI can still render the response.
+9. Inside the goroutine, marshal results back via `fyne.Do(func() { ... })`.
+   `fyne.Do` is the only safe way to touch widgets from a non-UI
+   goroutine; it schedules the callback onto Fyne's event loop.
+10. The `fyne.Do` body:
+    - Re-enables Send and renders chain console + leaf console lines
+      into `scriptConsole`.
+    - If `view.Response.StatusCode == 0`, the leaf's pre-script or
+      HTTP failed: select the Raw tab, set the status line, dump the
+      error into Raw, clear Pretty and Headers.
+    - Otherwise render from `view.Response`: fill `responseRaw`,
+      `headersText`; run `responsefmt.PrettyJSON` / `PrettyXML`
+      based on Content-Type to fill Pretty when applicable; select
+      Pretty or Raw depending on whether pretty-printing succeeded.
+    - Set status to `"<Status> · <size> · <duration>"`, possibly
+      suffixed with `· sent <METHOD> <URL>` (pre-script mutated
+      method or URL) and / or `· post-script: <err>` if the leaf's
+      post-script failed.
+    - If `view.Response.CORSWarning != ""`, show the orange
+      `corsBanner`.
 
 The Send button is the lifecycle marker: disabled when the goroutine is in
 flight, re-enabled in the `fyne.Do` block. Pressing Enter twice in a row

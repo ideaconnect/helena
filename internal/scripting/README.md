@@ -94,11 +94,39 @@ Post-response additionally binds a read-only `request` (same shape) and a
 | -------- | ---- | ----- |
 | `response.status` | int | e.g. `200` |
 | `response.statusText` | string | e.g. `"200 OK"` |
-| `response.headers` | object | First value per header, case-insensitive (HTTP semantics). |
+| `response.headers` | object | First value per header, keys canonicalized to MIME form (`Content-Type`, `Location`); read with the canonical name. |
 | `response.body` | string | Raw body. |
 | `response.text` | string | Alias for `body`. |
 | `response.json` | parsed | JSON object/array when the body parses; otherwise `undefined`. |
-| `response.xml` | parsed | xml2js-style nested object with `$` for attrs and `_` for text. Duplicate child names become arrays. `undefined` when the body isn't XML. |
+| `response.xml` | parsed | xml2js-style nested object with `$` for attrs and `_` for text. Duplicate child names become arrays. `undefined` when the body isn't XML or exceeds the safety nesting cap (256 levels). |
+
+## The `chain` global
+
+When a request declares `Chain []ChainStep`, the
+[internal/chain](../chain/) runner executes the named predecessors
+in order before the leaf runs and binds each result as
+`chain.<alias>`:
+
+```js
+// In the leaf's pre-request script
+request.headers["Authorization"] = "Bearer " + chain.login.response.json.token;
+```
+
+Each entry has two sub-objects:
+
+| Property | Type | Notes |
+| -------- | ---- | ----- |
+| `chain.<alias>.request.method` | string | The method the predecessor was sent with (post-pre-script mutations). |
+| `chain.<alias>.request.url` | string | Final URL after variable resolution. |
+| `chain.<alias>.request.body` | string | Wire body. |
+| `chain.<alias>.response.*` | object | Identical shape to the top-level `response` global (status, statusText, headers, body, text, json, xml). |
+
+Alias scope is **per request** — when request B runs as part of A's
+chain, B's own scripts see only B's declared aliases, never A's. A
+never sees B's predecessors' aliases either. The `chain` global is
+also bound in the post-response phase so post-scripts can correlate
+the leaf's response with a predecessor's. A request with no Chain
+sees `chain` as `{}` — safe to iterate with `Object.keys(chain)`.
 
 ## Timeout
 

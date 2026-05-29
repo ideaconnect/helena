@@ -5,7 +5,7 @@
 | File | Purpose |
 | ---- | ------- |
 | [doc.go](doc.go) | Package doc comment. |
-| [shell.go](shell.go) | `MainUI` struct, `NewMainUI`, the main layout, send/save/loadRequest, params/headers row machinery, environment + settings dialogs, body validate/format. Also defines `sessionEnvBridge` — the `scripting.EnvBridge` adapter that hands `helena.env.set/get` calls through to the session overlay. |
+| [shell.go](shell.go) | `MainUI` struct, `NewMainUI`, the main layout, send/save/loadRequest, params/headers row machinery, environment + settings dialogs, body validate/format. Also defines `sessionEnvBridge` (the `scripting.EnvBridge` adapter), `sessionRequestFinder` (the `chain.RequestFinder` adapter), and `chainExecutor` — the single execution path that runs pre-script → `client.Do` → post-script for both chain steps and the leaf. |
 | [items.go](items.go) | Tree CRUD actions (new request, new folder, rename, duplicate, delete) plus `parentForNew`, `promptName`, `nameOfNode`, `isAncestor` helpers. |
 | [workspaces.go](workspaces.go) | `editWorkspaces` dialog and `refreshWorkspaceDropdown`. |
 | [collections.go](collections.go) | `actionNewCollection` — prompt + folder picker + empty YAML write. |
@@ -13,13 +13,15 @@
 | [export.go](export.go) | `actionExport` — cURL / wget snippet dialog plus `newSnippetEntry`. |
 | [docs.go](docs.go) | `buildDocsTab` and `refreshDocsPreview` — per-request Markdown editor with rendered preview subtab. |
 | [scripts.go](scripts.go) | `buildScriptsTab` — the Pre-request / Post-response code editors and the read-only Console panel below. `loadScriptsTab` populates the editors during `loadRequest`; `setScriptConsole` renders the captured console output after each Send. |
+| [chain.go](chain.go) | `buildChainTab` — the list of (Alias, Request path) rows for declaring before-hooks. `loadChainTab` / `rebuildChainRows` / `addChainStep` / `buildChainRow` follow the same patterns as the Params and Headers tabs. |
 | [auth.go](auth.go) | `buildAuthTab`, `loadAuthTab`, `refreshAuthVisibility`, `refreshAuthInheritLabel`, and the `ensureBasic`/`ensureBearer`/`ensureAPIKey`/`ensureOAuth2` lazy allocators for the per-type sub-structs. |
 | [oauth2.go](oauth2.go) | `fyneAuthCodeStarter` — adapter that hands the authorization URL to `fyne.CurrentApp().OpenURL`. The `newAuthCodeStarter` package-level var lets tests swap in a fake. |
 | [theme.go](theme.go) | `ApplyTheme` plus the `themeName` / `themeFromName` string mapping used by the picker. |
 | [shortcuts.go](shortcuts.go) | `shortcutSpec`, `registerShortcuts`, `showShortcuts`, `shortcutModifierName`, and `shortcutRowLayout`. |
 | [shell_test.go](shell_test.go) | `NewMainUI` construction + headless layout smoke test. |
 | [docs_test.go](docs_test.go) | Docs editor load + preview + write-back, plus clear-on-nil behaviour. |
-| [scripts_test.go](scripts_test.go) | Scripts tab load + write-back, loading-flag suppression across request swaps, clear-on-nil for both editors and the console, console rendering, and the `sessionEnvBridge` adapter. |
+| [scripts_test.go](scripts_test.go) | Scripts tab load + write-back, loading-flag suppression across request swaps, clear-on-nil for both editors and the console, console rendering (incl. truncation), and the `sessionEnvBridge` adapter. |
+| [chain_test.go](chain_test.go) | Chain tab load + add/delete, loading-flag suppression across request swaps, and `pruneEmptyChain` save-time filter. |
 | [auth_test.go](auth_test.go) | Auth tab load + write-back for Bearer / Basic / API-Key, type-change → Auth.Type, and m.loading suppression. |
 | [shortcuts_test.go](shortcuts_test.go) | Shortcut registration, modifier label, dialog open, and nil-window short-circuit. |
 | [theme_test.go](theme_test.go) | `themeName` / `themeFromName` round-trip and `ApplyTheme` panic-safety. |
@@ -55,7 +57,8 @@ without infinite write-back loops.
 | `docsPreview` | `*widget.RichText` | Rendered Markdown shown in the Docs > Preview subtab. |
 | `preScriptEditor` | `*widget.Entry` | Monospace editor for `request.Scripts.PreRequest` source. |
 | `postScriptEditor` | `*widget.Entry` | Monospace editor for `request.Scripts.PostResponse` source. |
-| `scriptConsole` | `*widget.Entry` | Read-only console panel below the script editors. Filled by `setScriptConsole` with the joined console lines from the last Send's pre + post results. |
+| `scriptConsole` | `*widget.Entry` | Read-only console panel below the script editors. Filled by `setScriptConsole` with the joined console lines from the last Send's chain steps + leaf pre+post results. Capped at `scriptConsoleMaxLines`. |
+| `chainRows` | `*fyne.Container` | VBox of (Alias, Request path) rows for the Chain tab. Rebuilt by `rebuildChainRows` after add/delete or loadRequest. |
 | `authType` | `*widget.Select` | Auth Type dropdown (None / Inherit / Basic / Bearer / API Key / OAuth 2.0). Drives `refreshAuthVisibility`. |
 | `authBasic*` / `authBearer*` / `authAPIKey*` / `authOAuth2*` | various entries / selects / check | Per-type form widgets. Each `OnChanged` calls the matching `ensure*` allocator if the sub-struct is nil. |
 | `authInheritLabel` | `*widget.Label` | Live preview text showing what `session.EffectiveAuth(currentRequestID)` would resolve to, refreshed on load and type change. |

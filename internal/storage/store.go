@@ -112,6 +112,22 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 				}
 				rf.Scripts.Extra = prev.Scripts.Extra
 			}
+			// Chain: pair entries by alias and copy the prior file's Extra
+			// catch-all into the matching new entry so any per-entry keys
+			// other tools authored survive the round-trip.
+			if len(prev.Chain) > 0 && len(rf.Chain) > 0 {
+				byAlias := make(map[string]map[string]yaml.Node, len(prev.Chain))
+				for _, p := range prev.Chain {
+					if p.Alias != "" && len(p.Extra) > 0 {
+						byAlias[p.Alias] = p.Extra
+					}
+				}
+				for i := range rf.Chain {
+					if e, ok := byAlias[rf.Chain[i].Alias]; ok {
+						rf.Chain[i].Extra = e
+					}
+				}
+			}
 		}
 		if err := writeYAML(filepath.Join(dir, name+ymlExt), rf); err != nil {
 			return err

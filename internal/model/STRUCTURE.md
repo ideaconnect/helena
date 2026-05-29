@@ -19,6 +19,12 @@ A single HTTP request as the user defined it.
 - `Docs` — free-form markdown shown in the request's Docs tab.
 - `Auth` — own auth or `Inherit` from parent; see [auth.go](auth.go).
 - `Scripts` — pre/post JavaScript hooks; see `Scripts`.
+- `Chain` — ordered list of `ChainStep` before-hooks; see `ChainStep`.
+
+### `ChainStep` — [model.go](model.go)
+Names another request to execute before this one and binds the result to an alias the request's scripts can read via `chain.<alias>`. Used by [internal/chain](../chain/).
+- `Alias` — script-visible name; must be unique within the parent's `Chain`.
+- `Request` — slash-separated name path into the same collection (e.g. `"Auth/Login"`). Case-sensitive on the display name.
 
 ### `Scripts` — [model.go](model.go)
 Per-request JavaScript bodies the [internal/scripting](../scripting/) runtime executes around Send. Both fields are raw ECMAScript source; an empty string disables that hook.

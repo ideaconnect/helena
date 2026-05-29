@@ -354,6 +354,50 @@ func (s *Session) SnapshotActiveEnvVars() map[string]string {
 	return s.activeEnvVars()
 }
 
+// FindRequestByPath walks the active collection for a request whose
+// slash-separated Name path matches ref. `"Auth/Login"` resolves to the
+// request named "Login" inside the folder named "Auth". A leading "/"
+// is tolerated. Matching is case-sensitive on the display name. Returns
+// (req, true) on the first match, or (zero, false) when nothing
+// matches. Used by [internal/chain] to resolve `ChainStep.Request`.
+func (s *Session) FindRequestByPath(ref string) (model.Request, bool) {
+	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
+		return model.Request{}, false
+	}
+	parts := strings.Split(strings.TrimPrefix(ref, "/"), "/")
+	for i := range parts {
+		parts[i] = strings.TrimSpace(parts[i])
+	}
+	col := &s.cols[s.activeCol]
+	return findRequestInContainer(col.Folders, col.Requests, parts)
+}
+
+// findRequestInContainer recurses into folders and matches against
+// requests at the path's leaf. Empty path is an error case the caller
+// rejects.
+func findRequestInContainer(folders []model.Folder, requests []model.Request, parts []string) (model.Request, bool) {
+	if len(parts) == 0 {
+		return model.Request{}, false
+	}
+	if len(parts) == 1 {
+		for _, r := range requests {
+			if r.Name == parts[0] {
+				return r, true
+			}
+		}
+		return model.Request{}, false
+	}
+	head, rest := parts[0], parts[1:]
+	for _, f := range folders {
+		if f.Name == head {
+			if r, ok := findRequestInContainer(f.Folders, f.Requests, rest); ok {
+				return r, true
+			}
+		}
+	}
+	return model.Request{}, false
+}
+
 // SaveActiveCollection writes the active collection back to its source directory.
 func (s *Session) SaveActiveCollection() error {
 	if s.activeCol < 0 || s.activeCol >= len(s.cols) {

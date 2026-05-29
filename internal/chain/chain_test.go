@@ -1,0 +1,226 @@
+package chain
+
+import (
+	"context"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/idct/helena/internal/model"
+)
+
+// fakeFinder is a tiny RequestFinder backed by a path → Request map.
+type fakeFinder map[string]model.Request
+
+func (f fakeFinder) FindRequestByPath(ref string) (model.Request, bool) {
+	r, ok := f[ref]
+	return r, ok
+}
+
+// recordingExec captures each ExecuteOnce call so tests can assert
+// order and chain visibility. It returns a deterministic View per
+// request keyed by Name.
+type recordingExec struct {
+	calls    []string
+	chainSee map[string]map[string]bool
+}
+
+func newRecordingExec() *recordingExec {
+	return &recordingExec{chainSee: map[string]map[string]bool{}}
+}
+
+func (e *recordingExec) ExecuteOnce(_ context.Context, r model.Request, chainMap map[string]View) (View, []string, error) {
+	e.calls = append(e.calls, r.Name)
+	if e.chainSee[r.Name] == nil {
+		e.chainSee[r.Name] = map[string]bool{}
+	}
+	for alias := range chainMap {
+		e.chainSee[r.Name][alias] = true
+	}
+	return View{
+		Request: RequestView{Method: string(r.Method), URL: r.URL},
+		Response: ResponseView{
+			StatusCode: 200, Status: "200 OK",
+			Headers: http.Header{"Content-Type": []string{"text/plain"}},
+			Body:    []byte("from " + r.Name),
+		},
+	}, []string{"console:" + r.Name}, nil
+}
+
+// TestResolveEmptyChain verifies a request with no Chain produces an
+// empty alias map and no executor calls.
+func TestResolveEmptyChain(t *testing.T) {
+	leaf := model.Request{ID: "L", Name: "Leaf"}
+	exec := newRecordingExec()
+	m, console, err := Resolve(context.Background(), leaf, fakeFinder{}, exec)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(m) != 0 {
+		t.Errorf("chainMap len = %d, want 0", len(m))
+	}
+	if len(console) != 0 {
+		t.Errorf("console = %v, want empty", console)
+	}
+	if len(exec.calls) != 0 {
+		t.Errorf("calls = %v, want []", exec.calls)
+	}
+}
+
+// TestResolveSingleStep verifies one before-hook executes and lands
+// under its alias in the returned map.
+func TestResolveSingleStep(t *testing.T) {
+	login := model.Request{ID: "B", Name: "Login", URL: "https://auth/login"}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "login", Request: "Auth/Login"},
+	}}
+	finder := fakeFinder{"Auth/Login": login}
+	exec := newRecordingExec()
+	m, console, err := Resolve(context.Background(), leaf, finder, exec)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if len(m) != 1 || m["login"].Request.URL != "https://auth/login" {
+		t.Errorf("chainMap = %+v, want {login: Login}", m)
+	}
+	if got := strings.Join(exec.calls, ","); got != "Login" {
+		t.Errorf("calls = %q, want 'Login'", got)
+	}
+	if len(console) != 1 || console[0] != "console:Login" {
+		t.Errorf("console = %v", console)
+	}
+}
+
+// TestResolveRecursiveOrder verifies that A → [B] → [C] runs in order
+// C, B, with B's chain map containing only its OWN aliases (csrf), and
+// the returned map for A containing only A's own alias (login).
+func TestResolveRecursiveOrder(t *testing.T) {
+	bootstrap := model.Request{ID: "C", Name: "Bootstrap"}
+	login := model.Request{ID: "B", Name: "Login", Chain: []model.ChainStep{
+		{Alias: "csrf", Request: "Bootstrap"},
+	}}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "login", Request: "Auth/Login"},
+	}}
+	finder := fakeFinder{
+		"Auth/Login": login,
+		"Bootstrap":  bootstrap,
+	}
+	exec := newRecordingExec()
+	m, _, err := Resolve(context.Background(), leaf, finder, exec)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	// Bootstrap first, then Login (Leaf is run by the caller).
+	if got := strings.Join(exec.calls, ","); got != "Bootstrap,Login" {
+		t.Errorf("call order = %q, want 'Bootstrap,Login'", got)
+	}
+	// Leaf's returned chain map: only login.
+	if _, ok := m["login"]; !ok || len(m) != 1 {
+		t.Errorf("leaf chainMap = %v, want {login: ...}", m)
+	}
+	// Login's chain map (recorded during its ExecuteOnce): only csrf.
+	if !exec.chainSee["Login"]["csrf"] || len(exec.chainSee["Login"]) != 1 {
+		t.Errorf("Login saw chain = %v, want only {csrf}", exec.chainSee["Login"])
+	}
+	// Bootstrap's chain map: empty.
+	if len(exec.chainSee["Bootstrap"]) != 0 {
+		t.Errorf("Bootstrap saw chain = %v, want empty", exec.chainSee["Bootstrap"])
+	}
+}
+
+// TestResolveCycleDirect verifies A → A short-cycle is caught.
+func TestResolveCycleDirect(t *testing.T) {
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "self", Request: "Leaf"},
+	}}
+	finder := fakeFinder{"Leaf": leaf}
+	exec := newRecordingExec()
+	_, _, err := Resolve(context.Background(), leaf, finder, exec)
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("err = %v, want cycle error", err)
+	}
+}
+
+// TestResolveCycleIndirect verifies A → B → A is caught.
+func TestResolveCycleIndirect(t *testing.T) {
+	a := model.Request{ID: "A", Name: "A", Chain: []model.ChainStep{
+		{Alias: "b", Request: "B"},
+	}}
+	b := model.Request{ID: "B", Name: "B", Chain: []model.ChainStep{
+		{Alias: "a", Request: "A"},
+	}}
+	finder := fakeFinder{"A": a, "B": b}
+	exec := newRecordingExec()
+	_, _, err := Resolve(context.Background(), a, finder, exec)
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("err = %v, want cycle error", err)
+	}
+}
+
+// TestResolveUnknownRef verifies an unresolved name path surfaces a
+// clear error naming the alias.
+func TestResolveUnknownRef(t *testing.T) {
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "missing", Request: "DoesNotExist"},
+	}}
+	exec := newRecordingExec()
+	_, _, err := Resolve(context.Background(), leaf, fakeFinder{}, exec)
+	if err == nil || !strings.Contains(err.Error(), "DoesNotExist") {
+		t.Errorf("err = %v, want unresolved-ref error", err)
+	}
+}
+
+// TestResolveDuplicateAlias verifies two steps with the same alias in
+// one request's chain produce a clear error.
+func TestResolveDuplicateAlias(t *testing.T) {
+	a := model.Request{ID: "X", Name: "X"}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "x", Request: "X"},
+		{Alias: "x", Request: "X"},
+	}}
+	finder := fakeFinder{"X": a}
+	exec := newRecordingExec()
+	_, _, err := Resolve(context.Background(), leaf, finder, exec)
+	if err == nil || !strings.Contains(err.Error(), "duplicate alias") {
+		t.Errorf("err = %v, want duplicate-alias error", err)
+	}
+}
+
+// TestResolveMissingAlias verifies a step with no Alias is rejected.
+func TestResolveMissingAlias(t *testing.T) {
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "", Request: "X"},
+	}}
+	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec())
+	if err == nil || !strings.Contains(err.Error(), "alias") {
+		t.Errorf("err = %v, want missing-alias error", err)
+	}
+}
+
+// TestResolveExecutorError verifies an executor failure aborts the
+// chain and the error names the offending step.
+func TestResolveExecutorError(t *testing.T) {
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "boom", Request: "X"},
+	}}
+	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
+	exec := failingExec{}
+	_, _, err := Resolve(context.Background(), leaf, finder, exec)
+	if err == nil || !strings.Contains(err.Error(), "boom") {
+		t.Errorf("err = %v, want error naming step 'boom'", err)
+	}
+}
+
+type failingExec struct{}
+
+func (failingExec) ExecuteOnce(context.Context, model.Request, map[string]View) (View, []string, error) {
+	return View{}, nil, errFakeExec
+}
+
+var errFakeExec = stubErr("executor failed")
+
+type stubErr string
+
+func (s stubErr) Error() string { return string(s) }

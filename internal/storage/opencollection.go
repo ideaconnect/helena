@@ -59,7 +59,16 @@ type ocRequestFile struct {
 	HTTP    *ocHTTP              `yaml:"http,omitempty"`
 	Docs    string               `yaml:"docs,omitempty"` // free-form markdown
 	Scripts *ocScripts           `yaml:"scripts,omitempty"`
+	Chain   []ocChainStep        `yaml:"chain,omitempty"`
 	Extra   map[string]yaml.Node `yaml:",inline"` // catches settings, runtime, …
+}
+
+// ocChainStep mirrors one entry under the on-disk `chain:` list. Extra
+// preserves keys other tools may have nested on a chain entry.
+type ocChainStep struct {
+	Alias   string               `yaml:"alias"`
+	Request string               `yaml:"request"`
+	Extra   map[string]yaml.Node `yaml:",inline"`
 }
 
 // ocScripts mirrors the on-disk scripts block. preRequest and
@@ -164,7 +173,35 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 		HTTP:    h,
 		Docs:    r.Docs,
 		Scripts: scriptsToFile(r.Scripts),
+		Chain:   chainToFile(r.Chain),
 	}
+}
+
+// chainToFile mirrors a Chain slice into its on-disk DTO form. Returns
+// nil for an empty slice so the YAML stays clean for non-chained
+// requests.
+func chainToFile(chain []model.ChainStep) []ocChainStep {
+	if len(chain) == 0 {
+		return nil
+	}
+	out := make([]ocChainStep, len(chain))
+	for i, s := range chain {
+		out[i] = ocChainStep{Alias: s.Alias, Request: s.Request}
+	}
+	return out
+}
+
+// fileToChain maps the on-disk chain DTO back into the domain model.
+// Returns nil for an empty slice.
+func fileToChain(chain []ocChainStep) []model.ChainStep {
+	if len(chain) == 0 {
+		return nil
+	}
+	out := make([]model.ChainStep, len(chain))
+	for i, s := range chain {
+		out[i] = model.ChainStep{Alias: s.Alias, Request: s.Request}
+	}
+	return out
 }
 
 // scriptsToFile returns nil when both hooks are empty so the on-disk
@@ -197,6 +234,7 @@ func fileToRequest(f ocRequestFile) model.Request {
 		Docs:    f.Docs,
 		Auth:    model.Auth{Type: model.AuthInherit},
 		Scripts: fileToScripts(f.Scripts),
+		Chain:   fileToChain(f.Chain),
 	}
 	if f.HTTP == nil {
 		return r

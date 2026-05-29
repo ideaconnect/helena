@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/idct/helena/internal/auth"
+	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/responsefmt"
@@ -50,6 +51,90 @@ func (b sessionEnvBridge) Get(name string) (string, bool) {
 
 func (b sessionEnvBridge) Set(name, value string) { b.s.SetEnvOverlay(name, value) }
 
+// sessionRequestFinder adapts *session.Session to chain.RequestFinder
+// so the chain runner can resolve "Folder/Name" paths to the actual
+// requests in the active collection.
+type sessionRequestFinder struct{ s *session.Session }
+
+func (f sessionRequestFinder) FindRequestByPath(ref string) (model.Request, bool) {
+	return f.s.FindRequestByPath(ref)
+}
+
+// chainExecutor is the single execution path for both chain steps and
+// the leaf: deep-copy the request's KV slices, run the pre-script with
+// the supplied chain map bound as `chain.<alias>`, build the resolver
+// from the captured env snapshot + a fresh overlay snapshot, call
+// client.Do, then run the post-script. The captured fields close over
+// the per-Send constants (rt, client, envSnap, sess) so successive
+// ExecuteOnce calls don't repeat the boilerplate.
+type chainExecutor struct {
+	rt      *scripting.Runtime
+	client  *httpclient.Client
+	envSnap map[string]string
+	sess    *session.Session
+}
+
+func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMap map[string]chain.View) (chain.View, []string, error) {
+	// Deep-copy slices to insulate the parent request's data from
+	// per-step writeback or chain-time mutations.
+	r.Params = append([]model.KeyValue(nil), r.Params...)
+	r.Headers = append([]model.KeyValue(nil), r.Headers...)
+	r.Body.Form = append([]model.KeyValue(nil), r.Body.Form...)
+
+	scriptChain := chainViewToScripting(chainMap)
+	var console []string
+
+	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain)
+	console = append(console, preRes.Console...)
+	if preErr != nil {
+		return chain.View{}, console, fmt.Errorf("pre-script: %w", preErr)
+	}
+
+	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay())
+	resp, err := e.client.Do(ctx, r, resolver)
+	if err != nil {
+		return chain.View{}, console, err
+	}
+
+	view := chain.View{
+		Request: chain.RequestView{Method: string(r.Method), URL: r.URL, Body: []byte(r.Body.Content)},
+		Response: chain.ResponseView{
+			StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers,
+			Body: resp.Body, Size: resp.Size, Duration: resp.Duration, CORSWarning: resp.CORSWarning,
+		},
+	}
+
+	postRes, postErr := e.rt.RunPostResponse(ctx, r.Scripts.PostResponse, r,
+		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
+		scriptChain)
+	console = append(console, postRes.Console...)
+	if postErr != nil {
+		return view, console, fmt.Errorf("post-script: %w", postErr)
+	}
+	return view, console, nil
+}
+
+// chainViewToScripting bridges chain.View to scripting.ChainView so
+// the scripting package stays unaware of internal/chain. They carry
+// the same data with different field names by design (chain.View has
+// display fields the scripting surface deliberately doesn't expose).
+func chainViewToScripting(chainMap map[string]chain.View) map[string]scripting.ChainView {
+	if len(chainMap) == 0 {
+		return nil
+	}
+	out := make(map[string]scripting.ChainView, len(chainMap))
+	for alias, v := range chainMap {
+		out[alias] = scripting.ChainView{
+			Request: scripting.ChainRequestView{Method: v.Request.Method, URL: v.Request.URL, Body: v.Request.Body},
+			Response: scripting.ResponseInput{
+				StatusCode: v.Response.StatusCode, Status: v.Response.Status,
+				Headers: v.Response.Headers, Body: v.Response.Body,
+			},
+		}
+	}
+	return out
+}
+
 // noEnv is the option shown when no environment is selected.
 const noEnv = "No Environment"
 
@@ -79,6 +164,7 @@ type MainUI struct {
 	preScriptEditor  *widget.Entry
 	postScriptEditor *widget.Entry
 	scriptConsole    *widget.Entry
+	chainRows        *fyne.Container
 
 	authType                                                          *widget.Select
 	authBasicUsername, authBasicPassword                              *widget.Entry
@@ -189,6 +275,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewTabItem("Headers", headersTab),
 		container.NewTabItem("Body", bodyTab),
 		container.NewTabItem("Scripts", m.buildScriptsTab()),
+		container.NewTabItem("Chain", m.buildChainTab()),
 		container.NewTabItem("Docs", m.buildDocsTab()),
 	)
 
@@ -317,6 +404,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.refreshDocsPreview()
 		m.loadAuthTab(nil)
 		m.loadScriptsTab(nil)
+		m.loadChainTab(nil)
 		m.urlPreview.Hide()
 		return
 	}
@@ -343,6 +431,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	m.refreshDocsPreview()
 	m.loadAuthTab(req)
 	m.loadScriptsTab(req)
+	m.loadChainTab(req)
 	m.updateURLPreview()
 }
 
@@ -356,8 +445,10 @@ func (m *MainUI) saveRequest() {
 	// Drop incomplete (empty-key) rows on save so we don't write noise to YAML.
 	m.currentRequest.Params = pruneEmptyKV(m.currentRequest.Params)
 	m.currentRequest.Headers = pruneEmptyKV(m.currentRequest.Headers)
+	m.currentRequest.Chain = pruneEmptyChain(m.currentRequest.Chain)
 	m.rebuildParamsRows()
 	m.rebuildHeadersRows()
+	m.rebuildChainRows()
 
 	if err := m.sess.SaveActiveCollection(); err != nil {
 		m.Status.SetText("Save failed: " + err.Error())
@@ -574,16 +665,11 @@ func (m *MainUI) send() {
 	} else {
 		req = model.Request{Method: model.Method(m.Method.Selected), URL: m.URL.Text}
 	}
-	// Deep-copy Params / Headers / Body.Form so the worker goroutine
-	// doesn't race against UI-thread edits to the live currentRequest
-	// slices (e.g. the user typing in the Params tab during a slow script).
-	req.Params = append([]model.KeyValue(nil), req.Params...)
-	req.Headers = append([]model.KeyValue(nil), req.Headers...)
-	req.Body.Form = append([]model.KeyValue(nil), req.Body.Form...)
-
 	// Snapshot env vars + auth state on the UI goroutine so the worker
 	// goroutine can run for ~ScriptTimeout without racing against UI
-	// mutations of s.cols / s.activeCol / Environment.Variables.
+	// mutations of s.cols / s.activeCol / Environment.Variables. The
+	// per-Send deep-copy of slice fields happens inside ExecuteOnce so
+	// chain steps get the same insulation.
 	envSnap := m.sess.SnapshotActiveEnvVars()
 
 	client := httpclient.New(m.sess.Settings())
@@ -594,6 +680,8 @@ func (m *MainUI) send() {
 		newAuthCodeStarter(),
 	))
 	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
+	exec := chainExecutor{rt: rt, client: client, envSnap: envSnap, sess: m.sess}
+	finder := sessionRequestFinder{s: m.sess}
 
 	m.Status.SetText("Sending…")
 	m.Send.Disable()
@@ -614,88 +702,73 @@ func (m *MainUI) send() {
 			}
 		}()
 		ctx := context.Background()
-		var consoleLines []string
 
-		preRes, preErr := rt.RunPreRequest(ctx, req.Scripts.PreRequest, &req)
-		consoleLines = append(consoleLines, preRes.Console...)
-		if preErr != nil {
+		chainMap, chainConsole, chainErr := chain.Resolve(ctx, req, finder, exec)
+		if chainErr != nil {
 			fyne.Do(func() {
 				m.Send.Enable()
-				m.Status.SetText("Pre-request script error: " + preErr.Error())
-				m.responseRaw.SetText(preErr.Error())
+				m.Status.SetText("Chain error: " + chainErr.Error())
+				m.responseRaw.SetText(chainErr.Error())
 				m.prettyText.SetText("")
 				m.headersText.SetText("")
 				m.Response.SelectIndex(1)
-				m.setScriptConsole(consoleLines)
+				m.setScriptConsole(chainConsole)
 			})
 			return
 		}
 
-		// Build the resolver after the pre-request hook so any
-		// helena.env.set calls become visible to httpclient.Build. We
-		// use the captured envSnap (not m.sess.Resolver()) so we don't
-		// race against UI-thread env mutations during the Send.
-		resolver := vars.New(envSnap, m.sess.SnapshotEnvOverlay())
-		resp, err := client.Do(ctx, req, resolver)
-
-		var postRes scripting.Result
-		var postErr error
-		if err == nil {
-			postRes, postErr = rt.RunPostResponse(ctx, req.Scripts.PostResponse, req, scripting.ResponseInput{
-				StatusCode: resp.StatusCode,
-				Status:     resp.Status,
-				Headers:    resp.Headers,
-				Body:       resp.Body,
-			})
-			consoleLines = append(consoleLines, postRes.Console...)
-		}
+		view, leafConsole, leafErr := exec.ExecuteOnce(ctx, req, chainMap)
+		consoleLines := append(chainConsole, leafConsole...)
 
 		fyne.Do(func() {
 			m.Send.Enable()
 			m.setScriptConsole(consoleLines)
-			if err != nil {
-				m.Response.SelectIndex(1) // Raw shows the error
-				m.Status.SetText("Error: " + err.Error())
-				m.responseRaw.SetText(err.Error())
+			// No HTTP completed → pre-script or HTTP failure; show the error.
+			if view.Response.StatusCode == 0 {
+				m.Response.SelectIndex(1)
+				m.Status.SetText("Error: " + leafErr.Error())
+				m.responseRaw.SetText(leafErr.Error())
 				m.prettyText.SetText("")
 				m.headersText.SetText("")
 				return
 			}
-			m.responseRaw.SetText(string(resp.Body))
-			m.headersText.SetText(responsefmt.FormatHeaders(resp.Headers))
+			// HTTP completed → render response. leafErr (if any) is a
+			// post-script error; surfaced as a status-line suffix.
+			m.responseRaw.SetText(string(view.Response.Body))
+			m.headersText.SetText(responsefmt.FormatHeaders(view.Response.Headers))
 
 			pretty := ""
-			ct := resp.Headers.Get("Content-Type")
+			ct := view.Response.Headers.Get("Content-Type")
 			switch {
 			case responsefmt.IsJSON(ct):
-				if p, perr := responsefmt.PrettyJSON(resp.Body); perr == nil {
+				if p, perr := responsefmt.PrettyJSON(view.Response.Body); perr == nil {
 					pretty = p
 				}
 			case responsefmt.IsXML(ct):
-				if p, perr := responsefmt.PrettyXML(resp.Body); perr == nil {
+				if p, perr := responsefmt.PrettyXML(view.Response.Body); perr == nil {
 					pretty = p
 				}
 			}
 			m.prettyText.SetText(pretty)
 			if pretty != "" {
-				m.Response.SelectIndex(0) // Pretty
+				m.Response.SelectIndex(0)
 			} else {
-				m.Response.SelectIndex(1) // Raw
+				m.Response.SelectIndex(1)
 			}
 
 			status := fmt.Sprintf("%s · %s · %s",
-				resp.Status,
-				responsefmt.HumanSize(resp.Size),
-				responsefmt.HumanDuration(resp.Duration))
-			if req.Method != originalMethod || req.URL != originalURL {
-				status += fmt.Sprintf(" · sent %s %s", req.Method, req.URL)
+				view.Response.Status,
+				responsefmt.HumanSize(view.Response.Size),
+				responsefmt.HumanDuration(view.Response.Duration))
+			if view.Request.Method != string(originalMethod) || view.Request.URL != originalURL {
+				status += fmt.Sprintf(" · sent %s %s", view.Request.Method, view.Request.URL)
 			}
-			if postErr != nil {
-				status += " · post-script: " + postErr.Error()
+			if leafErr != nil {
+				status += " · " + leafErr.Error()
 			}
 			m.Status.SetText(status)
-			if resp.CORSWarning != "" {
-				m.corsBanner.Text = "⚠ CORS: " + resp.CORSWarning
+			if view.Response.CORSWarning != "" {
+				m.corsBanner.Text = "⚠ CORS: " + view.Response.CORSWarning
 				m.corsBanner.Refresh()
 				m.corsBanner.Show()
 			}
@@ -864,6 +937,19 @@ func pruneEmptyKV(kvs []model.KeyValue) []model.KeyValue {
 	for _, kv := range kvs {
 		if strings.TrimSpace(kv.Key) != "" {
 			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// pruneEmptyChain drops chain steps where either Alias or Request is
+// blank — the user added a row but didn't fill it in, so we keep the
+// YAML clean instead of writing half-filled entries.
+func pruneEmptyChain(steps []model.ChainStep) []model.ChainStep {
+	out := steps[:0]
+	for _, s := range steps {
+		if strings.TrimSpace(s.Alias) != "" && strings.TrimSpace(s.Request) != "" {
+			out = append(out, s)
 		}
 	}
 	return out

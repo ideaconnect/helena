@@ -9,7 +9,8 @@
 | [store.go](store.go) | The `Save`/`Load` entry points and the directory walker, including the Extra round-trip and orphan sweep. |
 | [storage_test.go](storage_test.go) | Round-trip, key-naming and docs-key tests. |
 | [storage_extras_test.go](storage_extras_test.go) | Extra round-trip and orphan sweep tests against hand-written YAML. |
-| [storage_scripts_test.go](storage_scripts_test.go) | Scripts round-trip — on-disk key names, empty-Scripts omission, and `scripts.Extra` survival across a load → save cycle. |
+| [storage_scripts_test.go](storage_scripts_test.go) | Scripts round-trip — on-disk key names, empty-Scripts omission, `scripts.Extra` survival, and Extra preservation when the user clears both hooks. |
+| [storage_chain_test.go](storage_chain_test.go) | Chain round-trip — on-disk key names, empty-Chain omission, and per-entry Extra preservation across a load → save cycle. |
 
 ## DTO layer
 
@@ -25,8 +26,9 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocParam` | a query/path parameter (name/value/type/disabled + Extra) | `model.KeyValue` used for `model.Request.Params` |
 | `ocBody` | a request body (`type`, `data` + Extra) | `model.Body` (`Type`, `Content`) |
 | `ocHTTP` | the `http:` block of a request (method, url, headers, params, body, auth + Extra) | the HTTP-level fields of `model.Request` |
-| `ocRequestFile` | one request `.yml` (info + http + docs + scripts + Extra) | `model.Request` |
+| `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + Extra) | `model.Request` |
 | `ocScripts` | the per-request `scripts:` block (`preRequest`, `postResponse`, + Extra) | `model.Scripts` |
+| `ocChainStep` | one entry under `chain:` (`alias`, `request`, + Extra) | `model.ChainStep` |
 | `ocFolderFile` | one `folder.yml` (info + auth + Extra) | `model.Folder` (name + auth; folders/requests are read from the surrounding directory) |
 | `ocCollectionFile` | the root `opencollection.yml` (info + auth + Extra) | the top-level `model.Collection` (name + auth; the rest comes from the directory) |
 | `ocAuth` | the `auth:` block on requests / folders / collections (`type`, one sub-block, + Extra) | `model.Auth` |
@@ -46,6 +48,8 @@ the output on marshal. This is the heart of the lossless round-trip.
 | [`fileToAuth`](opencollection.go) | `*ocAuth` → `model.Auth`. Nil input is treated as `AuthInherit` for request/folder callers; the collection-root load path explicitly substitutes `AuthNone` instead. |
 | [`scriptsToFile`](opencollection.go) | `model.Scripts` → `*ocScripts`. Returns nil when both hooks are empty so the YAML stays clean for non-scripted requests. |
 | [`fileToScripts`](opencollection.go) | `*ocScripts` → `model.Scripts`. Nil input produces the zero `Scripts` value (both hooks empty). |
+| [`chainToFile`](opencollection.go) | `[]model.ChainStep` → `[]ocChainStep`. Returns nil for an empty slice. |
+| [`fileToChain`](opencollection.go) | `[]ocChainStep` → `[]model.ChainStep`. Nil-safe; returns nil for an empty slice. |
 
 The model's `KeyValue.Enabled` is flipped to the DTO's `Disabled` and back so
 the on-disk representation matches OpenCollection's convention of recording

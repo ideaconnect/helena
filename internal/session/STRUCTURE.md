@@ -4,7 +4,7 @@
 
 | File | Responsibility |
 | --- | --- |
-| [session.go](session.go) | `Session` type, constructor `New`, workspace switching, active collection / environment, UI state persistence (open request, window size, settings), `Resolver()`, env overlay (`SetEnvOverlay` / `EnvOverlay` / `ClearEnvOverlay`). |
+| [session.go](session.go) | `Session` type, constructor `New`, workspace switching, active collection / environment, UI state persistence (open request, window size, settings), `Resolver()`, env overlay (`SetEnvOverlay` / `EnvOverlay` / `ClearEnvOverlay` / `SnapshotEnvOverlay` / `SnapshotActiveEnvVars`), and `FindRequestByPath` used by [internal/chain](../chain/). |
 | [tree.go](tree.go) | `Tree` navigation model used by the Fyne `widget.Tree`. Defines the node ID format and the lookups that drive `widget.Tree` callbacks. |
 | [items.go](items.go) | Tree mutation: `AddRequest`, `AddFolder`, `RenameItem`, `DeleteItem`, `DuplicateItem`. Each one mutates the in-memory collection through pointer access and calls `SaveActiveCollection`. |
 | [workspace.go](workspace.go) | Workspace CRUD: `AddWorkspace`, `RenameWorkspace`, `DeleteWorkspace`. |
@@ -13,6 +13,7 @@
 | [session_auth_test.go](session_auth_test.go) | `EffectiveAuth` resolution covering own-wins, folder→collection inheritance, fallback to `AuthNone`, and unknown-id safety. |
 | [session_env_test.go](session_env_test.go) | Resolver, env editing persistence, parse/format env vars. |
 | [session_overlay_test.go](session_overlay_test.go) | Script-set env overlay: basic round-trip, clear, Resolver layering (overlay > active env), non-persistence invariant, and concurrent-safety with `-race`. |
+| [session_chain_test.go](session_chain_test.go) | `FindRequestByPath` resolution: top-level requests, nested folders, leading-slash tolerance, unknown paths, empty paths, and the no-active-collection short-circuit. |
 | [session_save_test.go](session_save_test.go) | Round-trip of request edits through Tree pointer + save. |
 | [session_settings_test.go](session_settings_test.go) | Settings persistence. |
 | [session_uistate_test.go](session_uistate_test.go) | UI state persistence (active collection, active env, open request, window size) and stability across collection reordering. |

@@ -75,12 +75,30 @@ type ResponseInput struct {
 	Body       []byte
 }
 
-// RunPreRequest evaluates script with the helena.* surface bound and the
-// request bound as a mutable global. Mutations on request.method, url,
-// body, headers, and params are merged back into r before returning.
-// An empty (or whitespace-only) script returns a zero Result with no
-// error.
-func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Request) (Result, error) {
+// ChainView is one entry in the script-side `chain.<alias>` global —
+// the snapshot of a previously executed chain step, mirroring the
+// shape of the top-level `request` + `response` globals. The
+// internal/chain package builds these from real Send results.
+type ChainView struct {
+	Request  ChainRequestView
+	Response ResponseInput
+}
+
+// ChainRequestView is the immutable request side of a chain entry —
+// what method, URL, and body the chained predecessor was sent with.
+type ChainRequestView struct {
+	Method string
+	URL    string
+	Body   []byte
+}
+
+// RunPreRequest evaluates script with the helena.* surface bound, the
+// request bound as a mutable global, and any chain predecessors bound
+// as `chain.<alias>` (read-only). Mutations on request.method, url,
+// body, headers, params, and form are merged back into r before
+// returning. An empty (or whitespace-only) script returns a zero
+// Result with no error. A nil chain map binds an empty `chain` global.
+func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Request, chain map[string]ChainView) (Result, error) {
 	if strings.TrimSpace(script) == "" {
 		return Result{}, nil
 	}
@@ -94,6 +112,9 @@ func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Re
 	if err := vm.Set("request", reqObj); err != nil {
 		return *res, err
 	}
+	if err := vm.Set("chain", chainToObject(vm, chain)); err != nil {
+		return *res, err
+	}
 	if err := runWithTimeout(ctx, vm, script); err != nil {
 		return *res, err
 	}
@@ -104,10 +125,11 @@ func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Re
 }
 
 // RunPostResponse evaluates script with helena.* plus read-only
-// `request` and `response` globals. Mutations on the request object are
-// ignored: the request has already gone over the wire. An empty (or
-// whitespace-only) script returns a zero Result with no error.
-func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.Request, in ResponseInput) (Result, error) {
+// `request`, `response`, and `chain.<alias>` globals. Mutations on
+// the request object are ignored: the request has already gone over
+// the wire. An empty (or whitespace-only) script returns a zero
+// Result with no error.
+func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.Request, in ResponseInput, chain map[string]ChainView) (Result, error) {
 	if strings.TrimSpace(script) == "" {
 		return Result{}, nil
 	}
@@ -121,6 +143,9 @@ func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.R
 		return *res, err
 	}
 	if err := vm.Set("response", responseToObject(vm, in)); err != nil {
+		return *res, err
+	}
+	if err := vm.Set("chain", chainToObject(vm, chain)); err != nil {
 		return *res, err
 	}
 	if err := runWithTimeout(ctx, vm, script); err != nil {

@@ -94,16 +94,28 @@ type Body struct {
 
 // Request is a single HTTP request definition.
 type Request struct {
-	ID      string     `json:"id"`
-	Name    string     `json:"name"`
-	Method  Method     `json:"method"`
-	URL     string     `json:"url"`
-	Params  []KeyValue `json:"params,omitempty"`
-	Headers []KeyValue `json:"headers,omitempty"`
-	Body    Body       `json:"body"`
-	Docs    string     `json:"docs,omitempty"`    // free-form markdown
-	Auth    Auth       `json:"auth,omitempty"`    // own auth or Inherit from parent
-	Scripts Scripts    `json:"scripts,omitempty"` // pre/post JS hooks
+	ID      string      `json:"id"`
+	Name    string      `json:"name"`
+	Method  Method      `json:"method"`
+	URL     string      `json:"url"`
+	Params  []KeyValue  `json:"params,omitempty"`
+	Headers []KeyValue  `json:"headers,omitempty"`
+	Body    Body        `json:"body"`
+	Docs    string      `json:"docs,omitempty"`    // free-form markdown
+	Auth    Auth        `json:"auth,omitempty"`    // own auth or Inherit from parent
+	Scripts Scripts     `json:"scripts,omitempty"` // pre/post JS hooks
+	Chain   []ChainStep `json:"chain,omitempty"`   // before-hooks (linear list)
+}
+
+// ChainStep names another request to execute before this one, binding
+// the result to an alias so this request's scripts can read it via the
+// `chain` global (e.g. chain.login.response.json.token). Request is a
+// slash-separated name-path within the same collection: `"Auth/Login"`
+// resolves to the request named "Login" inside the folder named
+// "Auth". Names are case-sensitive and match the on-disk display name.
+type ChainStep struct {
+	Alias   string `json:"alias"`
+	Request string `json:"request"`
 }
 
 // Scripts holds the per-request JavaScript hooks the scripting runtime

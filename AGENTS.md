@@ -31,7 +31,8 @@ Top-level orientation:
 | [internal/vars/](internal/vars/) | `{{variable}}` resolver. |
 | [internal/httpclient/](internal/httpclient/) | Request execution, CORS advisory. |
 | [internal/auth/](internal/auth/) | Auth inheritance resolution + Apply on outgoing requests. |
-| [internal/scripting/](internal/scripting/) | goja JS runtime for per-request pre/post hooks. Mutable `request` in pre, read-only `request` + parsed `response` in post, `helena.env.*` overlay writes. |
+| [internal/scripting/](internal/scripting/) | goja JS runtime for per-request pre/post hooks. Mutable `request` in pre, read-only `request` + parsed `response` in post, `helena.env.*` overlay writes, `chain.<alias>` predecessor views. |
+| [internal/chain/](internal/chain/) | Per-request before-hooks runner. Recursive resolution with per-request alias scope, cycle detection, and an Executor/RequestFinder seam so the package stays free of httpclient/scripting/session deps. |
 | [internal/responsefmt/](internal/responsefmt/) | Pretty-printing + content-type sniffing. |
 | [internal/importer/](internal/importer/) | OpenAPI / Swagger / WSDL + URL fetch. |
 | [internal/exporter/](internal/exporter/) | cURL / wget rendering. |

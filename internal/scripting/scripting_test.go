@@ -44,7 +44,7 @@ func (f *fakeBridge) Set(name, value string) {
 func TestRunPreRequestEmpty(t *testing.T) {
 	rt := New(newFakeBridge())
 	r := model.Request{Method: model.GET, URL: "https://x/"}
-	res, err := rt.RunPreRequest(context.Background(), "   \n  ", &r)
+	res, err := rt.RunPreRequest(context.Background(), "   \n  ", &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v, want nil", err)
 	}
@@ -63,7 +63,7 @@ func TestRunPreRequestMutatesScalars(t *testing.T) {
 		request.url = "https://y/";
 		request.body = "new body";
 	`
-	_, err := rt.RunPreRequest(context.Background(), src, &r)
+	_, err := rt.RunPreRequest(context.Background(), src, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -97,7 +97,7 @@ func TestRunPreRequestHeadersAddUpdateDelete(t *testing.T) {
 		delete request.headers["X-Delete"];
 		request.headers["X-New"] = "fresh";
 	`
-	_, err := rt.RunPreRequest(context.Background(), src, &r)
+	_, err := rt.RunPreRequest(context.Background(), src, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -127,7 +127,7 @@ func TestRunPreRequestParamsMerge(t *testing.T) {
 		Params: []model.KeyValue{{Enabled: true, Key: "page", Value: "1"}},
 	}
 	_, err := rt.RunPreRequest(context.Background(),
-		`request.params["page"] = "2"; request.params["sort"] = "name";`, &r)
+		`request.params["page"] = "2"; request.params["sort"] = "name";`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -146,7 +146,7 @@ func TestRunPreRequestHelenaEnvSet(t *testing.T) {
 	bridge := newFakeBridge()
 	rt := New(bridge)
 	r := model.Request{Method: model.GET, URL: "https://x/"}
-	_, err := rt.RunPreRequest(context.Background(), `helena.env.set("TOKEN", "abc123");`, &r)
+	_, err := rt.RunPreRequest(context.Background(), `helena.env.set("TOKEN", "abc123");`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -164,7 +164,7 @@ func TestRunPreRequestHelenaEnvGet(t *testing.T) {
 	r := model.Request{Method: model.GET, URL: "https://x/"}
 	_, err := rt.RunPreRequest(context.Background(),
 		`request.url = helena.env.get("BASE") + "users";
-		 request.headers["X-Alias"] = helena.vars.get("BASE");`, &r)
+		 request.headers["X-Alias"] = helena.vars.get("BASE");`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -196,7 +196,7 @@ func TestRunPostResponseReadsJSON(t *testing.T) {
 	}
 	_, err := rt.RunPostResponse(context.Background(),
 		`helena.env.set("TOKEN", response.json.token);
-		 helena.env.set("UID", String(response.json.user.id));`, req, in)
+		 helena.env.set("UID", String(response.json.user.id));`, req, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -221,7 +221,7 @@ func TestRunPostResponseReadsXML(t *testing.T) {
 	}
 	_, err := rt.RunPostResponse(context.Background(),
 		`helena.env.set("ID", response.xml.root.$.id);
-		 helena.env.set("TOK", response.xml.root.token._);`, req, in)
+		 helena.env.set("TOK", response.xml.root.token._);`, req, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -246,7 +246,7 @@ func TestRunPostResponseHeadersCanonical(t *testing.T) {
 		Body:       []byte(""),
 	}
 	_, err := rt.RunPostResponse(context.Background(),
-		`helena.env.set("CT", response.headers["Content-Type"]);`, model.Request{}, in)
+		`helena.env.set("CT", response.headers["Content-Type"]);`, model.Request{}, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -269,7 +269,7 @@ func TestRunPostResponseStatusAndHeaders(t *testing.T) {
 		`helena.env.set("S", String(response.status));
 		 helena.env.set("T", response.statusText);
 		 helena.env.set("L", response.headers.Location);`,
-		model.Request{}, in)
+		model.Request{}, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -293,7 +293,7 @@ func TestConsoleCaptures(t *testing.T) {
 		`console.log("a", 1);
 		 console.info("b");
 		 console.warn("c");
-		 console.error("d");`, &r)
+		 console.error("d");`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -313,7 +313,7 @@ func TestConsoleStringifyObject(t *testing.T) {
 	rt := New(newFakeBridge())
 	r := model.Request{Method: model.GET, URL: "https://x/"}
 	res, err := rt.RunPreRequest(context.Background(),
-		`console.log({a: 1, b: "x"});`, &r)
+		`console.log({a: 1, b: "x"});`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -336,7 +336,7 @@ func TestScriptTimeout(t *testing.T) {
 	r := model.Request{Method: model.GET, URL: "https://x/"}
 	done := make(chan error, 1)
 	go func() {
-		_, err := rt.RunPreRequest(context.Background(), `while(true){}`, &r)
+		_, err := rt.RunPreRequest(context.Background(), `while(true){}`, &r, nil)
 		done <- err
 	}()
 	select {
@@ -357,7 +357,7 @@ func TestContextCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() {
-		_, err := rt.RunPreRequest(ctx, `while(true){}`, &r)
+		_, err := rt.RunPreRequest(ctx, `while(true){}`, &r, nil)
 		done <- err
 	}()
 	time.Sleep(50 * time.Millisecond)
@@ -377,7 +377,7 @@ func TestContextCancelled(t *testing.T) {
 func TestScriptThrowSurfacesError(t *testing.T) {
 	rt := New(newFakeBridge())
 	r := model.Request{Method: model.GET, URL: "https://x/"}
-	_, err := rt.RunPreRequest(context.Background(), `throw new Error("boom");`, &r)
+	_, err := rt.RunPreRequest(context.Background(), `throw new Error("boom");`, &r, nil)
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("err = %v, want error containing boom", err)
 	}
@@ -389,7 +389,7 @@ func TestNilEnvBridge(t *testing.T) {
 	rt := New(nil)
 	r := model.Request{Method: model.GET, URL: "https://x/"}
 	_, err := rt.RunPreRequest(context.Background(),
-		`helena.env.set("X","Y"); request.url = helena.env.get("Z");`, &r)
+		`helena.env.set("X","Y"); request.url = helena.env.get("Z");`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -405,7 +405,7 @@ func TestRunPostResponseUndefinedParsers(t *testing.T) {
 	in := ResponseInput{StatusCode: 200, Body: []byte("plain text")}
 	res, err := rt.RunPostResponse(context.Background(),
 		`console.log(typeof response.json, typeof response.xml);`,
-		model.Request{}, in)
+		model.Request{}, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -426,7 +426,7 @@ func TestRunPostResponseJSONArrayBody(t *testing.T) {
 	_, err := rt.RunPostResponse(context.Background(),
 		`helena.env.set("FIRST", response.json[0].id);
 		 helena.env.set("COUNT", String(response.json.length));`,
-		model.Request{}, in)
+		model.Request{}, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -435,6 +435,78 @@ func TestRunPostResponseJSONArrayBody(t *testing.T) {
 	}
 	if v, _ := bridge.Get("COUNT"); v != "2" {
 		t.Errorf("COUNT = %q, want 2", v)
+	}
+}
+
+// TestRunPreRequestChainGlobalReadsAlias verifies the script-side
+// `chain.<alias>` global exposes a previous step's response, including
+// auto-parsed JSON.
+func TestRunPreRequestChainGlobalReadsAlias(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	chainMap := map[string]ChainView{
+		"login": {
+			Request: ChainRequestView{Method: "POST", URL: "https://auth/login"},
+			Response: ResponseInput{
+				StatusCode: 200, Status: "200 OK",
+				Headers: http.Header{"Content-Type": []string{"application/json"}},
+				Body:    []byte(`{"token":"chained-abc"}`),
+			},
+		},
+	}
+	_, err := rt.RunPreRequest(context.Background(),
+		`request.headers["Authorization"] = "Bearer " + chain.login.response.json.token;
+		 helena.env.set("TRACE", chain.login.request.url);`, &r, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if got := r.Headers[0].Value; got != "Bearer chained-abc" {
+		t.Errorf("Authorization = %q, want 'Bearer chained-abc'", got)
+	}
+	if v, _ := bridge.Get("TRACE"); v != "https://auth/login" {
+		t.Errorf("TRACE = %q, want https://auth/login", v)
+	}
+}
+
+// TestRunPostResponseChainGlobalReadsAlias verifies the chain map is
+// also bound during the post-response phase.
+func TestRunPostResponseChainGlobalReadsAlias(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	chainMap := map[string]ChainView{
+		"bootstrap": {
+			Response: ResponseInput{
+				StatusCode: 200, Body: []byte(`{"csrf":"X"}`),
+			},
+		},
+	}
+	in := ResponseInput{StatusCode: 200, Body: []byte("{}")}
+	_, err := rt.RunPostResponse(context.Background(),
+		`helena.env.set("CSRF", chain.bootstrap.response.json.csrf);`,
+		model.Request{}, in, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("CSRF"); v != "X" {
+		t.Errorf("CSRF = %q, want X", v)
+	}
+}
+
+// TestRunPreRequestNilChainBindsEmptyObject verifies a nil chain map
+// still produces a usable `chain` global (empty object) so scripts can
+// safely do `Object.keys(chain).length`.
+func TestRunPreRequestNilChainBindsEmptyObject(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	_, err := rt.RunPreRequest(context.Background(),
+		`helena.env.set("N", String(Object.keys(chain).length));`, &r, nil)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("N"); v != "0" {
+		t.Errorf("N = %q, want 0", v)
 	}
 }
 
@@ -453,7 +525,7 @@ func TestRunPreRequestFormBody(t *testing.T) {
 		}},
 	}
 	_, err := rt.RunPreRequest(context.Background(),
-		`request.form["user"] = "new"; request.form["token"] = "abc";`, &r)
+		`request.form["user"] = "new"; request.form["token"] = "abc";`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -478,7 +550,7 @@ func TestRunPreRequestFormNotBoundForRawBodies(t *testing.T) {
 	bridge := newFakeBridge()
 	rt = New(bridge)
 	_, err := rt.RunPreRequest(context.Background(),
-		`helena.env.set("HAS_FORM", typeof request.form);`, &r)
+		`helena.env.set("HAS_FORM", typeof request.form);`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -498,7 +570,7 @@ func TestMergeKVCaseInsensitiveNoDuplicate(t *testing.T) {
 		Headers: []model.KeyValue{{Enabled: true, Key: "Authorization", Value: "Bearer old"}},
 	}
 	_, err := rt.RunPreRequest(context.Background(),
-		`request.headers["authorization"] = "Bearer new";`, &r)
+		`request.headers["authorization"] = "Bearer new";`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -518,7 +590,7 @@ func TestMergeKVDuplicateCaseInJSObject(t *testing.T) {
 	rt := New(newFakeBridge())
 	r := model.Request{Method: model.GET, URL: "https://x/"}
 	_, err := rt.RunPreRequest(context.Background(),
-		`request.headers["Content-Type"] = "a"; request.headers["content-type"] = "b";`, &r)
+		`request.headers["Content-Type"] = "a"; request.headers["content-type"] = "b";`, &r, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -538,7 +610,7 @@ func TestThrowingToStringDoesNotPanic(t *testing.T) {
 	rt := New(newFakeBridge())
 	r := model.Request{Method: model.GET, URL: "https://original/"}
 	_, err := rt.RunPreRequest(context.Background(),
-		`request.url = {toString(){ throw new Error("boom"); }};`, &r)
+		`request.url = {toString(){ throw new Error("boom"); }};`, &r, nil)
 	if err == nil {
 		// Either it returned an error (preferred) or it absorbed the
 		// throw and left URL unchanged. Both are non-crash outcomes.
@@ -567,7 +639,7 @@ func TestParseXMLDepthCap(t *testing.T) {
 	rt := New(bridge)
 	in := ResponseInput{Body: []byte(b.String())}
 	_, err := rt.RunPostResponse(context.Background(),
-		`helena.env.set("X", typeof response.xml);`, model.Request{}, in)
+		`helena.env.set("X", typeof response.xml);`, model.Request{}, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -587,7 +659,7 @@ func TestParseXMLMultipleChildren(t *testing.T) {
 	_, err := rt.RunPostResponse(context.Background(),
 		`helena.env.set("LEN", String(response.xml.root.item.length));
 		 helena.env.set("FIRST", response.xml.root.item[0]._);`,
-		model.Request{}, in)
+		model.Request{}, in, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
