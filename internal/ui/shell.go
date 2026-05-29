@@ -14,11 +14,41 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/httpclient"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/responsefmt"
+	"github.com/idct/helena/internal/scripting"
 	"github.com/idct/helena/internal/session"
+	"github.com/idct/helena/internal/vars"
 )
+
+// sessionEnvBridge adapts *session.Session to scripting.EnvBridge so the
+// scripting package stays decoupled from internal/session.
+//
+// `base` is a snapshot of the active environment captured on the UI
+// goroutine at Send entry; the script reads through it without
+// touching live session state, which avoids racing against UI-thread
+// mutations of s.cols / s.activeCol / Environment.Variables during a
+// long-running script. `s` is still consulted for overlay writes and
+// reads — the overlay carries its own RWMutex so live access is safe.
+//
+// Get returns overlay-over-snapshot. Set writes only to the session's
+// in-memory overlay (invariant 9 — script-set vars never touch disk).
+type sessionEnvBridge struct {
+	s    *session.Session
+	base map[string]string
+}
+
+func (b sessionEnvBridge) Get(name string) (string, bool) {
+	if v, ok := b.s.EnvOverlay(name); ok {
+		return v, true
+	}
+	v, ok := b.base[name]
+	return v, ok
+}
+
+func (b sessionEnvBridge) Set(name, value string) { b.s.SetEnvOverlay(name, value) }
 
 // noEnv is the option shown when no environment is selected.
 const noEnv = "No Environment"
@@ -40,10 +70,31 @@ type MainUI struct {
 	Response    *container.AppTabs
 	Status      *widget.Label
 
-	paramsRows  *fyne.Container
-	headersRows *fyne.Container
-	BodyType    *widget.Select
-	BodyContent *widget.Entry
+	paramsRows       *fyne.Container
+	headersRows      *fyne.Container
+	BodyType         *widget.Select
+	BodyContent      *widget.Entry
+	docsEditor       *widget.Entry
+	docsPreview      *widget.RichText
+	preScriptEditor  *widget.Entry
+	postScriptEditor *widget.Entry
+	scriptConsole    *widget.Entry
+
+	authType                                                          *widget.Select
+	authBasicUsername, authBasicPassword                              *widget.Entry
+	authBearerToken                                                   *widget.Entry
+	authAPIKeyName, authAPIKeyValue                                   *widget.Entry
+	authAPIKeyPlacement                                               *widget.Select
+	authOAuth2Grant                                                   *widget.Select
+	authOAuth2TokenURL, authOAuth2AuthURL                             *widget.Entry
+	authOAuth2ClientID, authOAuth2ClientSecret, authOAuth2Scope       *widget.Entry
+	authOAuth2RedirectURI, authOAuth2Audience                         *widget.Entry
+	authOAuth2UsePKCE                                                 *widget.Check
+	authOAuth2ClearTokens                                             *widget.Button
+	authInheritLabel                                                  *widget.Label
+	authNonePanel, authInheritPanel                                   *fyne.Container
+	authBasicPanel, authBearerPanel, authAPIKeyPanel, authOAuth2Panel *widget.Form
+	authFormsStack                                                    *fyne.Container
 
 	responseRaw *widget.Entry
 	prettyText  *widget.Entry
@@ -134,8 +185,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 
 	m.Request = container.NewAppTabs(
 		container.NewTabItem("Params", paramsTab),
+		container.NewTabItem("Auth", m.buildAuthTab()),
 		container.NewTabItem("Headers", headersTab),
 		container.NewTabItem("Body", bodyTab),
+		container.NewTabItem("Scripts", m.buildScriptsTab()),
+		container.NewTabItem("Docs", m.buildDocsTab()),
 	)
 
 	// Response tabs.
@@ -257,6 +311,12 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.paramsRows.Refresh()
 		m.headersRows.RemoveAll()
 		m.headersRows.Refresh()
+		if m.docsEditor != nil {
+			m.docsEditor.SetText("")
+		}
+		m.refreshDocsPreview()
+		m.loadAuthTab(nil)
+		m.loadScriptsTab(nil)
 		m.urlPreview.Hide()
 		return
 	}
@@ -277,9 +337,17 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	}
 	m.BodyType.SetSelected(string(bt))
 	m.BodyContent.SetText(req.Body.Content)
+	if m.docsEditor != nil {
+		m.docsEditor.SetText(req.Docs)
+	}
+	m.refreshDocsPreview()
+	m.loadAuthTab(req)
+	m.loadScriptsTab(req)
 	m.updateURLPreview()
 }
 
+// saveRequest writes the currently edited request back to disk through the
+// session, pruning empty-key rows so the YAML stays clean.
 func (m *MainUI) saveRequest() {
 	if m.currentRequest == nil {
 		m.Status.SetText("No request selected")
@@ -301,6 +369,9 @@ func (m *MainUI) saveRequest() {
 	m.Status.SetText("Saved: " + m.currentRequest.Name)
 }
 
+// updateURLPreview shows the resolved URL beneath the entry whenever the raw
+// text differs from its substituted form, surfacing unresolved {{vars}} as a
+// warning so users notice missing environment values before sending.
 func (m *MainUI) updateURLPreview() {
 	if m.URL == nil || m.urlPreview == nil {
 		return // called during construction before widgets exist
@@ -386,6 +457,9 @@ func (m *MainUI) addHeader() {
 	m.rebuildHeadersRows()
 }
 
+// rebuildParamsRows discards the current Params editor rows and re-creates one
+// per entry; needed after add/delete and after loadRequest swaps the backing
+// slice.
 func (m *MainUI) rebuildParamsRows() {
 	m.paramsRows.RemoveAll()
 	if m.currentRequest != nil {
@@ -396,6 +470,7 @@ func (m *MainUI) rebuildParamsRows() {
 	m.paramsRows.Refresh()
 }
 
+// rebuildHeadersRows is the Headers-tab counterpart to rebuildParamsRows.
 func (m *MainUI) rebuildHeadersRows() {
 	m.headersRows.RemoveAll()
 	if m.currentRequest != nil {
@@ -441,6 +516,9 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func()) fyn
 		container.NewGridWithColumns(2, keyEntry, valEntry))
 }
 
+// onWorkspaceChanged is the Workspace dropdown's selection handler; it tells
+// the session which workspace is now active and refreshes the tree so the
+// sidebar shows that workspace's collections.
 func (m *MainUI) onWorkspaceChanged(name string) {
 	for i, n := range m.sess.WorkspaceNames() {
 		if n == name {
@@ -453,6 +531,8 @@ func (m *MainUI) onWorkspaceChanged(name string) {
 	}
 }
 
+// openCollection shows a folder picker and asks the session to load whatever
+// directory the user chooses.
 func (m *MainUI) openCollection() {
 	if m.win == nil {
 		return
@@ -476,6 +556,10 @@ func (m *MainUI) openCollection() {
 
 // send executes the active edited request (or the bare method/URL if nothing is
 // selected) off the UI goroutine, resolving {{vars}} against the active env.
+// The pre-request script runs before httpclient builds the *http.Request so
+// the script can mutate URL / method / body / headers / params; the
+// post-response script runs once the response body is read so it can write
+// extracted values into the session env overlay.
 func (m *MainUI) send() {
 	if strings.TrimSpace(m.URL.Text) == "" {
 		m.Status.SetText("Enter a URL first")
@@ -484,21 +568,91 @@ func (m *MainUI) send() {
 	var req model.Request
 	if m.currentRequest != nil {
 		req = *m.currentRequest
+		// Flatten any Inherit on the in-memory request copy via the session's
+		// ancestor walk so httpclient sees the concrete auth.
+		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
 	} else {
 		req = model.Request{Method: model.Method(m.Method.Selected), URL: m.URL.Text}
 	}
+	// Deep-copy Params / Headers / Body.Form so the worker goroutine
+	// doesn't race against UI-thread edits to the live currentRequest
+	// slices (e.g. the user typing in the Params tab during a slow script).
+	req.Params = append([]model.KeyValue(nil), req.Params...)
+	req.Headers = append([]model.KeyValue(nil), req.Headers...)
+	req.Body.Form = append([]model.KeyValue(nil), req.Body.Form...)
+
+	// Snapshot env vars + auth state on the UI goroutine so the worker
+	// goroutine can run for ~ScriptTimeout without racing against UI
+	// mutations of s.cols / s.activeCol / Environment.Variables.
+	envSnap := m.sess.SnapshotActiveEnvVars()
+
 	client := httpclient.New(m.sess.Settings())
-	resolver := m.sess.Resolver()
+	client.SetOAuth2Resolver(auth.NewOAuth2Resolver(
+		m.sess.TokenCache(),
+		nil, // default http.Client; settings-derived TLS/timeout intentionally not applied to the token endpoint
+		m.sess.ActiveCollectionDir(),
+		newAuthCodeStarter(),
+	))
+	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
 
 	m.Status.SetText("Sending…")
 	m.Send.Disable()
 	m.corsBanner.Hide()
 
+	// Capture the pre-script's view of method+URL so we can flag any
+	// mutation in the status line later.
+	originalMethod, originalURL := req.Method, req.URL
+
 	go func() {
-		resp, err := client.Do(context.Background(), req, resolver)
+		defer func() {
+			if r := recover(); r != nil {
+				msg := fmt.Sprintf("Send panic: %v", r)
+				fyne.Do(func() {
+					m.Send.Enable()
+					m.Status.SetText(msg)
+				})
+			}
+		}()
+		ctx := context.Background()
+		var consoleLines []string
+
+		preRes, preErr := rt.RunPreRequest(ctx, req.Scripts.PreRequest, &req)
+		consoleLines = append(consoleLines, preRes.Console...)
+		if preErr != nil {
+			fyne.Do(func() {
+				m.Send.Enable()
+				m.Status.SetText("Pre-request script error: " + preErr.Error())
+				m.responseRaw.SetText(preErr.Error())
+				m.prettyText.SetText("")
+				m.headersText.SetText("")
+				m.Response.SelectIndex(1)
+				m.setScriptConsole(consoleLines)
+			})
+			return
+		}
+
+		// Build the resolver after the pre-request hook so any
+		// helena.env.set calls become visible to httpclient.Build. We
+		// use the captured envSnap (not m.sess.Resolver()) so we don't
+		// race against UI-thread env mutations during the Send.
+		resolver := vars.New(envSnap, m.sess.SnapshotEnvOverlay())
+		resp, err := client.Do(ctx, req, resolver)
+
+		var postRes scripting.Result
+		var postErr error
+		if err == nil {
+			postRes, postErr = rt.RunPostResponse(ctx, req.Scripts.PostResponse, req, scripting.ResponseInput{
+				StatusCode: resp.StatusCode,
+				Status:     resp.Status,
+				Headers:    resp.Headers,
+				Body:       resp.Body,
+			})
+			consoleLines = append(consoleLines, postRes.Console...)
+		}
 
 		fyne.Do(func() {
 			m.Send.Enable()
+			m.setScriptConsole(consoleLines)
 			if err != nil {
 				m.Response.SelectIndex(1) // Raw shows the error
 				m.Status.SetText("Error: " + err.Error())
@@ -529,10 +683,17 @@ func (m *MainUI) send() {
 				m.Response.SelectIndex(1) // Raw
 			}
 
-			m.Status.SetText(fmt.Sprintf("%s · %s · %s",
+			status := fmt.Sprintf("%s · %s · %s",
 				resp.Status,
 				responsefmt.HumanSize(resp.Size),
-				responsefmt.HumanDuration(resp.Duration)))
+				responsefmt.HumanDuration(resp.Duration))
+			if req.Method != originalMethod || req.URL != originalURL {
+				status += fmt.Sprintf(" · sent %s %s", req.Method, req.URL)
+			}
+			if postErr != nil {
+				status += " · post-script: " + postErr.Error()
+			}
+			m.Status.SetText(status)
 			if resp.CORSWarning != "" {
 				m.corsBanner.Text = "⚠ CORS: " + resp.CORSWarning
 				m.corsBanner.Refresh()
@@ -542,6 +703,9 @@ func (m *MainUI) send() {
 	}()
 }
 
+// onEnvChanged is the Environment dropdown's selection handler; it stores the
+// chosen environment on the session and re-runs the URL preview so its
+// resolution reflects the new variables.
 func (m *MainUI) onEnvChanged(name string) {
 	if name == noEnv {
 		m.sess.SetActiveEnv("")
@@ -551,6 +715,8 @@ func (m *MainUI) onEnvChanged(name string) {
 	m.updateURLPreview()
 }
 
+// refreshEnvironments reseeds the Environment dropdown from the active
+// collection's environment list and restores the previously selected name.
 func (m *MainUI) refreshEnvironments() {
 	m.Environment.Options = append([]string{noEnv}, m.sess.CollectionEnvironmentNames()...)
 	sel := m.sess.ActiveEnvName()
@@ -691,6 +857,8 @@ func bodyTypeNames() []string {
 	return out
 }
 
+// pruneEmptyKV returns kvs with rows whose Key trims to empty removed; used at
+// save time so blank "+ Add" rows the user never filled in don't reach disk.
 func pruneEmptyKV(kvs []model.KeyValue) []model.KeyValue {
 	out := kvs[:0]
 	for _, kv := range kvs {

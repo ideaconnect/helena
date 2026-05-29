@@ -9,6 +9,9 @@ import (
 	"github.com/idct/helena/internal/storage"
 )
 
+// TestHttpbinSampleLoads verifies that the bundled httpbin sample collection
+// round-trips through the real storage.Load: correct name, two requests with
+// matching methods, and a default environment carrying base_url.
 func TestHttpbinSampleLoads(t *testing.T) {
 	c, err := storage.Load("httpbin")
 	if err != nil {

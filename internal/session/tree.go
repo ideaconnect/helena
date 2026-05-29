@@ -124,6 +124,61 @@ func (t *Tree) nameAt(id string) string {
 	return ""
 }
 
+// AncestorAuths returns the Auth values on every container above id (the
+// immediate parent first, the collection root last). Used by callers that
+// want to flatten an Inherit on the addressed node via auth.Resolve.
+// Returns nil when id is empty or addresses a node outside the tree.
+func (t *Tree) AncestorAuths(id string) []model.Auth {
+	if id == "" {
+		return nil
+	}
+	var out []model.Auth
+	for p := parentID(id); p != id; p = parentID(p) {
+		if a, ok := t.containerAuth(p); ok {
+			out = append(out, a)
+		}
+		if p == "" {
+			break
+		}
+		id = p
+	}
+	return out
+}
+
+// containerAuth returns the Auth on the collection or folder addressed by
+// id. Returns false for request nodes and out-of-range indices.
+func (t *Tree) containerAuth(id string) (model.Auth, bool) {
+	if id == "" {
+		return model.Auth{}, false
+	}
+	parts := strings.Split(id, "/")
+	ci, err := strconv.Atoi(parts[0])
+	if err != nil || ci < 0 || ci >= len(t.cols) {
+		return model.Auth{}, false
+	}
+	col := t.cols[ci]
+	if len(parts) == 1 {
+		return col.Auth, true
+	}
+	folders := col.Folders
+	var folder *model.Folder
+	for _, p := range parts[1:] {
+		if !strings.HasPrefix(p, "f") {
+			return model.Auth{}, false
+		}
+		fi, err := strconv.Atoi(p[1:])
+		if err != nil || fi < 0 || fi >= len(folders) {
+			return model.Auth{}, false
+		}
+		folder = &folders[fi]
+		folders = folder.Folders
+	}
+	if folder == nil {
+		return model.Auth{}, false
+	}
+	return folder.Auth, true
+}
+
 // CollectionIndex returns the collection index a node ID belongs to, or -1.
 func (t *Tree) CollectionIndex(id string) int {
 	seg := id

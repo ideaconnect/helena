@@ -3,6 +3,7 @@ package model
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"strings"
 )
 
 // Method is an HTTP request method.
@@ -100,14 +101,36 @@ type Request struct {
 	Params  []KeyValue `json:"params,omitempty"`
 	Headers []KeyValue `json:"headers,omitempty"`
 	Body    Body       `json:"body"`
+	Docs    string     `json:"docs,omitempty"`    // free-form markdown
+	Auth    Auth       `json:"auth,omitempty"`    // own auth or Inherit from parent
+	Scripts Scripts    `json:"scripts,omitempty"` // pre/post JS hooks
 }
 
-// Folder groups requests and nested folders within a collection.
+// Scripts holds the per-request JavaScript hooks the scripting runtime
+// executes around Send. Both fields are raw ECMAScript source — empty
+// strings disable that hook. The runtime is in-memory and dies with the
+// process; scripts have no persistent side effects beyond Helena's
+// in-memory environment overlay.
+type Scripts struct {
+	PreRequest   string `json:"preRequest,omitempty"`
+	PostResponse string `json:"postResponse,omitempty"`
+}
+
+// IsEmpty reports whether neither hook has any non-whitespace content,
+// which the UI and Send pipeline use to skip the scripting runtime
+// entirely.
+func (s Scripts) IsEmpty() bool {
+	return strings.TrimSpace(s.PreRequest) == "" && strings.TrimSpace(s.PostResponse) == ""
+}
+
+// Folder groups requests and nested folders within a collection. Auth
+// applies to every descendant whose own Auth is Inherit.
 type Folder struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
 	Folders  []Folder  `json:"folders,omitempty"`
 	Requests []Request `json:"requests,omitempty"`
+	Auth     Auth      `json:"auth,omitempty"`
 }
 
 // Variable is a single environment variable.
@@ -126,12 +149,16 @@ type Environment struct {
 }
 
 // Collection is a tree of folders and requests plus its own environments.
+// Auth on the collection root is the outermost ancestor in the
+// auth-inheritance walk; folders and requests with Auth=Inherit fall back
+// to it.
 type Collection struct {
 	ID           string        `json:"id"`
 	Name         string        `json:"name"`
 	Folders      []Folder      `json:"folders,omitempty"`
 	Requests     []Request     `json:"requests,omitempty"`
 	Environments []Environment `json:"environments,omitempty"`
+	Auth         Auth          `json:"auth,omitempty"`
 }
 
 // Workspace groups collections under a single roof.

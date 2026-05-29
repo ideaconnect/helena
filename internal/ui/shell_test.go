@@ -9,6 +9,9 @@ import (
 	"github.com/idct/helena/internal/session"
 )
 
+// TestNewMainUIBuilds verifies that NewMainUI produces a non-nil root, seeds
+// the expected default Method and Workspace, wires the right tab counts, and
+// can be laid out in a headless window without panicking.
 func TestNewMainUIBuilds(t *testing.T) {
 	test.NewApp()
 
@@ -27,8 +30,8 @@ func TestNewMainUIBuilds(t *testing.T) {
 	if m.Workspace.Selected != "Default" {
 		t.Errorf("workspace = %q, want Default", m.Workspace.Selected)
 	}
-	if len(m.Request.Items) != 3 || len(m.Response.Items) != 3 {
-		t.Errorf("tabs = %d/%d, want 3/3", len(m.Request.Items), len(m.Response.Items))
+	if len(m.Request.Items) != 6 || len(m.Response.Items) != 3 {
+		t.Errorf("tabs = %d/%d, want 6/3", len(m.Request.Items), len(m.Response.Items))
 	}
 
 	// Lay it out in a headless window to catch construction/layout panics.

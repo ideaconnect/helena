@@ -5,6 +5,7 @@ import (
 	"testing"
 )
 
+// TestResolveSimple verifies that a single {{name}} reference is replaced by its scope value.
 func TestResolveSimple(t *testing.T) {
 	r := New(map[string]string{"host": "example.com"})
 	got, missing := r.Resolve("https://{{host}}/api")
@@ -16,6 +17,7 @@ func TestResolveSimple(t *testing.T) {
 	}
 }
 
+// TestResolveWhitespace verifies that surrounding whitespace inside {{ name }} is ignored.
 func TestResolveWhitespace(t *testing.T) {
 	r := New(map[string]string{"host": "example.com"})
 	if got, _ := r.Resolve("{{ host }}"); got != "example.com" {
@@ -23,6 +25,7 @@ func TestResolveWhitespace(t *testing.T) {
 	}
 }
 
+// TestResolveMultipleAndMissing verifies that known refs are substituted, unknown ones survive and are reported once.
 func TestResolveMultipleAndMissing(t *testing.T) {
 	r := New(map[string]string{"host": "x.com"})
 	got, missing := r.Resolve("{{host}}/{{version}}/{{host}}")
@@ -34,6 +37,7 @@ func TestResolveMultipleAndMissing(t *testing.T) {
 	}
 }
 
+// TestResolvePrecedence verifies that later scopes override earlier ones for both Lookup and Resolve.
 func TestResolvePrecedence(t *testing.T) {
 	r := New(map[string]string{"x": "low"}, map[string]string{"x": "high"})
 	if v, ok := r.Lookup("x"); !ok || v != "high" {
@@ -44,6 +48,7 @@ func TestResolvePrecedence(t *testing.T) {
 	}
 }
 
+// TestResolveChained verifies that variables whose values reference other variables are resolved to a fixed point.
 func TestResolveChained(t *testing.T) {
 	r := New(map[string]string{
 		"url":   "{{proto}}://{{host}}",
@@ -59,6 +64,7 @@ func TestResolveChained(t *testing.T) {
 	}
 }
 
+// TestResolveNoVars verifies that input without templates is returned unchanged with no missing names.
 func TestResolveNoVars(t *testing.T) {
 	r := New(nil)
 	got, missing := r.Resolve("plain text")
@@ -67,6 +73,7 @@ func TestResolveNoVars(t *testing.T) {
 	}
 }
 
+// TestResolveCycleTerminates verifies that a cyclic reference (a->b->a) halts without looping and is reported as unresolved.
 func TestResolveCycleTerminates(t *testing.T) {
 	r := New(map[string]string{"a": "{{b}}", "b": "{{a}}"})
 	got, missing := r.Resolve("{{a}}")

@@ -36,7 +36,8 @@ http:
   url: https://example.test/x
   auth:
     type: bearer
-    token: secret-abc
+    bearer:
+      token: secret-abc
 runtime:
   scripts:
     - type: pre-request

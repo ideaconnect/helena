@@ -9,7 +9,8 @@ import (
 	"github.com/idct/helena/internal/storage"
 )
 
-// writeSampleCollection saves a small collection and returns its directory.
+// writeSampleCollection saves a small collection (one root request "Health",
+// one folder "Users" with "Create User") to a fresh temp dir and returns it.
 func writeSampleCollection(t *testing.T) string {
 	t.Helper()
 	c := model.Collection{
@@ -27,6 +28,9 @@ func writeSampleCollection(t *testing.T) string {
 	return dir
 }
 
+// TestOpenCollectionPersistsAndReloads verifies that OpenCollection records the
+// directory in the active workspace and a fresh Session at the same config path
+// re-loads the same collection.
 func TestOpenCollectionPersistsAndReloads(t *testing.T) {
 	colDir := writeSampleCollection(t)
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
@@ -55,6 +59,9 @@ func TestOpenCollectionPersistsAndReloads(t *testing.T) {
 	}
 }
 
+// TestTreeNavigation verifies the Tree node ID layout: root produces "0",
+// folders produce "0/f0", requests produce "0/r0", IsBranch/Label/Request
+// behave consistently with these IDs.
 func TestTreeNavigation(t *testing.T) {
 	colDir := writeSampleCollection(t)
 	s, _ := New(filepath.Join(t.TempDir(), "config.yml"))

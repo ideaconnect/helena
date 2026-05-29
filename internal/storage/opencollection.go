@@ -50,23 +50,77 @@ type ocHTTP struct {
 	Headers []ocKV               `yaml:"headers,omitempty"`
 	Params  []ocParam            `yaml:"params,omitempty"`
 	Body    *ocBody              `yaml:"body,omitempty"`
-	Extra   map[string]yaml.Node `yaml:",inline"` // catches auth and other http-level fields
+	Auth    *ocAuth              `yaml:"auth,omitempty"`
+	Extra   map[string]yaml.Node `yaml:",inline"` // catches runtime + other http-level fields
 }
 
 type ocRequestFile struct {
-	Info  ocInfo               `yaml:"info"`
-	HTTP  *ocHTTP              `yaml:"http,omitempty"`
-	Extra map[string]yaml.Node `yaml:",inline"` // catches runtime, settings, docs, …
+	Info    ocInfo               `yaml:"info"`
+	HTTP    *ocHTTP              `yaml:"http,omitempty"`
+	Docs    string               `yaml:"docs,omitempty"` // free-form markdown
+	Scripts *ocScripts           `yaml:"scripts,omitempty"`
+	Extra   map[string]yaml.Node `yaml:",inline"` // catches settings, runtime, …
+}
+
+// ocScripts mirrors the on-disk scripts block. preRequest and
+// postResponse hold raw JavaScript source. Extra preserves keys other
+// tools may have added (e.g. test runners).
+type ocScripts struct {
+	PreRequest   string               `yaml:"preRequest,omitempty"`
+	PostResponse string               `yaml:"postResponse,omitempty"`
+	Extra        map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocFolderFile struct {
 	Info  ocInfo               `yaml:"info"`
+	Auth  *ocAuth              `yaml:"auth,omitempty"`
 	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocCollectionFile struct {
 	Info  ocInfo               `yaml:"info"`
+	Auth  *ocAuth              `yaml:"auth,omitempty"`
 	Extra map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuth struct {
+	Type   string               `yaml:"type"`
+	Basic  *ocAuthBasic         `yaml:"basic,omitempty"`
+	Bearer *ocAuthBearer        `yaml:"bearer,omitempty"`
+	APIKey *ocAuthAPIKey        `yaml:"apikey,omitempty"`
+	OAuth2 *ocAuthOAuth2        `yaml:"oauth2,omitempty"`
+	Extra  map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthBasic struct {
+	Username string               `yaml:"username"`
+	Password string               `yaml:"password"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthBearer struct {
+	Token string               `yaml:"token"`
+	Extra map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthAPIKey struct {
+	Name      string               `yaml:"name"`
+	Value     string               `yaml:"value"`
+	Placement string               `yaml:"placement,omitempty"`
+	Extra     map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthOAuth2 struct {
+	Grant        string               `yaml:"grant"`
+	TokenURL     string               `yaml:"tokenUrl"`
+	AuthURL      string               `yaml:"authUrl,omitempty"`
+	ClientID     string               `yaml:"clientId"`
+	ClientSecret string               `yaml:"clientSecret"`
+	Scope        string               `yaml:"scope,omitempty"`
+	RedirectURI  string               `yaml:"redirectUri,omitempty"`
+	UsePKCE      bool                 `yaml:"usePkce,omitempty"`
+	Audience     string               `yaml:"audience,omitempty"`
+	Extra        map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocEnvVar struct {
@@ -86,6 +140,9 @@ type ocEnvironmentFile struct {
 	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
+// requestToFile maps a model.Request to its on-disk DTO at sequence position
+// seq. The Extra catch-alls are left nil — the Save path layers any
+// previously-loaded extras on top before writing.
 func requestToFile(r model.Request, seq int) ocRequestFile {
 	method := r.Method
 	if method == "" {
@@ -101,14 +158,46 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 	if r.Body.Type != "" && r.Body.Type != model.BodyNone {
 		h.Body = &ocBody{Type: string(r.Body.Type), Data: r.Body.Content}
 	}
+	h.Auth = authToFile(r.Auth)
 	return ocRequestFile{
-		Info: ocInfo{Name: r.Name, Type: "http", Seq: seq},
-		HTTP: h,
+		Info:    ocInfo{Name: r.Name, Type: "http", Seq: seq},
+		HTTP:    h,
+		Docs:    r.Docs,
+		Scripts: scriptsToFile(r.Scripts),
 	}
 }
 
+// scriptsToFile returns nil when both hooks are empty so the on-disk
+// scripts block stays out of the YAML when there's nothing to persist.
+func scriptsToFile(s model.Scripts) *ocScripts {
+	if s.PreRequest == "" && s.PostResponse == "" {
+		return nil
+	}
+	return &ocScripts{PreRequest: s.PreRequest, PostResponse: s.PostResponse}
+}
+
+// fileToScripts maps the on-disk scripts DTO back into the domain
+// model. A nil DTO produces the zero Scripts value (both hooks empty).
+func fileToScripts(f *ocScripts) model.Scripts {
+	if f == nil {
+		return model.Scripts{}
+	}
+	return model.Scripts{PreRequest: f.PreRequest, PostResponse: f.PostResponse}
+}
+
+// fileToRequest maps an on-disk request DTO into the domain model. A fresh
+// ID is assigned because the OpenCollection format does not record one.
+// Missing auth in YAML resolves to AuthInherit so newly created requests
+// default to inheriting their parent's auth.
 func fileToRequest(f ocRequestFile) model.Request {
-	r := model.Request{ID: model.NewID(), Name: f.Info.Name, Body: model.Body{Type: model.BodyNone}}
+	r := model.Request{
+		ID:      model.NewID(),
+		Name:    f.Info.Name,
+		Body:    model.Body{Type: model.BodyNone},
+		Docs:    f.Docs,
+		Auth:    model.Auth{Type: model.AuthInherit},
+		Scripts: fileToScripts(f.Scripts),
+	}
 	if f.HTTP == nil {
 		return r
 	}
@@ -123,9 +212,13 @@ func fileToRequest(f ocRequestFile) model.Request {
 	if f.HTTP.Body != nil {
 		r.Body = model.Body{Type: model.BodyType(f.HTTP.Body.Type), Content: f.HTTP.Body.Data}
 	}
+	if f.HTTP.Auth != nil {
+		r.Auth = fileToAuth(f.HTTP.Auth)
+	}
 	return r
 }
 
+// envToFile maps a model.Environment to its on-disk DTO at sequence position seq.
 func envToFile(e model.Environment, seq int) ocEnvironmentFile {
 	f := ocEnvironmentFile{Info: ocInfo{Name: e.Name, Type: "environment", Seq: seq}}
 	for _, v := range e.Variables {
@@ -134,10 +227,89 @@ func envToFile(e model.Environment, seq int) ocEnvironmentFile {
 	return f
 }
 
+// fileToEnv maps an on-disk environment DTO back into the domain model,
+// assigning a fresh ID.
 func fileToEnv(f ocEnvironmentFile) model.Environment {
 	e := model.Environment{ID: model.NewID(), Name: f.Info.Name}
 	for _, v := range f.Vars {
 		e.Variables = append(e.Variables, model.Variable{Enabled: !v.Disabled, Key: v.Name, Value: v.Value, Secret: v.Secret})
 	}
 	return e
+}
+
+// authToFile maps a model.Auth to its on-disk DTO. Returns nil for the
+// "" / Inherit case so the auth block stays out of the YAML when the
+// caller has nothing meaningful to persist. Sub-structs that don't match
+// the active Type are dropped.
+func authToFile(a model.Auth) *ocAuth {
+	if a.Type == "" || a.Type == model.AuthInherit {
+		return nil
+	}
+	out := &ocAuth{Type: string(a.Type)}
+	switch a.Type {
+	case model.AuthBasic:
+		if a.Basic != nil {
+			out.Basic = &ocAuthBasic{Username: a.Basic.Username, Password: a.Basic.Password}
+		}
+	case model.AuthBearer:
+		if a.Bearer != nil {
+			out.Bearer = &ocAuthBearer{Token: a.Bearer.Token}
+		}
+	case model.AuthAPIKey:
+		if a.APIKey != nil {
+			out.APIKey = &ocAuthAPIKey{Name: a.APIKey.Name, Value: a.APIKey.Value, Placement: string(a.APIKey.Placement)}
+		}
+	case model.AuthOAuth2:
+		if a.OAuth2 != nil {
+			out.OAuth2 = &ocAuthOAuth2{
+				Grant:        string(a.OAuth2.Grant),
+				TokenURL:     a.OAuth2.TokenURL,
+				AuthURL:      a.OAuth2.AuthURL,
+				ClientID:     a.OAuth2.ClientID,
+				ClientSecret: a.OAuth2.ClientSecret,
+				Scope:        a.OAuth2.Scope,
+				RedirectURI:  a.OAuth2.RedirectURI,
+				UsePKCE:      a.OAuth2.UsePKCE,
+				Audience:     a.OAuth2.Audience,
+			}
+		}
+	}
+	return out
+}
+
+// fileToAuth maps an on-disk auth DTO back into the domain model. A nil
+// DTO is the caller's signal to fall back to AuthInherit (the default for
+// requests and folders) — fileToAuth itself only handles non-nil input.
+func fileToAuth(f *ocAuth) model.Auth {
+	if f == nil {
+		return model.Auth{Type: model.AuthInherit}
+	}
+	a := model.Auth{Type: model.AuthType(f.Type)}
+	if f.Basic != nil {
+		a.Basic = &model.BasicAuth{Username: f.Basic.Username, Password: f.Basic.Password}
+	}
+	if f.Bearer != nil {
+		a.Bearer = &model.BearerAuth{Token: f.Bearer.Token}
+	}
+	if f.APIKey != nil {
+		a.APIKey = &model.APIKeyAuth{
+			Name:      f.APIKey.Name,
+			Value:     f.APIKey.Value,
+			Placement: model.APIKeyPlacement(f.APIKey.Placement),
+		}
+	}
+	if f.OAuth2 != nil {
+		a.OAuth2 = &model.OAuth2Auth{
+			Grant:        model.OAuth2Grant(f.OAuth2.Grant),
+			TokenURL:     f.OAuth2.TokenURL,
+			AuthURL:      f.OAuth2.AuthURL,
+			ClientID:     f.OAuth2.ClientID,
+			ClientSecret: f.OAuth2.ClientSecret,
+			Scope:        f.OAuth2.Scope,
+			RedirectURI:  f.OAuth2.RedirectURI,
+			UsePKCE:      f.OAuth2.UsePKCE,
+			Audience:     f.OAuth2.Audience,
+		}
+	}
+	return a
 }

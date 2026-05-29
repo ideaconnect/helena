@@ -7,6 +7,8 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestSettingsPersist verifies that SetSettings writes settings to disk and a
+// fresh Session at the same config path reads them back.
 func TestSettingsPersist(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
 

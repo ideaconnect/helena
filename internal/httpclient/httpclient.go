@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/vars"
 )
@@ -29,8 +30,17 @@ type Response struct {
 
 // Client executes model.Requests with behavior derived from settings.
 type Client struct {
-	settings model.Settings
-	http     *http.Client
+	settings       model.Settings
+	http           *http.Client
+	oauth2Resolver auth.OAuth2Resolver
+}
+
+// SetOAuth2Resolver installs the resolver consulted when a request's
+// resolved auth is OAuth2. Nil disables OAuth2 (Apply will return
+// ErrOAuth2NotImplemented). The resolver is shared across all requests
+// executed through this Client so its own caching applies.
+func (c *Client) SetOAuth2Resolver(r auth.OAuth2Resolver) {
+	c.oauth2Resolver = r
 }
 
 // New builds a Client honoring the given settings: invalid-TLS tolerance,
@@ -54,7 +64,11 @@ func New(s model.Settings) *Client {
 // naming any unresolved {{variables}} so the caller can surface them. Build is
 // independent of any Client / settings — it's the pure "what would this
 // request look like on the wire" path used by Do and by the exporter package.
-func Build(ctx context.Context, r model.Request, res *vars.Resolver) (*http.Request, error) {
+//
+// oauth2 may be nil; the OAuth2 case in auth.Apply then surfaces
+// ErrOAuth2NotImplemented, which is the right thing for callers like the
+// exporter that don't want to actually fetch a token at render time.
+func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth.OAuth2Resolver) (*http.Request, error) {
 	if res == nil {
 		res = vars.New()
 	}
@@ -79,6 +93,10 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver) (*http.Requ
 	for _, p := range model.EnabledPairs(r.Params) {
 		params = append(params, kv{resolve(p.Key), resolve(p.Value)})
 	}
+
+	// Auth values share the same {{var}} substitution + missing-name reporting
+	// as the rest of the request.
+	resolvedAuth := auth.ResolveValues(r.Auth, resolve)
 
 	if u := dedupe(missing); len(u) > 0 {
 		return nil, fmt.Errorf("unresolved variables: %s", strings.Join(u, ", "))
@@ -131,12 +149,20 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver) (*http.Requ
 	if !hasContentType && contentType != "" {
 		req.Header.Set("Content-Type", contentType)
 	}
+
+	// Apply auth last so it can see the headers the user explicitly set —
+	// Basic/Bearer back off if Authorization is already present, and header
+	// API-keys back off if their header name is taken. OAuth2 grants delegate
+	// to the supplied resolver.
+	if err := auth.Apply(ctx, req, resolvedAuth, oauth2); err != nil {
+		return nil, fmt.Errorf("auth: %w", err)
+	}
 	return req, nil
 }
 
 // Do builds and executes the request, fully reading the response body.
 func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*Response, error) {
-	req, err := Build(ctx, r, res)
+	req, err := Build(ctx, r, res, c.oauth2Resolver)
 	if err != nil {
 		return nil, err
 	}
@@ -169,6 +195,9 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	return out, nil
 }
 
+// buildBody serializes r.Body into bytes plus the matching Content-Type. The
+// returned content type is only used when the request has no explicit
+// Content-Type header.
 func buildBody(r model.Request, resolve func(string) string) (body []byte, contentType string, err error) {
 	switch r.Body.Type {
 	case "", model.BodyNone:

@@ -9,6 +9,8 @@ import (
 	"github.com/idct/helena/internal/storage"
 )
 
+// writeCollectionWithEnv saves a collection that includes one environment with
+// one enabled and one disabled variable, returning its directory.
 func writeCollectionWithEnv(t *testing.T) string {
 	t.Helper()
 	c := model.Collection{
@@ -29,6 +31,9 @@ func writeCollectionWithEnv(t *testing.T) string {
 	return dir
 }
 
+// TestResolverFromActiveEnv verifies that the resolver only picks up enabled
+// variables from the active environment, and that switching the active env
+// makes its variables available to {{name}} expansion.
 func TestResolverFromActiveEnv(t *testing.T) {
 	dir := writeCollectionWithEnv(t)
 	s, _ := New(filepath.Join(t.TempDir(), "config.yml"))
@@ -53,6 +58,9 @@ func TestResolverFromActiveEnv(t *testing.T) {
 	}
 }
 
+// TestEnvEditPersists verifies that editing an active environment's variables
+// and saving causes a subsequent Session at the same config path to see the
+// edited values via Resolver.
 func TestEnvEditPersists(t *testing.T) {
 	dir := writeCollectionWithEnv(t)
 	cfg := filepath.Join(t.TempDir(), "config.yml")
@@ -75,6 +83,9 @@ func TestEnvEditPersists(t *testing.T) {
 	}
 }
 
+// TestParseFormatEnvVars verifies that ParseEnvVars handles enabled, disabled
+// (#-prefixed), malformed and blank lines, and that Format then Parse is the
+// identity on a parsed slice.
 func TestParseFormatEnvVars(t *testing.T) {
 	got := ParseEnvVars("base = http://x\n# token = secret\nfoo=bar\n\n   \nmalformed")
 	want := []model.Variable{

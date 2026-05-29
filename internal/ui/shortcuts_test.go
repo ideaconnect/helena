@@ -10,6 +10,9 @@ import (
 	"github.com/idct/helena/internal/session"
 )
 
+// TestRegisterShortcutsPopulatesList verifies that registerShortcuts fills
+// m.shortcuts with non-nil actions and covers each of the documented bindings
+// (Send, Save, Open, Import, New request, New collection, Settings).
 func TestRegisterShortcutsPopulatesList(t *testing.T) {
 	test.NewApp()
 	sess, err := session.New("")
@@ -56,6 +59,8 @@ func TestRegisterShortcutsPopulatesList(t *testing.T) {
 	}
 }
 
+// TestShortcutModifierName verifies that the platform modifier label is the
+// Command symbol on macOS and "Ctrl" everywhere else.
 func TestShortcutModifierName(t *testing.T) {
 	got := shortcutModifierName()
 	want := "Ctrl"
@@ -67,6 +72,8 @@ func TestShortcutModifierName(t *testing.T) {
 	}
 }
 
+// TestShowShortcutsDoesNotPanic verifies that opening the shortcuts help
+// dialog is safe when shortcuts have been registered against a real window.
 func TestShowShortcutsDoesNotPanic(t *testing.T) {
 	test.NewApp()
 	sess, err := session.New("")
@@ -82,6 +89,9 @@ func TestShowShortcutsDoesNotPanic(t *testing.T) {
 	m.showShortcuts()
 }
 
+// TestRegisterShortcutsWithoutWindowIsNoop verifies that calling
+// registerShortcuts and showShortcuts before SetWindow short-circuits safely
+// instead of dereferencing the nil m.win.
 func TestRegisterShortcutsWithoutWindowIsNoop(t *testing.T) {
 	test.NewApp()
 	sess, err := session.New("")

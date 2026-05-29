@@ -7,7 +7,9 @@ package session
 import (
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/config"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/storage"
@@ -22,6 +24,9 @@ type Session struct {
 	dirs      []string           // source directory of each loaded collection, aligned with cols
 	activeCol int                // index into cols, or -1 when none
 	activeEnv map[int]string     // collection index -> active environment name
+	tokens    *auth.TokenCache   // OAuth2 access tokens cached for this session
+	overlayMu sync.RWMutex
+	overlay   map[string]string // script-set env; in-memory only, never persisted
 }
 
 // New loads the config at cfgPath (empty path = defaults, no persistence) and
@@ -31,11 +36,31 @@ func New(cfgPath string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Session{cfgPath: cfgPath, cfg: cfg}
+	s := &Session{cfgPath: cfgPath, cfg: cfg, tokens: auth.NewTokenCache(), overlay: map[string]string{}}
 	s.reload()
 	return s, nil
 }
 
+// TokenCache returns the OAuth2 token cache owned by this session. Tokens
+// are keyed by collection-dir + auth config so two collections that
+// happen to share a token URL never reuse each other's access tokens.
+// The cache is process-lifetime only; tokens are dropped when Helena
+// exits.
+func (s *Session) TokenCache() *auth.TokenCache { return s.tokens }
+
+// ActiveCollectionDir returns the on-disk directory of the active
+// collection, or "" when no collection is active. Useful as a namespace
+// prefix for OAuth2 token-cache keys.
+func (s *Session) ActiveCollectionDir() string {
+	if s.activeCol < 0 || s.activeCol >= len(s.dirs) {
+		return ""
+	}
+	return s.dirs[s.activeCol]
+}
+
+// reload re-reads the collections of the active workspace from disk and
+// rebuilds the per-collection active-environment map. Collections that fail to
+// load are skipped silently — the UI surfaces those failures elsewhere.
 func (s *Session) reload() {
 	s.cols = nil
 	s.dirs = nil
@@ -72,6 +97,8 @@ func (s *Session) reload() {
 	}
 }
 
+// activeWorkspace returns the workspace at cfg.Active, or a zero workspace if
+// the index is out of range.
 func (s *Session) activeWorkspace() config.Workspace {
 	if s.cfg.Active < 0 || s.cfg.Active >= len(s.cfg.Workspaces) {
 		return config.Workspace{}
@@ -120,6 +147,8 @@ func (s *Session) OpenCollection(dir string) error {
 	return s.persist()
 }
 
+// persist writes the current config to cfgPath. When cfgPath is empty (a
+// transient in-memory session) it is a no-op.
 func (s *Session) persist() error {
 	if s.cfgPath == "" {
 		return nil
@@ -129,6 +158,22 @@ func (s *Session) persist() error {
 
 // Tree returns a navigation model over the currently loaded collections.
 func (s *Session) Tree() *Tree { return &Tree{cols: s.cols} }
+
+// EffectiveAuth flattens the Inherit chain for the request addressed by
+// nodeID and returns the auth that should actually be applied. The
+// request's own Auth wins outright when it is anything other than Inherit;
+// otherwise the folder → collection ancestor chain is walked and the
+// nearest non-Inherit value is used. Falls back to AuthNone when nothing
+// concrete is set anywhere on the chain.
+func (s *Session) EffectiveAuth(nodeID string) model.Auth {
+	t := s.Tree()
+	req, ok := t.Request(nodeID)
+	var own model.Auth
+	if ok {
+		own = req.Auth
+	}
+	return auth.Resolve(own, t.AncestorAuths(nodeID))
+}
 
 // ActiveCollection returns the index of the active collection, or -1.
 func (s *Session) ActiveCollection() int { return s.activeCol }
@@ -222,11 +267,70 @@ func (s *Session) SetActiveEnvironmentVariables(variables []model.Variable) {
 }
 
 // Resolver builds a variable resolver from the active collection's active
-// environment (enabled variables only).
+// environment (enabled variables only). The script-set env overlay is
+// layered on top as the highest-precedence scope so a `helena.env.set(...)`
+// during a pre-request or post-response hook is visible to the next Send
+// without ever touching disk.
+//
+// Call from the UI goroutine. Workers should use the
+// SnapshotActiveEnvVars + SnapshotEnvOverlay pair instead so the env
+// can't shift mid-Send.
 func (s *Session) Resolver() *vars.Resolver {
-	return vars.New(s.activeEnvVars())
+	return vars.New(s.activeEnvVars(), s.SnapshotEnvOverlay())
 }
 
+// SetEnvOverlay records a script-set environment variable for the lifetime
+// of the process. Per the Helena scripting contract (AGENTS invariant 9),
+// these never persist to the collection's environment file. Empty name is
+// a no-op so scripts that accidentally call with a falsy key don't poison
+// the overlay.
+func (s *Session) SetEnvOverlay(name, value string) {
+	if name == "" {
+		return
+	}
+	s.overlayMu.Lock()
+	if s.overlay == nil {
+		s.overlay = map[string]string{}
+	}
+	s.overlay[name] = value
+	s.overlayMu.Unlock()
+}
+
+// EnvOverlay returns the current value an overlay entry, or "" + false when
+// nothing has been set under that name. The check covers callers that want
+// to know whether the script explicitly set a value vs. inheriting from the
+// underlying environment.
+func (s *Session) EnvOverlay(name string) (string, bool) {
+	s.overlayMu.RLock()
+	defer s.overlayMu.RUnlock()
+	v, ok := s.overlay[name]
+	return v, ok
+}
+
+// ClearEnvOverlay removes every script-set entry. Useful between Send
+// invocations when the user wants a clean slate without restarting Helena.
+func (s *Session) ClearEnvOverlay() {
+	s.overlayMu.Lock()
+	s.overlay = map[string]string{}
+	s.overlayMu.Unlock()
+}
+
+// SnapshotEnvOverlay returns a copy of the overlay so callers (the Send
+// pipeline, Resolver scopes) don't race against concurrent
+// SetEnvOverlay calls. Safe to call from any goroutine; the underlying
+// map is locked under the overlay RWMutex.
+func (s *Session) SnapshotEnvOverlay() map[string]string {
+	s.overlayMu.RLock()
+	defer s.overlayMu.RUnlock()
+	out := make(map[string]string, len(s.overlay))
+	for k, v := range s.overlay {
+		out[k] = v
+	}
+	return out
+}
+
+// activeEnvVars returns the enabled key/value pairs of the active environment
+// as a flat map, ready to feed into vars.Resolver.
 func (s *Session) activeEnvVars() map[string]string {
 	m := map[string]string{}
 	e := s.ActiveEnvironment()
@@ -239,6 +343,15 @@ func (s *Session) activeEnvVars() map[string]string {
 		}
 	}
 	return m
+}
+
+// SnapshotActiveEnvVars returns a copy of the active environment's
+// enabled variables. Called from the UI goroutine on Send entry so the
+// worker goroutine can read env values without racing against later UI
+// mutations to s.cols / s.activeCol / Environment.Variables. The
+// returned map is owned by the caller.
+func (s *Session) SnapshotActiveEnvVars() map[string]string {
+	return s.activeEnvVars()
 }
 
 // SaveActiveCollection writes the active collection back to its source directory.

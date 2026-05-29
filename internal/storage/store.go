@@ -31,7 +31,10 @@ func Save(c model.Collection, dir string) error {
 	}
 
 	// Preserve any unknown top-level fields from a prior load.
-	root := ocCollectionFile{Info: ocInfo{Name: c.Name, Type: "collection"}}
+	root := ocCollectionFile{
+		Info: ocInfo{Name: c.Name, Type: "collection"},
+		Auth: authToFile(c.Auth),
+	}
 	if existing, err := readCollectionFile(filepath.Join(dir, collectionFile)); err == nil {
 		root.Extra = existing.Extra
 		// Merge Info.Extra (unknown info fields) too.
@@ -70,6 +73,10 @@ func Save(c model.Collection, dir string) error {
 	return saveItems(dir, c.Folders, c.Requests)
 }
 
+// saveItems writes the requests and folders of one container (collection root
+// or folder) into dir, recursing into subfolders. For each item it preserves
+// the Extra catch-alls from any existing file with the same slug so unknown
+// fields round-trip, then sweeps orphan entries.
 func saveItems(dir string, folders []model.Folder, requests []model.Request) error {
 	used := map[string]bool{
 		strings.TrimSuffix(collectionFile, ymlExt): true,
@@ -94,6 +101,17 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 			if rf.HTTP != nil && prev.HTTP != nil {
 				rf.HTTP.Extra = prev.HTTP.Extra
 			}
+			// Scripts: if the user cleared both hooks, scriptsToFile returns
+			// nil — but the on-disk scripts block may have carried sibling
+			// keys (e.g. a tests: block from another tool) under Scripts.Extra.
+			// Synthesize an empty DTO carrying that Extra so the round-trip
+			// preserves it (invariant 1).
+			if prev.Scripts != nil && len(prev.Scripts.Extra) > 0 {
+				if rf.Scripts == nil {
+					rf.Scripts = &ocScripts{}
+				}
+				rf.Scripts.Extra = prev.Scripts.Extra
+			}
 		}
 		if err := writeYAML(filepath.Join(dir, name+ymlExt), rf); err != nil {
 			return err
@@ -106,7 +124,10 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 		if err := os.MkdirAll(sub, 0o755); err != nil {
 			return err
 		}
-		ff := ocFolderFile{Info: ocInfo{Name: f.Name, Type: "folder", Seq: i + 1}}
+		ff := ocFolderFile{
+			Info: ocInfo{Name: f.Name, Type: "folder", Seq: i + 1},
+			Auth: authToFile(f.Auth),
+		}
 		if prev, err := readFolderFile(filepath.Join(sub, folderFile)); err == nil {
 			ff.Extra = prev.Extra
 			ff.Info.Extra = prev.Info.Extra
@@ -156,6 +177,8 @@ func sweepDir(dir string, keep map[string]bool) error {
 	return nil
 }
 
+// readRequestFile loads a request DTO from path, preserving Extra fields for
+// later re-marshalling.
 func readRequestFile(path string) (ocRequestFile, error) {
 	var rf ocRequestFile
 	data, err := os.ReadFile(path)
@@ -165,6 +188,7 @@ func readRequestFile(path string) (ocRequestFile, error) {
 	return rf, yaml.Unmarshal(data, &rf)
 }
 
+// readFolderFile loads a folder DTO from path.
 func readFolderFile(path string) (ocFolderFile, error) {
 	var ff ocFolderFile
 	data, err := os.ReadFile(path)
@@ -174,6 +198,7 @@ func readFolderFile(path string) (ocFolderFile, error) {
 	return ff, yaml.Unmarshal(data, &ff)
 }
 
+// readCollectionFile loads the collection-root DTO from path.
 func readCollectionFile(path string) (ocCollectionFile, error) {
 	var cf ocCollectionFile
 	data, err := os.ReadFile(path)
@@ -183,6 +208,7 @@ func readCollectionFile(path string) (ocCollectionFile, error) {
 	return cf, yaml.Unmarshal(data, &cf)
 }
 
+// readEnvFile loads an environment DTO from path.
 func readEnvFile(path string) (ocEnvironmentFile, error) {
 	var ef ocEnvironmentFile
 	data, err := os.ReadFile(path)
@@ -206,6 +232,12 @@ func Load(dir string) (model.Collection, error) {
 		return c, fmt.Errorf("parse %s: %w", collectionFile, err)
 	}
 	c.Name = root.Info.Name
+	if root.Auth != nil {
+		c.Auth = fileToAuth(root.Auth)
+	} else {
+		// Collection root has no parent to inherit from, so the default is None.
+		c.Auth = model.Auth{Type: model.AuthNone}
+	}
 
 	envs, err := loadEnvironments(filepath.Join(dir, environmentsDir))
 	if err != nil {
@@ -222,6 +254,8 @@ func Load(dir string) (model.Collection, error) {
 	return c, nil
 }
 
+// loadEnvironments reads every .yml file under dir as an environment file,
+// sorted by their info.seq, returning nil when the directory is absent.
 func loadEnvironments(dir string) ([]model.Environment, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -257,6 +291,9 @@ func loadEnvironments(dir string) ([]model.Environment, error) {
 	return out, nil
 }
 
+// loadItems walks one container directory: subdirectories that contain a
+// folder.yml become folders (recursing), .yml files of type http (or with no
+// type) become requests. Both lists are ordered by their info.seq.
 func loadItems(dir string) ([]model.Folder, []model.Request, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -296,11 +333,16 @@ func loadItems(dir string) ([]model.Folder, []model.Request, error) {
 			if err != nil {
 				return nil, nil, err
 			}
+			folderAuth := model.Auth{Type: model.AuthInherit}
+			if ff.Auth != nil {
+				folderAuth = fileToAuth(ff.Auth)
+			}
 			fols = append(fols, seqFol{ff.Info.Seq, model.Folder{
 				ID:       model.NewID(),
 				Name:     ff.Info.Name,
 				Folders:  subFolders,
 				Requests: subRequests,
+				Auth:     folderAuth,
 			}})
 			continue
 		}
@@ -336,6 +378,7 @@ func loadItems(dir string) ([]model.Folder, []model.Request, error) {
 	return folders, requests, nil
 }
 
+// writeYAML marshals v and writes it to path with 0644 permissions.
 func writeYAML(path string, v any) error {
 	data, err := yaml.Marshal(v)
 	if err != nil {
@@ -357,6 +400,9 @@ func slug(name, fallback string) string {
 	return s
 }
 
+// uniqueName returns base, or base with a `-2`, `-3`, … suffix that has not
+// yet been used. The picked name is recorded in used so further calls keep
+// producing fresh names.
 func uniqueName(base string, used map[string]bool) string {
 	name := base
 	for i := 2; used[name]; i++ {

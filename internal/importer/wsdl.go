@@ -113,6 +113,10 @@ func buildSOAPRequest(opName, endpoint, soapAction, targetNS string) model.Reque
 
 // --- WSDL parse types (captures just the bits Helena needs) ---
 
+// wsdlDefinitions is the root <definitions> element. We capture only the
+// targetNamespace and the service / binding lists; ports, messages and types
+// are ignored because Helena emits a placeholder envelope rather than a fully
+// typed payload.
 type wsdlDefinitions struct {
 	XMLName         xml.Name      `xml:"definitions"`
 	TargetNamespace string        `xml:"targetNamespace,attr"`
@@ -120,31 +124,41 @@ type wsdlDefinitions struct {
 	Bindings        []wsdlBinding `xml:"binding"`
 }
 
+// wsdlService groups one or more ports under a service name; the service name
+// becomes the imported collection's display name.
 type wsdlService struct {
 	Name  string     `xml:"name,attr"`
 	Ports []wsdlPort `xml:"port"`
 }
 
+// wsdlPort ties a binding to a concrete SOAP endpoint URL.
 type wsdlPort struct {
 	Name        string          `xml:"name,attr"`
 	Binding     string          `xml:"binding,attr"`
 	SoapAddress wsdlSoapAddress `xml:"address"`
 }
 
+// wsdlSoapAddress carries the endpoint URL the SOAP request will be POSTed to.
 type wsdlSoapAddress struct {
 	Location string `xml:"location,attr"`
 }
 
+// wsdlBinding lists the SOAP operations exposed by a binding; we use Name to
+// match against wsdlPort.Binding (after stripping any namespace prefix).
 type wsdlBinding struct {
 	Name       string                 `xml:"name,attr"`
 	Operations []wsdlBindingOperation `xml:"operation"`
 }
 
+// wsdlBindingOperation pairs a WSDL operation name with its SOAP-specific
+// metadata (SOAPAction).
 type wsdlBindingOperation struct {
 	Name          string            `xml:"name,attr"`
 	SoapOperation wsdlSoapOperation `xml:"operation"`
 }
 
+// wsdlSoapOperation captures soapAction; an empty value means no SOAPAction
+// header should be emitted for this operation.
 type wsdlSoapOperation struct {
 	SoapAction string `xml:"soapAction,attr"`
 }

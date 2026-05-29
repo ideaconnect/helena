@@ -57,6 +57,7 @@ paths:
           type: boolean
 `
 
+// TestFromOpenAPI3 verifies a full OpenAPI 3 YAML spec maps to a collection with base_url env, tag-folders, request bodies and disabled optional params.
 func TestFromOpenAPI3(t *testing.T) {
 	c, err := FromOpenAPI([]byte(oas3Sample))
 	if err != nil {
@@ -119,6 +120,7 @@ func TestFromOpenAPI3(t *testing.T) {
 	}
 }
 
+// TestFromSwagger2 verifies a Swagger 2 spec is converted via openapi2conv, preserving title, host+basePath as base_url, and tag-folder grouping.
 func TestFromSwagger2(t *testing.T) {
 	c, err := FromOpenAPI([]byte(swagger2Sample))
 	if err != nil {
@@ -142,6 +144,7 @@ func TestFromSwagger2(t *testing.T) {
 	}
 }
 
+// TestFromOpenAPIRejectsNonSpec verifies a JSON document with neither openapi nor swagger key returns an error.
 func TestFromOpenAPIRejectsNonSpec(t *testing.T) {
 	_, err := FromOpenAPI([]byte(`{"hello": "world"}`))
 	if err == nil {
@@ -149,6 +152,7 @@ func TestFromOpenAPIRejectsNonSpec(t *testing.T) {
 	}
 }
 
+// TestFromOpenAPIJSONInput verifies that raw JSON specs skip YAML normalization and parse directly.
 func TestFromOpenAPIJSONInput(t *testing.T) {
 	// Same spec but in JSON form.
 	in := `{"openapi":"3.0.0","info":{"title":"JSON API"},"paths":{}}`

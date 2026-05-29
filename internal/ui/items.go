@@ -166,6 +166,9 @@ func (m *MainUI) promptName(title, label, initial string, onAccept func(string))
 	d.Show()
 }
 
+// nameOfNode returns the display name suitable for a Rename/Delete prompt:
+// the raw request name for requests, or the tree label for folders and
+// collections.
 func nameOfNode(m *MainUI, id string) string {
 	// For requests, show the raw name (no "GET  " prefix); fall back to Label
 	// for collections and folders.

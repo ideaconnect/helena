@@ -8,6 +8,7 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestLoadMissingReturnsDefault verifies that loading a non-existent path yields the default config without an error.
 func TestLoadMissingReturnsDefault(t *testing.T) {
 	got, err := Load(filepath.Join(t.TempDir(), "does-not-exist.yml"))
 	if err != nil {
@@ -18,6 +19,7 @@ func TestLoadMissingReturnsDefault(t *testing.T) {
 	}
 }
 
+// TestLoadEmptyPathReturnsDefault verifies that Load("") short-circuits to the default config.
 func TestLoadEmptyPathReturnsDefault(t *testing.T) {
 	got, err := Load("")
 	if err != nil || !reflect.DeepEqual(got, Default()) {
@@ -25,6 +27,7 @@ func TestLoadEmptyPathReturnsDefault(t *testing.T) {
 	}
 }
 
+// TestSaveLoadRoundTrip verifies that a Config persists and reloads identically through Save/Load, including nested directories.
 func TestSaveLoadRoundTrip(t *testing.T) {
 	want := Config{
 		Workspaces: []Workspace{
@@ -47,6 +50,7 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 }
 
+// TestLoadClampsActive verifies that an out-of-range Active index is clamped to 0 on load.
 func TestLoadClampsActive(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.yml")
 	if err := Save(path, Config{Workspaces: []Workspace{{Name: "Only"}}, Active: 9}); err != nil {

@@ -8,6 +8,7 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestUIStateRoundTrip verifies that UIState (active collection, env map, open request, window size) survives Save/Load.
 func TestUIStateRoundTrip(t *testing.T) {
 	want := Config{
 		Workspaces: []Workspace{{Name: "Default", Collections: []string{"/c/a", "/c/b"}}},

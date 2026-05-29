@@ -12,6 +12,7 @@ import (
 	"github.com/idct/helena/internal/vars"
 )
 
+// TestDoGETWithParams verifies that enabled query params merge with URL params and disabled ones are dropped.
 func TestDoGETWithParams(t *testing.T) {
 	var gotPath, gotQuery string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +45,7 @@ func TestDoGETWithParams(t *testing.T) {
 	}
 }
 
+// TestPostJSONBodyAndHeaders verifies that {{vars}} resolve in body and headers and that Content-Type is auto-set for JSON.
 func TestPostJSONBodyAndHeaders(t *testing.T) {
 	var gotBody, gotCT, gotTok string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -79,15 +81,17 @@ func TestPostJSONBodyAndHeaders(t *testing.T) {
 	}
 }
 
+// TestUnresolvedVariablesError verifies that Build returns an error naming every unresolved {{variable}}.
 func TestUnresolvedVariablesError(t *testing.T) {
 	_, err := Build(context.Background(),
 		model.Request{Method: model.GET, URL: "{{base}}/{{missing}}"},
-		vars.New(map[string]string{"base": "http://x"}))
+		vars.New(map[string]string{"base": "http://x"}), nil)
 	if err == nil || !strings.Contains(err.Error(), "missing") {
 		t.Fatalf("err=%v, want it to name 'missing'", err)
 	}
 }
 
+// TestRedirectPolicy verifies that Settings.FollowRedirects toggles between stopping at 302 and following to the final body.
 func TestRedirectPolicy(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/final", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("final")) })
@@ -111,6 +115,7 @@ func TestRedirectPolicy(t *testing.T) {
 	}
 }
 
+// TestPostFormBodyFallsBackToContent verifies that BodyForm with no structured fields sends raw Content with form Content-Type.
 func TestPostFormBodyFallsBackToContent(t *testing.T) {
 	var gotBody, gotCT string
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -136,6 +141,45 @@ func TestPostFormBodyFallsBackToContent(t *testing.T) {
 	}
 }
 
+// TestBuildAppliesAuthAfterVarResolution verifies that auth credentials
+// run through {{var}} substitution and that the resulting Bearer token
+// reaches the outgoing Authorization header.
+func TestBuildAppliesAuthAfterVarResolution(t *testing.T) {
+	resolver := vars.New(map[string]string{"TOKEN": "abc123"})
+	req, err := Build(context.Background(), model.Request{
+		Method: model.GET,
+		URL:    "https://example.com",
+		Auth: model.Auth{
+			Type:   model.AuthBearer,
+			Bearer: &model.BearerAuth{Token: "{{TOKEN}}"},
+		},
+	}, resolver, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if got := req.Header.Get("Authorization"); got != "Bearer abc123" {
+		t.Errorf("Authorization = %q", got)
+	}
+}
+
+// TestBuildReportsUnresolvedAuthVars verifies that unresolved {{vars}} in
+// the auth section show up in the missing-variables error alongside any
+// from URL/headers/body.
+func TestBuildReportsUnresolvedAuthVars(t *testing.T) {
+	_, err := Build(context.Background(), model.Request{
+		Method: model.GET,
+		URL:    "https://example.com",
+		Auth: model.Auth{
+			Type:   model.AuthBearer,
+			Bearer: &model.BearerAuth{Token: "{{NOT_SET}}"},
+		},
+	}, vars.New(), nil)
+	if err == nil || !strings.Contains(err.Error(), "NOT_SET") {
+		t.Errorf("Build err = %v, want one mentioning NOT_SET", err)
+	}
+}
+
+// TestCORSAdvisory verifies that corsAdvisory warns on missing or mismatched Access-Control-Allow-Origin and stays silent on match or wildcard.
 func TestCORSAdvisory(t *testing.T) {
 	header := func(allow string) http.Header {
 		h := http.Header{}

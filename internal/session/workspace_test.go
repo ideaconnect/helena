@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// TestAddRenameWorkspace verifies that AddWorkspace and RenameWorkspace mutate
+// the workspace list and that a fresh Session at the same config path observes
+// those changes.
 func TestAddRenameWorkspace(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
 	s, _ := New(cfgPath)
@@ -31,6 +34,8 @@ func TestAddRenameWorkspace(t *testing.T) {
 	}
 }
 
+// TestDeleteWorkspace verifies that DeleteWorkspace removes the given workspace
+// and that deleting the last remaining workspace fails.
 func TestDeleteWorkspace(t *testing.T) {
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
 	s, _ := New(cfgPath)

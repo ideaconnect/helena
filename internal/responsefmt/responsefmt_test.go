@@ -7,6 +7,7 @@ import (
 	"time"
 )
 
+// TestPrettyJSON verifies that PrettyJSON indents valid JSON with two spaces and errors on invalid input.
 func TestPrettyJSON(t *testing.T) {
 	got, err := PrettyJSON([]byte(`{"a":1,"b":[2,3]}`))
 	if err != nil {
@@ -20,6 +21,7 @@ func TestPrettyJSON(t *testing.T) {
 	}
 }
 
+// TestPrettyXML verifies that PrettyXML indents well-formed XML and errors on mismatched tags.
 func TestPrettyXML(t *testing.T) {
 	got, err := PrettyXML([]byte(`<root><a>x</a><b>y</b></root>`))
 	if err != nil {
@@ -34,6 +36,7 @@ func TestPrettyXML(t *testing.T) {
 	}
 }
 
+// TestPrettyXMLStripsInputWhitespace verifies that pre-existing indentation in the input does not leak into the formatted output.
 func TestPrettyXMLStripsInputWhitespace(t *testing.T) {
 	in := []byte("<root>\n    <a>x</a>\n    <b>y</b>\n</root>")
 	got, err := PrettyXML(in)
@@ -45,6 +48,7 @@ func TestPrettyXMLStripsInputWhitespace(t *testing.T) {
 	}
 }
 
+// TestIsJSONIsXML verifies content-type sniffing matches JSON/XML variants (incl. vnd.api+json, SOAP) without false positives.
 func TestIsJSONIsXML(t *testing.T) {
 	for _, ct := range []string{"application/json", "application/vnd.api+json", "APPLICATION/JSON"} {
 		if !IsJSON(ct) {
@@ -64,6 +68,7 @@ func TestIsJSONIsXML(t *testing.T) {
 	}
 }
 
+// TestFormatHeaders verifies that headers are emitted sorted by name with one line per value.
 func TestFormatHeaders(t *testing.T) {
 	h := http.Header{
 		"Content-Type": {"application/json"},
@@ -76,6 +81,7 @@ func TestFormatHeaders(t *testing.T) {
 	}
 }
 
+// TestHumanSize verifies the binary-unit formatter at each B/KB/MB/GB boundary.
 func TestHumanSize(t *testing.T) {
 	cases := []struct {
 		in   int64
@@ -95,6 +101,7 @@ func TestHumanSize(t *testing.T) {
 	}
 }
 
+// TestHumanDuration verifies duration formatting across the sub-second, sub-minute, and minute+ ranges.
 func TestHumanDuration(t *testing.T) {
 	cases := []struct {
 		in   time.Duration

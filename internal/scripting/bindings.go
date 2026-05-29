@@ -1,0 +1,367 @@
+package scripting
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/textproto"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/dop251/goja"
+
+	"github.com/idct/helena/internal/model"
+)
+
+// bindHelena attaches the helena.* surface (env.get / env.set and the
+// helena.vars.get alias). The same surface is bound in pre- and
+// post-response phases so user scripts can rely on identical APIs in
+// both. The session overlay is the only place script writes land.
+func (rt *Runtime) bindHelena(vm *goja.Runtime) error {
+	helena := vm.NewObject()
+
+	env := vm.NewObject()
+	if err := env.Set("get", func(call goja.FunctionCall) goja.Value {
+		v, _ := rt.env.Get(call.Argument(0).String())
+		return vm.ToValue(v)
+	}); err != nil {
+		return err
+	}
+	if err := env.Set("set", func(call goja.FunctionCall) goja.Value {
+		rt.env.Set(call.Argument(0).String(), call.Argument(1).String())
+		return goja.Undefined()
+	}); err != nil {
+		return err
+	}
+	if err := helena.Set("env", env); err != nil {
+		return err
+	}
+
+	varsObj := vm.NewObject()
+	if err := varsObj.Set("get", func(call goja.FunctionCall) goja.Value {
+		v, _ := rt.env.Get(call.Argument(0).String())
+		return vm.ToValue(v)
+	}); err != nil {
+		return err
+	}
+	if err := helena.Set("vars", varsObj); err != nil {
+		return err
+	}
+
+	return vm.Set("helena", helena)
+}
+
+// bindConsole installs console.log / info / error / warn. Each call
+// appends one line — space-joined arguments — to res.Console so the UI
+// can show the user what their script printed during the last run.
+func bindConsole(vm *goja.Runtime, res *Result) {
+	emit := func(prefix string) func(goja.FunctionCall) goja.Value {
+		return func(call goja.FunctionCall) goja.Value {
+			parts := make([]string, 0, len(call.Arguments))
+			for _, a := range call.Arguments {
+				parts = append(parts, stringify(a))
+			}
+			line := strings.Join(parts, " ")
+			if prefix != "" {
+				line = prefix + line
+			}
+			res.Console = append(res.Console, line)
+			return goja.Undefined()
+		}
+	}
+	console := vm.NewObject()
+	_ = console.Set("log", emit(""))
+	_ = console.Set("info", emit(""))
+	_ = console.Set("error", emit("ERROR: "))
+	_ = console.Set("warn", emit("WARN: "))
+	_ = vm.Set("console", console)
+}
+
+// stringify renders a goja.Value the way `console.log` would: strings
+// pass through, null/undefined become their names, everything else goes
+// through json.Marshal so objects/arrays show useful structure rather
+// than `[object Object]`.
+func stringify(v goja.Value) string {
+	if v == nil || goja.IsUndefined(v) {
+		return "undefined"
+	}
+	if goja.IsNull(v) {
+		return "null"
+	}
+	exported := v.Export()
+	if s, ok := exported.(string); ok {
+		return s
+	}
+	b, err := json.Marshal(exported)
+	if err != nil {
+		return fmt.Sprintf("%v", exported)
+	}
+	return string(b)
+}
+
+// runWithTimeout executes src on vm with a hard ScriptTimeout cap, also
+// interrupting if ctx is cancelled. Interruptions surface as the
+// captured reason ("script execution timed out", "script execution
+// cancelled: …") rather than the raw goja.InterruptedError so the UI
+// gets a clean message.
+func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
+	done := make(chan struct{})
+	var (
+		mu     sync.Mutex
+		reason string
+	)
+	setReason := func(s string) {
+		mu.Lock()
+		if reason == "" {
+			reason = s
+		}
+		mu.Unlock()
+		vm.Interrupt(s)
+	}
+	timer := time.NewTimer(ScriptTimeout)
+	go func() {
+		defer timer.Stop()
+		select {
+		case <-timer.C:
+			setReason("script execution timed out")
+		case <-ctx.Done():
+			setReason("script execution cancelled: " + ctx.Err().Error())
+		case <-done:
+		}
+	}()
+	_, err := vm.RunString(src)
+	close(done)
+	if err != nil {
+		var ie *goja.InterruptedError
+		if errors.As(err, &ie) {
+			mu.Lock()
+			r := reason
+			mu.Unlock()
+			if r == "" {
+				r = fmt.Sprintf("script interrupted: %v", ie.Value())
+			}
+			return errors.New(r)
+		}
+		return err
+	}
+	return nil
+}
+
+// requestToObject mirrors the model.Request into a goja object the
+// script can mutate. Headers, params, and form fields expose only
+// enabled rows as flat name → value objects so scripts can naturally do
+// `request.headers["X-Trace"] = "abc"` or `delete request.params.token`.
+// `request.form` is bound only for form-urlencoded / multipart bodies
+// where the model has structured fields; otherwise the property is left
+// unset so scripts can probe its existence as a body-type hint.
+func requestToObject(vm *goja.Runtime, r *model.Request) *goja.Object {
+	obj := vm.NewObject()
+	method := string(r.Method)
+	if method == "" {
+		method = string(model.GET)
+	}
+	_ = obj.Set("method", method)
+	_ = obj.Set("url", r.URL)
+	_ = obj.Set("body", r.Body.Content)
+	_ = obj.Set("bodyType", string(r.Body.Type))
+	_ = obj.Set("headers", kvToObject(vm, r.Headers))
+	_ = obj.Set("params", kvToObject(vm, r.Params))
+	if r.Body.Type == model.BodyForm || r.Body.Type == model.BodyMultipart {
+		_ = obj.Set("form", kvToObject(vm, r.Body.Form))
+	}
+	return obj
+}
+
+// kvToObject builds a plain JS object from a KeyValue slice, skipping
+// disabled rows. Duplicate keys land last-write-wins, matching how most
+// scripting authors think of header tables.
+func kvToObject(vm *goja.Runtime, kvs []model.KeyValue) *goja.Object {
+	obj := vm.NewObject()
+	for _, kv := range kvs {
+		if !kv.Enabled {
+			continue
+		}
+		_ = obj.Set(kv.Key, kv.Value)
+	}
+	return obj
+}
+
+// writeBackRequest reads the (possibly mutated) JS request object back
+// into r. Disabled rows in the original headers/params slices pass
+// through untouched so an inherited disabled header still survives a
+// script run; enabled rows are merged with the JS-side object via
+// mergeKVFromObject. Every value read goes through safeString so a
+// hostile toString that throws turns into an empty string rather than a
+// process-crashing panic.
+func writeBackRequest(obj *goja.Object, r *model.Request) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = fmt.Errorf("script mutation panicked while reading back request: %v", rec)
+		}
+	}()
+	if s, ok := safeString(obj.Get("method")); ok {
+		r.Method = model.Method(s)
+	}
+	if s, ok := safeString(obj.Get("url")); ok {
+		r.URL = s
+	}
+	if s, ok := safeString(obj.Get("body")); ok {
+		r.Body.Content = s
+	}
+	if v := obj.Get("headers"); v != nil {
+		if o, ok := v.(*goja.Object); ok && o != nil {
+			r.Headers = mergeKVFromObject(r.Headers, o)
+		}
+	}
+	if v := obj.Get("params"); v != nil {
+		if o, ok := v.(*goja.Object); ok && o != nil {
+			r.Params = mergeKVFromObject(r.Params, o)
+		}
+	}
+	if v := obj.Get("form"); v != nil {
+		if o, ok := v.(*goja.Object); ok && o != nil {
+			r.Body.Form = mergeKVFromObject(r.Body.Form, o)
+		}
+	}
+	return nil
+}
+
+// safeString returns v.String() or ("", false) for nil / undefined /
+// null values, AND it absorbs the panic goja.Value.String triggers when
+// the underlying JS value's toString throws. Returning ("", false) on
+// throw is the conservative choice: the model field is left unchanged
+// rather than getting a misleading "[object Object]" or similar.
+func safeString(v goja.Value) (s string, ok bool) {
+	if v == nil || goja.IsUndefined(v) || goja.IsNull(v) {
+		return "", false
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			s, ok = "", false
+		}
+	}()
+	return v.String(), true
+}
+
+// mergeKVFromObject reconciles a KeyValue slice with the post-script JS
+// object using these rules so user intent is preserved across types of
+// change:
+//
+//   - Disabled rows in existing are passed through unchanged (the script
+//     never saw them and shouldn't be able to enable them inadvertently).
+//   - Enabled rows whose key is still present in obj have their value
+//     updated to the JS value (case-insensitive name match, so HTTP
+//     header semantics still hold).
+//   - Enabled rows whose key has disappeared from obj are dropped — the
+//     script called `delete request.headers["X"]` and meant it.
+//   - Keys present in obj but not matched to any existing row are
+//     appended as Enabled new entries.
+//
+// JS object keys differing only in case (`Content-Type` vs `content-type`)
+// are coalesced last-write-wins before the merge so duplicates can't
+// reach the model. JS preserves insertion order on string keys, so
+// "later in the object" == "later in obj.Keys()" — this matches the
+// natural JS dict semantics.
+func mergeKVFromObject(existing []model.KeyValue, obj *goja.Object) []model.KeyValue {
+	type entry struct {
+		key string // original casing kept for new appends
+		val string
+	}
+	dedup := make(map[string]entry, len(obj.Keys()))
+	for _, k := range obj.Keys() {
+		v, ok := safeString(obj.Get(k))
+		if !ok {
+			continue
+		}
+		dedup[strings.ToLower(k)] = entry{key: k, val: v}
+	}
+
+	consumed := make(map[string]bool, len(dedup))
+	out := make([]model.KeyValue, 0, len(existing)+len(dedup))
+	for _, kv := range existing {
+		if !kv.Enabled {
+			out = append(out, kv)
+			continue
+		}
+		lk := strings.ToLower(kv.Key)
+		e, ok := dedup[lk]
+		if !ok {
+			continue // script deleted it
+		}
+		kv.Value = e.val
+		consumed[lk] = true
+		out = append(out, kv)
+	}
+	for lk, e := range dedup {
+		if consumed[lk] {
+			continue
+		}
+		out = append(out, model.KeyValue{Enabled: true, Key: e.key, Value: e.val})
+	}
+	return out
+}
+
+// responseToObject reflects the response into a goja object exposed to
+// post-response scripts. JSON parsing is attempted regardless of
+// Content-Type so APIs that return JSON without a header still get
+// `response.json`; same for XML and `response.xml`. Both stay undefined
+// for non-matching bodies.
+func responseToObject(vm *goja.Runtime, in ResponseInput) *goja.Object {
+	obj := vm.NewObject()
+	_ = obj.Set("status", in.StatusCode)
+	_ = obj.Set("statusText", in.Status)
+	body := string(in.Body)
+	_ = obj.Set("body", body)
+	_ = obj.Set("text", body)
+
+	// Canonicalize header keys to MIME form so case-insensitive script
+	// lookups work in practice. Net/http already stores canonical keys
+	// (Content-Type, Location), but ResponseInput is also constructed
+	// directly in tests and conceivably from other inputs that may use
+	// raw casing — normalizing here makes the surface predictable.
+	// We read straight from the map (vs http.Header.Get) because Get
+	// canonicalizes the lookup key and so misses non-canonical entries.
+	headers := vm.NewObject()
+	for k, vs := range in.Headers {
+		if len(vs) == 0 {
+			continue
+		}
+		_ = headers.Set(textproto.CanonicalMIMEHeaderKey(k), vs[0])
+	}
+	_ = obj.Set("headers", headers)
+
+	if parsed, ok := tryParseJSON(in.Body); ok {
+		_ = obj.Set("json", vm.ToValue(parsed))
+	} else {
+		_ = obj.Set("json", goja.Undefined())
+	}
+	if parsed, ok := tryParseXML(in.Body); ok {
+		_ = obj.Set("xml", vm.ToValue(parsed))
+	} else {
+		_ = obj.Set("xml", goja.Undefined())
+	}
+	return obj
+}
+
+// tryParseJSON returns (parsed, true) when body is a JSON object or
+// array — Helena's two interesting cases. Top-level scalars (numbers,
+// strings, booleans) are technically valid JSON but rarely the user's
+// intent, so they fall back to false and stay accessible via
+// response.body.
+func tryParseJSON(body []byte) (interface{}, bool) {
+	trim := strings.TrimLeft(string(body), " \t\r\n")
+	if trim == "" {
+		return nil, false
+	}
+	c := trim[0]
+	if c != '{' && c != '[' {
+		return nil, false
+	}
+	var v interface{}
+	if err := json.Unmarshal(body, &v); err != nil {
+		return nil, false
+	}
+	return v, true
+}

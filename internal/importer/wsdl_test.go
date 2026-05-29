@@ -29,6 +29,7 @@ const wsdlSample = `<?xml version="1.0"?>
   </wsdl:service>
 </wsdl:definitions>`
 
+// TestFromWSDL verifies a WSDL 1.1 doc yields one POST request per operation with the port endpoint, SOAPAction header, and a placeholder envelope.
 func TestFromWSDL(t *testing.T) {
 	c, err := FromWSDL([]byte(wsdlSample))
 	if err != nil {
@@ -82,6 +83,7 @@ func TestFromWSDL(t *testing.T) {
 	}
 }
 
+// TestFromWSDLNoOperationsErrors verifies an empty WSDL definitions element produces an error rather than an empty collection.
 func TestFromWSDLNoOperationsErrors(t *testing.T) {
 	_, err := FromWSDL([]byte(`<?xml version="1.0"?><definitions xmlns="http://schemas.xmlsoap.org/wsdl/"/>`))
 	if err == nil {
@@ -89,6 +91,7 @@ func TestFromWSDLNoOperationsErrors(t *testing.T) {
 	}
 }
 
+// TestFromDispatcher verifies From routes XML to FromWSDL and JSON/YAML to FromOpenAPI based on the leading-byte sniff.
 func TestFromDispatcher(t *testing.T) {
 	// XML → WSDL path.
 	if c, err := From([]byte(wsdlSample)); err != nil || c.Name != "Calc" {

@@ -1,0 +1,61 @@
+# CLAUDE.md
+
+Project-specific instructions for Claude Code. Anthropic loads this file
+into context automatically when a session starts in this repo. Keep it
+short and high-signal — the general project conventions live in
+[AGENTS.md](AGENTS.md).
+
+## Commit identity (load-bearing)
+
+All commits in this repo MUST be authored as:
+
+```
+Bartosz Pachołek <bartosz+github@idct.tech>
+```
+
+Do **not** add `Co-Authored-By: Claude <noreply@anthropic.com>` (or any
+other Claude trailer) to commit messages. This was set by the project
+owner on day one and applies to every commit, including those made by
+Claude on the owner's behalf.
+
+Verify with `git log --format='%an <%ae>' -1` if uncertain. The repo's
+existing history is the canonical reference.
+
+## Read AGENTS.md first
+
+[AGENTS.md](AGENTS.md) contains the project's hard invariants (storage
+`Extra` round-trip, CORS-as-advisory, `m.loading` write-back flag, off-UI
+goroutine + `fyne.Do`, no fyne-cross), code conventions, and the module
+map. Treat it as required reading for any non-trivial change.
+
+## Per-module documentation
+
+Every module ships three files at its root:
+
+- `README.md` — purpose, public API, dependencies.
+- `STRUCTURE.md` — file map + type catalog.
+- `WORKFLOW.md` — runtime flows.
+
+When working in a module, read the relevant `WORKFLOW.md` before changing
+the code. When adding to a module, update the relevant `STRUCTURE.md`.
+
+**Docs are part of the change.** If you add or rename an exported
+identifier, add a new file, introduce a new runtime flow, or relax an
+invariant, update the matching docs in the same turn. A change that
+leaves the docs describing the old behaviour is not finished. See the
+"Keep the docs in sync" section of [AGENTS.md](AGENTS.md) for the
+specific trigger conditions.
+
+## Auto-memory
+
+Helena project facts may be present in your auto-memory under a
+`helena-project` entry. Consult it for prior decisions, but verify against
+the current code — memory can drift behind the repo state. The plan of
+record is in Asana
+(https://app.asana.com/1/1214897106264347/project/1215180905395792).
+
+## When in doubt
+
+Default to terseness: brief sentences, no filler, no emojis, no comments
+that restate code. The user prefers a one-line update over a paragraph
+and will redirect if more depth is needed.

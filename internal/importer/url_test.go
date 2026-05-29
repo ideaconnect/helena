@@ -9,6 +9,7 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestFromURLFetchesAndParses verifies FromURL fetches an HTTP body and pipes it through the From dispatcher to a parsed collection.
 func TestFromURLFetchesAndParses(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(oas3Sample))
@@ -27,6 +28,7 @@ func TestFromURLFetchesAndParses(t *testing.T) {
 	}
 }
 
+// TestFromURLFetchesWSDL verifies FromURL routes an XML body to the WSDL parser via From.
 func TestFromURLFetchesWSDL(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(wsdlSample))
@@ -42,6 +44,7 @@ func TestFromURLFetchesWSDL(t *testing.T) {
 	}
 }
 
+// TestFromURLNon2xxErrors verifies that a 5xx response surfaces as an error mentioning the status code.
 func TestFromURLNon2xxErrors(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		http.Error(w, "nope", http.StatusInternalServerError)
@@ -57,6 +60,7 @@ func TestFromURLNon2xxErrors(t *testing.T) {
 	}
 }
 
+// TestFromURLNetworkErrorPropagates verifies that connection-refused errors from the transport are returned to the caller.
 func TestFromURLNetworkErrorPropagates(t *testing.T) {
 	// Closed server → connection refused.
 	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))

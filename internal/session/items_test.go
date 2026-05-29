@@ -8,6 +8,8 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// openSessionWithCollection writes the sample collection to a temp dir, builds
+// a Session against a fresh config path, and opens that collection.
 func openSessionWithCollection(t *testing.T) *Session {
 	t.Helper()
 	dir := writeSampleCollection(t) // Has one root request "Health" and folder "Users" with "Create User"
@@ -21,6 +23,8 @@ func openSessionWithCollection(t *testing.T) *Session {
 	return s
 }
 
+// TestAddRequest verifies that AddRequest appends a GET request to a collection
+// and returns the new node ID at the next request index.
 func TestAddRequest(t *testing.T) {
 	s := openSessionWithCollection(t)
 	id, err := s.AddRequest("0", "Probe")
@@ -36,6 +40,8 @@ func TestAddRequest(t *testing.T) {
 	}
 }
 
+// TestAddFolderAndNestedRequest verifies that AddFolder appends a folder and
+// that a subsequent AddRequest at the folder's node ID lands inside that folder.
 func TestAddFolderAndNestedRequest(t *testing.T) {
 	s := openSessionWithCollection(t)
 
@@ -59,6 +65,8 @@ func TestAddFolderAndNestedRequest(t *testing.T) {
 	}
 }
 
+// TestRenameItem verifies that RenameItem renames both requests and folders
+// addressed by their node IDs.
 func TestRenameItem(t *testing.T) {
 	s := openSessionWithCollection(t)
 	if err := s.RenameItem("0/r0", "Pong"); err != nil {
@@ -75,6 +83,8 @@ func TestRenameItem(t *testing.T) {
 	}
 }
 
+// TestDeleteItem verifies that DeleteItem removes folders and requests from
+// the tree, with their parent's child list shrinking accordingly.
 func TestDeleteItem(t *testing.T) {
 	s := openSessionWithCollection(t)
 	if err := s.DeleteItem("0/f0"); err != nil {
@@ -92,6 +102,8 @@ func TestDeleteItem(t *testing.T) {
 	}
 }
 
+// TestDuplicateRequest verifies that DuplicateItem on a request inserts a copy
+// right after the original with the " (copy)" name suffix.
 func TestDuplicateRequest(t *testing.T) {
 	s := openSessionWithCollection(t)
 	newID, err := s.DuplicateItem("0/r0")
@@ -107,6 +119,9 @@ func TestDuplicateRequest(t *testing.T) {
 	}
 }
 
+// TestDuplicateFolderDeepCopies verifies that duplicating a folder produces an
+// independent subtree: edits to the original's nested request do not leak into
+// the copy.
 func TestDuplicateFolderDeepCopies(t *testing.T) {
 	s := openSessionWithCollection(t)
 	newID, err := s.DuplicateItem("0/f0")

@@ -5,6 +5,9 @@ import (
 	"testing"
 )
 
+// TestUIStatePersistsAndRestores verifies that the active collection, active
+// environment, open request and window size all round-trip through a fresh
+// Session, and that the restored env feeds back into Resolver.
 func TestUIStatePersistsAndRestores(t *testing.T) {
 	dir := writeCollectionWithEnv(t)
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
@@ -43,6 +46,9 @@ func TestUIStatePersistsAndRestores(t *testing.T) {
 	}
 }
 
+// TestOpenRequestStableAcrossCollectionReordering verifies that the open
+// request is persisted by collection directory path (not index) so reordering
+// the workspace's collections does not break restoration.
 func TestOpenRequestStableAcrossCollectionReordering(t *testing.T) {
 	// Persist by collection directory path, so reordering collections in the
 	// workspace doesn't break restoration.

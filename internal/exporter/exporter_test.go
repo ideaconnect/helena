@@ -8,6 +8,7 @@ import (
 	"github.com/idct/helena/internal/vars"
 )
 
+// TestToCurlSimpleGET verifies a no-headers no-body GET renders as a single quoted-URL curl line.
 func TestToCurlSimpleGET(t *testing.T) {
 	got, err := ToCurl(
 		model.Request{Method: model.GET, URL: "https://example.com/x"},
@@ -22,6 +23,7 @@ func TestToCurlSimpleGET(t *testing.T) {
 	}
 }
 
+// TestToCurlPOSTWithHeadersAndBody verifies that a JSON POST emits -H lines (including auto Content-Type) and --data-raw with quoted body.
 func TestToCurlPOSTWithHeadersAndBody(t *testing.T) {
 	r := model.Request{
 		Method:  model.POST,
@@ -44,6 +46,7 @@ func TestToCurlPOSTWithHeadersAndBody(t *testing.T) {
 	}
 }
 
+// TestToCurlResolvesVarsAndParams verifies that {{vars}} get resolved into the URL and disabled params are stripped before rendering.
 func TestToCurlResolvesVarsAndParams(t *testing.T) {
 	r := model.Request{
 		Method: model.GET,
@@ -71,6 +74,7 @@ func TestToCurlResolvesVarsAndParams(t *testing.T) {
 	}
 }
 
+// TestToCurlSettingsFlags verifies that InsecureSkipVerify, FollowRedirects and TimeoutSeconds translate to -k, -L and --max-time.
 func TestToCurlSettingsFlags(t *testing.T) {
 	r := model.Request{Method: model.GET, URL: "https://x"}
 	got, _ := ToCurl(r, nil, model.Settings{
@@ -85,6 +89,7 @@ func TestToCurlSettingsFlags(t *testing.T) {
 	}
 }
 
+// TestToWgetPOST verifies that wget rendering uses --method, --header, --body-data and the --no-check-certificate / --timeout flags.
 func TestToWgetPOST(t *testing.T) {
 	r := model.Request{
 		Method:  model.POST,
@@ -112,6 +117,7 @@ func TestToWgetPOST(t *testing.T) {
 	}
 }
 
+// TestToWgetNoFollowRedirectsAddsFlag verifies the inverted wget semantics: --max-redirect=0 only when FollowRedirects is false.
 func TestToWgetNoFollowRedirectsAddsFlag(t *testing.T) {
 	got, _ := ToWget(
 		model.Request{Method: model.GET, URL: "https://x"},
@@ -122,6 +128,7 @@ func TestToWgetNoFollowRedirectsAddsFlag(t *testing.T) {
 	}
 }
 
+// TestUnresolvedVarsReturnsError verifies that unresolved {{vars}} surface as errors from ToCurl via the underlying Build call.
 func TestUnresolvedVarsReturnsError(t *testing.T) {
 	_, err := ToCurl(
 		model.Request{Method: model.GET, URL: "{{base}}/x"},
@@ -132,6 +139,7 @@ func TestUnresolvedVarsReturnsError(t *testing.T) {
 	}
 }
 
+// TestShellQuoteEdgeCases verifies that shell-safe strings stay bare, empty / spaced / quoted strings get single-quoted, and inner quotes use the '\” trick.
 func TestShellQuoteEdgeCases(t *testing.T) {
 	cases := map[string]string{
 		"":                  "''",

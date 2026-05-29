@@ -1,0 +1,208 @@
+# AGENTS.md
+
+Guidance for AI assistants (Claude Code, Codex, Cursor, others) joining the
+Helena codebase. Read this once at the start of a session, then read the
+target module's own docs before changing code.
+
+## What Helena is
+
+A super-lightweight cross-platform API client written in Go + Fyne — a
+native alternative to Postman and Bruno, no Electron. Single self-contained
+binary on Linux and Windows; macOS deferred. Module path:
+`github.com/idct/helena`.
+
+## How to find what you need
+
+Every module directory carries three documents:
+
+| File | Read it when |
+| --- | --- |
+| `README.md` | First contact with the module. Purpose, public API, dependencies. |
+| `STRUCTURE.md` | Looking up a file or type. Files table + type catalog. |
+| `WORKFLOW.md` | Tracing runtime flows — life of a request, save sequence, etc. |
+
+Top-level orientation:
+
+| Path | What lives there |
+| --- | --- |
+| [cmd/helena/](cmd/helena/) | Application entrypoint. |
+| [internal/model/](internal/model/) | Domain types shared by every layer. |
+| [internal/storage/](internal/storage/) | Open Collection YAML load/save. |
+| [internal/vars/](internal/vars/) | `{{variable}}` resolver. |
+| [internal/httpclient/](internal/httpclient/) | Request execution, CORS advisory. |
+| [internal/auth/](internal/auth/) | Auth inheritance resolution + Apply on outgoing requests. |
+| [internal/scripting/](internal/scripting/) | goja JS runtime for per-request pre/post hooks. Mutable `request` in pre, read-only `request` + parsed `response` in post, `helena.env.*` overlay writes. |
+| [internal/responsefmt/](internal/responsefmt/) | Pretty-printing + content-type sniffing. |
+| [internal/importer/](internal/importer/) | OpenAPI / Swagger / WSDL + URL fetch. |
+| [internal/exporter/](internal/exporter/) | cURL / wget rendering. |
+| [internal/config/](internal/config/) | Persisted settings + UI state. |
+| [internal/session/](internal/session/) | Runtime workspace state, tree, env. |
+| [internal/ui/](internal/ui/) | Fyne views and actions. |
+| [examples/](examples/) | Bundled sample collection + smoke test. |
+| [assets/](assets/) | `go:embed`-ed app icon. |
+| [.github/workflows/](.github/workflows/) | Native Linux + Windows CI. |
+
+The plan of record is in
+[Asana](https://app.asana.com/1/1214897106264347/project/1215180905395792).
+Don't recreate decisions captured there — read the task notes first.
+
+## Hard invariants — do not regress
+
+1. **Storage `Extra` round-trip.** Every OpenCollection DTO embeds
+   `Extra map[string]yaml.Node \`yaml:",inline"\``. `Save` reads the existing
+   file before writing and copies `Extra` from the old DTO into the new one
+   so externally-authored fields (auth blocks, runtime scripts, custom keys
+   on headers/params) survive edits bit-for-bit. See
+   [internal/storage/WORKFLOW.md](internal/storage/WORKFLOW.md). Never add a
+   write path that skips the read-existing-first pattern.
+2. **CORS is advisory, not a toggle.** A native client cannot enforce CORS;
+   `httpclient.corsAdvisory` compares request `Origin` against response
+   `Access-Control-Allow-Origin` and surfaces a warning. The request is sent
+   regardless. Do not add a "CORS enforcement" path.
+3. **UI `m.loading` flag.** `loadRequest` sets `m.loading = true` while it
+   pushes values into widgets so the widgets' `OnChanged` callbacks don't
+   write the loaded values back into `currentRequest`. Any new widget added
+   to the request editor must respect this flag in its write-back closure.
+   See [internal/ui/WORKFLOW.md](internal/ui/WORKFLOW.md).
+4. **`Send` runs off the UI goroutine.** Network I/O happens inside a
+   `go func()` and marshals back to the UI via `fyne.Do(...)`. Never touch
+   a Fyne widget from a non-UI goroutine without `fyne.Do`.
+5. **Open Collection YAML is the storage format.** Not Bruno's `.bru` DSL.
+   The spec lives at https://docs.usebruno.com/opencollection-yaml.
+6. **Variable resolution happens once, up front, in `httpclient.Build`.**
+   Downstream code sees concrete strings. Missing variables are accumulated
+   into one error listing every unresolved name.
+7. **Window target is Windows amd64.** Not 386.
+8. **No `fyne-cross` / Docker.** CI uses native runners
+   (`ubuntu-latest` + `windows-latest`); each binary is built by its own
+   OS's cgo toolchain. Don't reintroduce cross-compilation.
+9. **Session-scoped env overlay for future scripts.** When scripting lands
+   (task 7.3), `helena.env.set(...)` writes to a session overlay, never to
+   the on-disk env file. Don't quietly persist script-set vars.
+10. **Auth `Inherit` is the default; `None` is explicit.** The zero
+    `model.Auth` value is treated as `Inherit` on load so new requests pick
+    up their parent's auth. To deliberately suppress inheritance, set
+    `Type: AuthNone` — never rely on the zero value to mean "no auth".
+    Collection roots default to `None` because they have no parent.
+    User-set `Authorization` headers always win over Apply.
+11. **OAuth2 token cache is in-memory only and namespaced.** The
+    `auth.TokenCache` lives on the `Session` for the process lifetime —
+    no persistence. Cache keys are namespaced by collection directory so
+    two collections sharing a token URL never share tokens. The user's
+    TLS / timeout settings deliberately don't apply to the OAuth2 token
+    endpoint (those are for the API under test). Persisting tokens
+    requires an encryption story; that's in the backlog.
+12. **OAuth2 authorization_code is interactive — never headless.** The
+    flow binds an ephemeral `127.0.0.1:0` listener, opens the user's
+    browser via `AuthCodeStarter`, and waits up to 5 minutes for the
+    redirect. Redirect URI hosts other than `localhost` / `127.0.0.1` /
+    `::1` are rejected. The starter lives behind an interface so the
+    auth package stays Fyne-free; UI plugs in the real adapter via
+    `newAuthCodeStarter()`. Don't make the resolver call OpenURL
+    directly — it would couple `internal/auth` to the UI toolkit and
+    break the test harness.
+13. **Per-request scripts are sandboxed goja runtimes.** Every
+    `scripting.Run*` call constructs a fresh `goja.Runtime` so state
+    never leaks between requests, and every call is capped at
+    `scripting.ScriptTimeout` (5 s) wall-clock via `vm.Interrupt`. A
+    script's mutable side effects are limited to (a) the session env
+    overlay via `helena.env.set` — invariant 9 — and (b) the in-flight
+    request in the pre-request phase via the `request` global. Scripts
+    have NO direct filesystem or process-spawn surface, and no goja
+    binding that opens its own sockets — keep it that way. Scripts
+    DO direct the user's own HTTP client (via `request.url` and
+    `request.headers`); this is the same trust model Postman / Bruno
+    ship, but it means imported collections are executable, and that
+    threat model is documented in
+    [internal/scripting/README.md](internal/scripting/README.md). The
+    full script-side API is documented there too; future bindings
+    should be reviewed against this invariant before they land. The
+    runtime is decoupled from `internal/session` and
+    `internal/httpclient` behind the `EnvBridge` and `ResponseInput`
+    boundaries, so adding a binding that drags either dependency into
+    the package is a regression.
+
+## Keep the docs in sync
+
+Documentation is part of the change, not an afterthought. The per-module
+docs lose value the moment they drift from the code, and an agent's most
+common failure mode is updating code without touching the docs that
+describe it.
+
+- **Exported identifier added / removed / renamed** → update the module's
+  `STRUCTURE.md` type catalog and `README.md` public-API section.
+- **New runtime flow, or a meaningful change to an existing flow** →
+  update the module's `WORKFLOW.md`.
+- **New file in a module** → add a row to that module's `STRUCTURE.md`
+  files table.
+- **New module added under `internal/`, `cmd/`, or top-level** → create
+  `README.md`, `STRUCTURE.md`, `WORKFLOW.md` at its root, and add a row
+  to the module map in this file.
+- **Invariant added, removed, or relaxed** → update the "Hard invariants"
+  list in this file. Mirror the change in [CLAUDE.md](CLAUDE.md) if it
+  affects Claude-specific behaviour, and in [HUMANS.md](HUMANS.md) if it
+  affects contributor onboarding.
+- **Build / test / CI commands change** → update this file and the
+  top-level [README.md](README.md).
+
+If you finish a change and the docs still describe the old behaviour,
+the change isn't done.
+
+## Code conventions
+
+- **Go doc comments on every exported identifier** (type, function, method,
+  constant, variable). Start with the identifier name. One or two sentences
+  describing WHAT and WHY, not HOW.
+- **Document non-trivial unexported helpers** when the WHY isn't obvious.
+- **Document tests.** Each `TestX` gets a `// TestX verifies <scenario>.`
+  one-liner naming the exact scenario.
+- **Inline comments only when the WHY is non-obvious.** Don't restate the
+  code. Don't narrate ("first we do X, then we do Y").
+- **No emojis** anywhere in code, comments, doc files, or commit messages.
+- **Brief over verbose.** A one-sentence flow description beats a paragraph
+  that summarizes the same thing.
+- **No new abstractions beyond what the task requires.** Three similar
+  lines beat a premature helper.
+- **No error-handling for impossible cases.** Trust internal code and
+  framework guarantees; validate only at system boundaries.
+
+## Build and test
+
+The Makefile (Linux/macOS/WSL) and `make.bat` (Windows) expose identical
+targets:
+
+```sh
+make tidy    # resolve modules
+make run     # run the app
+make build   # build ./bin/helena (or bin\helena.exe on Windows)
+make test    # go test ./...
+make vet     # go vet ./...
+make fmt     # gofmt -w .
+make lint    # golangci-lint (optional)
+```
+
+Before declaring a task done: `gofmt -l .` (must be empty), `go vet ./...`,
+`go test ./...`, `go build ./...` — all clean.
+
+## Things to avoid
+
+- **Adding heavyweight dependencies** without checking binary size. Helena
+  ships ~46 MB after task 7.3 added goja; goja, kin-openapi, and gopher-yaml
+  are the only large external deps. Justify any addition.
+- **Bypassing the storage Save pattern** (see invariant 1).
+- **Touching widgets from non-UI goroutines** without `fyne.Do` (see
+  invariant 4).
+- **Committing `.claude/`, `bin/`, or `dist/`.** All gitignored.
+- **Renaming exported identifiers** without explicit user request — this
+  ripples through plans, Asana notes, and external bookmarks.
+- **Refactoring while doing feature work.** Land the feature first; file a
+  cleanup task afterward.
+
+## Design history
+
+- Asana plan: https://app.asana.com/1/1214897106264347/project/1215180905395792
+- LICENSE: BSD 4-Clause.
+- Decisions made early (Windows amd64, OpenCollection YAML, CORS advisory,
+  native CI) are documented in the top-level [README.md](README.md) and the
+  per-module docs. Treat them as load-bearing unless the user explicitly
+  reopens them.

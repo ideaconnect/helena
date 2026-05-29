@@ -7,6 +7,9 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestRequestEditPersists verifies that mutations made through the Tree's
+// request pointer (URL, method, headers, params, body) survive a save and a
+// reload via a fresh Session.
 func TestRequestEditPersists(t *testing.T) {
 	dir := writeCollectionWithEnv(t)
 	cfgPath := filepath.Join(t.TempDir(), "config.yml")
