@@ -195,6 +195,39 @@ describe it.
 If you finish a change and the docs still describe the old behaviour,
 the change isn't done.
 
+## Keep the tests in sync
+
+Tests are part of the change, like docs. Every behaviour-affecting
+change MUST be paired with test work in the same turn — even a "trivial"
+fix:
+
+- **New behaviour** → add tests that fail before your change and pass
+  after. No new code lands without a test that exercises it (unless
+  the surface is pure plumbing covered by an existing integration test
+  — call that out explicitly in the PR description).
+- **Changed behaviour** → update the tests that pinned the old
+  behaviour. If no test pinned it, that's a coverage gap — add one
+  now while you're already in the file.
+- **Removed behaviour** → delete the matching tests; don't leave
+  `t.Skip(...)` or commented-out scenarios. Document the removal in
+  the change message.
+- **Bug fix** → add a regression test that fails on the unfixed
+  code. A bug fix without a regression test is a bug fix waiting to
+  recur.
+- **Signature change** → update every callsite's test, not just the
+  closest one. Use `grep` / agent search to find them all.
+- **Run the suite** before declaring done: `go test ./... -race`.
+  A failing test you didn't cause is still your problem to surface.
+
+Coverage floor (Phase 8 onward): every internal package outside
+`internal/ui` is expected to stay ≥ 90% line coverage; UI is excluded
+pending Phase 11. If your change pushes a package below the floor,
+either fill the gap or call out why the new code is genuinely
+untestable — silent coverage drops are not acceptable.
+
+If you finish a change and the test suite hasn't grown or shifted to
+match it, the change isn't done.
+
 ## Code conventions
 
 - **Go doc comments on every exported identifier** (type, function, method,

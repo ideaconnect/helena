@@ -1,7 +1,7 @@
 @echo off
 REM Helena dev convenience script — Windows .bat equivalent of the Makefile.
 REM Usage:   make.bat <target>
-REM Targets: run build test vet fmt lint tidy clean
+REM Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean
 REM Notes:   building cmd\helena needs a C toolchain (TDM-GCC or MSYS2 mingw-w64)
 REM          on PATH because Fyne uses cgo + OpenGL.
 
@@ -10,15 +10,25 @@ setlocal EnableExtensions
 set "APP=helena.exe"
 set "PKG=.\cmd\helena"
 
+REM Phase 8 coverage gate: per-package floor for every internal/* except
+REM internal/ui (UI tests deferred to Phase 11) and cmd/* (entrypoints).
+set "COVERAGE_FLOOR=90"
+set "COVERAGE_EXCLUDES=internal/ui,cmd"
+set "COVERAGE_PROFILE=coverage.out"
+set "COVERAGE_HTML=coverage.html"
+
 if "%~1"=="" goto :run
-if /I "%~1"=="run"   goto :run
-if /I "%~1"=="build" goto :build
-if /I "%~1"=="test"  goto :test
-if /I "%~1"=="vet"   goto :vet
-if /I "%~1"=="fmt"   goto :fmt
-if /I "%~1"=="lint"  goto :lint
-if /I "%~1"=="tidy"  goto :tidy
-if /I "%~1"=="clean" goto :clean
+if /I "%~1"=="run"             goto :run
+if /I "%~1"=="build"           goto :build
+if /I "%~1"=="test"            goto :test
+if /I "%~1"=="coverage"        goto :coverage
+if /I "%~1"=="coverage-html"   goto :coverage-html
+if /I "%~1"=="coverage-gate"   goto :coverage-gate
+if /I "%~1"=="vet"             goto :vet
+if /I "%~1"=="fmt"             goto :fmt
+if /I "%~1"=="lint"            goto :lint
+if /I "%~1"=="tidy"            goto :tidy
+if /I "%~1"=="clean"           goto :clean
 goto :usage
 
 :run
@@ -32,6 +42,27 @@ goto :end
 
 :test
 go test ./...
+goto :end
+
+:coverage
+go test ./... -coverprofile=%COVERAGE_PROFILE% -covermode=atomic
+if errorlevel 1 goto :end
+go run .\cmd\covergate -profile %COVERAGE_PROFILE% -exclude %COVERAGE_EXCLUDES%
+goto :end
+
+:coverage-html
+if not exist %COVERAGE_PROFILE% (
+    echo coverage profile %COVERAGE_PROFILE% not found - run "make coverage" first
+    exit /b 1
+)
+go tool cover -html=%COVERAGE_PROFILE% -o %COVERAGE_HTML%
+echo wrote %COVERAGE_HTML%
+goto :end
+
+:coverage-gate
+go test ./... -coverprofile=%COVERAGE_PROFILE% -covermode=atomic
+if errorlevel 1 goto :end
+go run .\cmd\covergate -profile %COVERAGE_PROFILE% -exclude %COVERAGE_EXCLUDES% -floor %COVERAGE_FLOOR%
 goto :end
 
 :vet
@@ -53,11 +84,13 @@ goto :end
 :clean
 if exist bin  rmdir /S /Q bin
 if exist dist rmdir /S /Q dist
+if exist %COVERAGE_PROFILE% del /Q %COVERAGE_PROFILE%
+if exist %COVERAGE_HTML% del /Q %COVERAGE_HTML%
 goto :end
 
 :usage
 echo Usage: %~n0 ^<target^>
-echo Targets: run build test vet fmt lint tidy clean
+echo Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean
 exit /b 1
 
 :end

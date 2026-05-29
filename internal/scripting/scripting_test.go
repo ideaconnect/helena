@@ -698,3 +698,150 @@ func TestParseXMLMultipleChildren(t *testing.T) {
 		t.Errorf("FIRST = %q, want 1", v)
 	}
 }
+
+// TestChainResponseJSONCachedAfterFirstAccess verifies the lazy json
+// accessor on a chain.<alias>.response object reuses its cached value
+// on second access — proves the cache branch of the getter, not just
+// the first-access parse path.
+func TestChainResponseJSONCachedAfterFirstAccess(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	chainMap := map[string]ChainView{
+		"login": {
+			Response: ResponseInput{StatusCode: 200, Body: []byte(`{"x":1}`)},
+		},
+	}
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	// Access json twice. If the getter recomputed, both values still
+	// match — the assertion here is "doesn't crash and produces
+	// consistent output across calls".
+	_, err := rt.RunPreRequest(context.Background(), `
+		var a = chain.login.response.json.x;
+		var b = chain.login.response.json.x;
+		helena.env.set("BOTH", String(a) + "," + String(b));
+	`, &r, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("BOTH"); v != "1,1" {
+		t.Errorf("BOTH = %q, want 1,1", v)
+	}
+}
+
+// TestChainResponseJSONUndefinedForNonJSONBody verifies that a chain
+// entry whose body is not valid JSON returns undefined from
+// chain.<alias>.response.json — and that the cached-undefined value is
+// stable across subsequent accesses.
+func TestChainResponseJSONUndefinedForNonJSONBody(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	chainMap := map[string]ChainView{
+		"plain": {
+			Response: ResponseInput{StatusCode: 200, Body: []byte("not json")},
+		},
+	}
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	_, err := rt.RunPreRequest(context.Background(), `
+		var first = (typeof chain.plain.response.json === "undefined") ? "u" : "d";
+		var second = (typeof chain.plain.response.json === "undefined") ? "u" : "d";
+		helena.env.set("BOTH", first + second);
+	`, &r, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("BOTH"); v != "uu" {
+		t.Errorf("BOTH = %q, want uu", v)
+	}
+}
+
+// TestChainResponseXMLCachedAfterFirstAccess verifies the lazy XML
+// accessor's cache hit branch. Parallel to the JSON variant above.
+func TestChainResponseXMLCachedAfterFirstAccess(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	chainMap := map[string]ChainView{
+		"feed": {
+			Response: ResponseInput{StatusCode: 200, Body: []byte(`<r><x>9</x></r>`)},
+		},
+	}
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	_, err := rt.RunPreRequest(context.Background(), `
+		var a = chain.feed.response.xml.r.x._;
+		var b = chain.feed.response.xml.r.x._;
+		helena.env.set("BOTH", a + "," + b);
+	`, &r, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("BOTH"); v != "9,9" {
+		t.Errorf("BOTH = %q, want 9,9", v)
+	}
+}
+
+// TestChainResponseXMLUndefinedForNonXMLBody verifies the
+// undefined-cache branch of the XML accessor on a non-XML body.
+func TestChainResponseXMLUndefinedForNonXMLBody(t *testing.T) {
+	bridge := newFakeBridge()
+	rt := New(bridge)
+	chainMap := map[string]ChainView{
+		"plain": {
+			Response: ResponseInput{StatusCode: 200, Body: []byte(`{"json":true}`)},
+		},
+	}
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	_, err := rt.RunPreRequest(context.Background(), `
+		var v = (typeof chain.plain.response.xml === "undefined") ? "u" : "d";
+		helena.env.set("XML", v);
+	`, &r, chainMap)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	if v, _ := bridge.Get("XML"); v != "u" {
+		t.Errorf("XML = %q, want u", v)
+	}
+}
+
+// TestNopBridgeSetIsNoop verifies that the default no-op env bridge
+// (used when New is called with nil) silently swallows
+// helena.env.set without panicking — keeps RunPre / RunPost callable
+// even when the caller didn't wire a real bridge.
+func TestNopBridgeSetIsNoop(t *testing.T) {
+	rt := New(nil)
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	// The script writes, but nobody listens. The script must complete
+	// without error and helena.env.get returns the documented empty
+	// string for a not-found key.
+	_, err := rt.RunPreRequest(context.Background(),
+		`helena.env.set("DROPPED", "x"); helena.env.set("MISSING", helena.env.get("nope"));`,
+		&r, nil)
+	if err != nil {
+		t.Errorf("nil-bridge RunPreRequest err = %v", err)
+	}
+}
+
+// TestRunPostResponseEmptyScript verifies the empty-script
+// short-circuit on the post phase mirrors the pre phase — zero
+// Result, no goja construction, no error.
+func TestRunPostResponseEmptyScript(t *testing.T) {
+	rt := New(newFakeBridge())
+	res, err := rt.RunPostResponse(context.Background(), "   \n\t  ",
+		model.Request{}, ResponseInput{StatusCode: 200}, nil)
+	if err != nil {
+		t.Errorf("err = %v", err)
+	}
+	if len(res.Console) != 0 {
+		t.Errorf("Console = %v, want empty", res.Console)
+	}
+}
+
+// TestRunPostResponseScriptErrorPropagates verifies that a thrown
+// exception in the post-script surfaces as an error from
+// RunPostResponse — distinct from non-fatal cases handled elsewhere.
+func TestRunPostResponseScriptErrorPropagates(t *testing.T) {
+	rt := New(newFakeBridge())
+	_, err := rt.RunPostResponse(context.Background(), `throw new Error("boom");`,
+		model.Request{}, ResponseInput{StatusCode: 200}, nil)
+	if err == nil {
+		t.Error("expected post-script error, got nil")
+	}
+}

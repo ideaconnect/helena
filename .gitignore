@@ -5,6 +5,7 @@
 *.exe
 *.test
 *.out
+coverage.html
 
 # OS / editor
 .DS_Store

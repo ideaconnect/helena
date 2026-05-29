@@ -152,6 +152,198 @@ func TestFromOpenAPIRejectsNonSpec(t *testing.T) {
 	}
 }
 
+// TestRequestNameFallbacks verifies the three name sources for a
+// generated request: Summary > OperationID > "METHOD path". Mirrors
+// the chain the importer documents.
+func TestRequestNameFallbacks(t *testing.T) {
+	const spec = `openapi: 3.0.0
+info:
+  title: X
+paths:
+  /a:
+    get:
+      summary: Has summary
+  /b:
+    get:
+      operationId: getB
+  /c:
+    get: {}
+`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	got := map[string]bool{}
+	for _, r := range c.Requests {
+		got[r.Name] = true
+	}
+	want := []string{"Has summary", "getB", "GET /c"}
+	for _, w := range want {
+		if !got[w] {
+			t.Errorf("missing request name %q in %v", w, got)
+		}
+	}
+}
+
+// TestBodyTypeFromContentTypeBranches verifies the content-type sniff
+// covers every BodyType branch the importer exposes.
+func TestBodyTypeFromContentTypeBranches(t *testing.T) {
+	cases := map[string]model.BodyType{
+		"application/json":                  model.BodyJSON,
+		"application/xml":                   model.BodyXML,
+		"application/x-www-form-urlencoded": model.BodyForm,
+		"multipart/form-data":               model.BodyMultipart,
+		"text/plain":                        model.BodyText,
+		"text/csv":                          model.BodyText,
+		"application/octet-stream":          model.BodyText, // default
+	}
+	for ct, want := range cases {
+		if got := bodyTypeFromContentType(ct); got != want {
+			t.Errorf("bodyTypeFromContentType(%q) = %q, want %q", ct, got, want)
+		}
+	}
+}
+
+// TestExtractExampleFallbacks verifies that extractExample picks an
+// example from each of the three places OpenAPI allows: the MediaType
+// example directly, the Examples map, and the Schema's example.
+func TestExtractExampleFallbacks(t *testing.T) {
+	const spec = `openapi: 3.0.0
+info:
+  title: X
+paths:
+  /examples-map:
+    post:
+      requestBody:
+        content:
+          application/json:
+            examples:
+              first:
+                value:
+                  via: examples-map
+  /schema-example:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              example:
+                via: schema
+  /no-example:
+    post:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	bodies := map[string]string{}
+	for _, r := range c.Requests {
+		bodies[r.URL] = r.Body.Content
+	}
+	if !strings.Contains(bodies["/examples-map"], "examples-map") {
+		t.Errorf("examples-map body = %q", bodies["/examples-map"])
+	}
+	if !strings.Contains(bodies["/schema-example"], "schema") {
+		t.Errorf("schema-example body = %q", bodies["/schema-example"])
+	}
+	if bodies["/no-example"] != "" {
+		t.Errorf("no-example body = %q, want empty", bodies["/no-example"])
+	}
+}
+
+// TestDefaultParamValueFromSchema verifies that defaultParamValue
+// falls back to the parameter's Schema.Default when the parameter
+// itself carries no Example. Matches how OpenAPI authors typically
+// declare default param values.
+func TestDefaultParamValueFromSchema(t *testing.T) {
+	const spec = `openapi: 3.0.0
+info:
+  title: X
+paths:
+  /list:
+    get:
+      parameters:
+        - in: query
+          name: page
+          required: false
+          schema:
+            type: integer
+            default: 1
+`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	if len(c.Requests) != 1 || len(c.Requests[0].Params) != 1 {
+		t.Fatalf("requests = %+v", c.Requests)
+	}
+	if c.Requests[0].Params[0].Value != "1" {
+		t.Errorf("page default = %q, want 1", c.Requests[0].Params[0].Value)
+	}
+}
+
+// TestHeaderParamLandsInHeaders verifies an OpenAPI parameter with
+// in=header lands on the request's Headers rather than Params.
+func TestHeaderParamLandsInHeaders(t *testing.T) {
+	const spec = `openapi: 3.0.0
+info:
+  title: X
+paths:
+  /x:
+    get:
+      parameters:
+        - in: header
+          name: X-Trace
+          required: true
+`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	r := c.Requests[0]
+	if len(r.Headers) != 1 || r.Headers[0].Key != "X-Trace" || !r.Headers[0].Enabled {
+		t.Errorf("headers = %+v, want enabled X-Trace", r.Headers)
+	}
+	if len(r.Params) != 0 {
+		t.Errorf("params = %+v, want empty (header param shouldn't double-up)", r.Params)
+	}
+}
+
+// TestFromOpenAPIInvalidYAMLReturnsError verifies that a malformed
+// YAML input doesn't crash and returns a clear parse error.
+func TestFromOpenAPIInvalidYAMLReturnsError(t *testing.T) {
+	_, err := FromOpenAPI([]byte("openapi: 3.0.0\npaths:\n  /x:\n    get:\n      summary: [unterminated"))
+	if err == nil {
+		t.Error("expected parse error from malformed YAML")
+	}
+}
+
+// TestLooksLikeXMLBranches verifies the XML sniffer's three observable
+// outcomes: bytes starting with '<' (after leading whitespace) are
+// XML; bytes starting with anything else are not; an all-whitespace
+// or empty input is not.
+func TestLooksLikeXMLBranches(t *testing.T) {
+	cases := map[string]bool{
+		"<wsdl>":       true,
+		"  \n\t<wsdl>": true,
+		"{\"json\":1}": false,
+		"openapi: 3.0": false,
+		"":             false,
+		"   \t\n":      false,
+	}
+	for in, want := range cases {
+		if got := looksLikeXML([]byte(in)); got != want {
+			t.Errorf("looksLikeXML(%q) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 // TestFromOpenAPIJSONInput verifies that raw JSON specs skip YAML normalization and parse directly.
 func TestFromOpenAPIJSONInput(t *testing.T) {
 	// Same spec but in JSON form.

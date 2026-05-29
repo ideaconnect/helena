@@ -1,8 +1,10 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/idct/helena/internal/model"
@@ -47,6 +49,84 @@ func TestSaveLoadRoundTrip(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("round-trip mismatch:\n want=%#v\n got =%#v", want, got)
+	}
+}
+
+// TestDefaultPathEndsWithHelenaConfig verifies DefaultPath returns a
+// platform-appropriate path that ends with helena/config.yml. The
+// exact prefix is OS-dependent (xdg config home, %APPDATA%, ~/Library)
+// so we only assert the suffix.
+func TestDefaultPathEndsWithHelenaConfig(t *testing.T) {
+	got, err := DefaultPath()
+	if err != nil {
+		t.Fatalf("DefaultPath: %v", err)
+	}
+	want := filepath.Join("helena", "config.yml")
+	if !strings.HasSuffix(got, want) {
+		t.Errorf("DefaultPath() = %q, want suffix %q", got, want)
+	}
+}
+
+// TestLoadEmptyWorkspacesFallsBackToDefault verifies that a YAML file
+// with no workspaces (corrupt or hand-edited) loads with the default
+// single-workspace shape rather than an empty list the UI would
+// stumble over.
+func TestLoadEmptyWorkspacesFallsBackToDefault(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(path, []byte("workspaces: []\nactive: 0\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got.Workspaces) != 1 || got.Workspaces[0].Name != "Default" {
+		t.Errorf("Workspaces = %+v, want [{Default}]", got.Workspaces)
+	}
+}
+
+// TestLoadMalformedYAMLReturnsError verifies that a structurally
+// invalid YAML file surfaces the parse error to the caller rather
+// than silently returning the zero Config (which would lose the
+// user's real config and silently overwrite on next Save).
+func TestLoadMalformedYAMLReturnsError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(path, []byte("workspaces: [unclosed\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if _, err := Load(path); err == nil {
+		t.Error("expected parse error from malformed YAML, got nil")
+	}
+}
+
+// TestSaveMkdirFailureSurfaces verifies that a Save with an
+// un-creatable parent (a path under an existing file) returns the
+// mkdir error rather than silently swallowing it.
+func TestSaveMkdirFailureSurfaces(t *testing.T) {
+	dir := t.TempDir()
+	// Create a regular file then try to save into it as if it were a directory.
+	blocker := filepath.Join(dir, "iam-a-file")
+	if err := os.WriteFile(blocker, []byte("x"), 0o644); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	err := Save(filepath.Join(blocker, "config.yml"), Default())
+	if err == nil {
+		t.Error("expected Save to fail when parent is a file")
+	}
+}
+
+// TestLoadReadErrorSurfaces verifies that an unreadable existing file
+// (e.g. a directory at the path) returns the read error rather than
+// the default config — Load only falls back to default on the
+// specific not-exist case.
+func TestLoadReadErrorSurfaces(t *testing.T) {
+	dir := t.TempDir()
+	// Make the "config file" a directory so ReadFile fails with EISDIR.
+	if err := os.Mkdir(filepath.Join(dir, "config.yml"), 0o755); err != nil {
+		t.Fatalf("setup: %v", err)
+	}
+	if _, err := Load(filepath.Join(dir, "config.yml")); err == nil {
+		t.Error("expected read error when config path is a directory, got nil")
 	}
 }
 

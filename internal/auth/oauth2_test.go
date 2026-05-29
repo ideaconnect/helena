@@ -195,3 +195,192 @@ func TestTokenCacheClearAllEmptiesEverything(t *testing.T) {
 		t.Errorf("k2 still present after ClearAll")
 	}
 }
+
+// TestTokenCacheClearDropsSingleEntry verifies the per-key Clear
+// removes only the named entry, leaving siblings intact.
+func TestTokenCacheClearDropsSingleEntry(t *testing.T) {
+	c := NewTokenCache()
+	c.Set("k1", TokenEntry{AccessToken: "v1", ExpiresAt: time.Now().Add(time.Hour)})
+	c.Set("k2", TokenEntry{AccessToken: "v2", ExpiresAt: time.Now().Add(time.Hour)})
+	c.Clear("k1")
+	if _, ok := c.Get("k1"); ok {
+		t.Errorf("k1 still present after Clear")
+	}
+	if _, ok := c.Get("k2"); !ok {
+		t.Errorf("k2 dropped by Clear(k1)")
+	}
+}
+
+// TestTokenCacheNilReceiverSafe verifies the cache's nil-receiver
+// guards on every method so callers can pass nil for "no cache" without
+// nil-deref panics. Matches the comments on each method.
+func TestTokenCacheNilReceiverSafe(t *testing.T) {
+	var c *TokenCache
+	if _, ok := c.Get("k"); ok {
+		t.Error("nil Get returned ok=true")
+	}
+	c.Set("k", TokenEntry{})
+	c.Clear("k")
+	c.ClearAll()
+}
+
+// TestResolverUnsupportedGrantReturnsNotImplemented verifies that a
+// grant the resolver doesn't know (here: a custom string) surfaces
+// ErrOAuth2NotImplemented rather than silently sending no auth.
+func TestResolverUnsupportedGrantReturnsNotImplemented(t *testing.T) {
+	r := NewClientCredentialsResolver(NewTokenCache(), nil, "ns")
+	_, err := r.(*cachingResolver).Token(context.Background(),
+		model.OAuth2Auth{Grant: model.OAuth2Grant("password")})
+	if !errors.Is(err, ErrOAuth2NotImplemented) {
+		t.Errorf("err = %v, want ErrOAuth2NotImplemented", err)
+	}
+}
+
+// TestClientCredentialsTokenEmptyURLOrClientIDErrors verifies the
+// pre-flight validation: a missing TokenURL or ClientID surfaces a
+// clear error before hitting the network.
+func TestClientCredentialsTokenEmptyURLOrClientIDErrors(t *testing.T) {
+	r := NewClientCredentialsResolver(NewTokenCache(), nil, "ns").(*cachingResolver)
+	_, err := r.clientCredentialsToken(context.Background(),
+		model.OAuth2Auth{Grant: model.OAuth2ClientCredentials, ClientID: "ci"})
+	if err == nil || !strings.Contains(err.Error(), "token URL is empty") {
+		t.Errorf("missing URL err = %v", err)
+	}
+	_, err = r.clientCredentialsToken(context.Background(),
+		model.OAuth2Auth{Grant: model.OAuth2ClientCredentials, TokenURL: "https://x"})
+	if err == nil || !strings.Contains(err.Error(), "client id is empty") {
+		t.Errorf("missing ClientID err = %v", err)
+	}
+}
+
+// TestParseTokenResponseErrorPaths verifies the documented failure
+// modes: malformed JSON, missing access_token, and (positive case)
+// missing expires_in defaulting to one hour.
+func TestParseTokenResponseErrorPaths(t *testing.T) {
+	if _, err := parseTokenResponse([]byte("not json")); err == nil {
+		t.Error("expected error for malformed JSON")
+	}
+	if _, err := parseTokenResponse([]byte(`{"token_type":"Bearer"}`)); err == nil {
+		t.Error("expected error for missing access_token")
+	}
+	te, err := parseTokenResponse([]byte(`{"access_token":"a","token_type":"Bearer"}`))
+	if err != nil {
+		t.Fatalf("missing expires_in: %v", err)
+	}
+	d := time.Until(te.ExpiresAt)
+	if d < 50*time.Minute || d > 70*time.Minute {
+		t.Errorf("default expiry = %v, want ~1h", d)
+	}
+}
+
+// TestParseTokenResponseAcceptsStringExpiresIn verifies the
+// quirks-compatibility note in parseTokenResponse: some providers
+// (older Auth0) emit expires_in as a JSON string instead of number.
+func TestParseTokenResponseAcceptsStringExpiresIn(t *testing.T) {
+	te, err := parseTokenResponse([]byte(`{"access_token":"a","token_type":"Bearer","expires_in":"42"}`))
+	if err != nil {
+		t.Fatalf("string expires_in: %v", err)
+	}
+	d := time.Until(te.ExpiresAt)
+	if d < 30*time.Second || d > 50*time.Second {
+		t.Errorf("string expires_in -> %v, want ~42s", d)
+	}
+}
+
+// TestPickListenAddrBranches verifies every documented behaviour of
+// the redirect-URI parser: empty input picks a random port; explicit
+// loopback host + port preserves the URI; non-loopback host is
+// rejected; missing port is rejected; invalid URL is rejected.
+func TestPickListenAddrBranches(t *testing.T) {
+	addr, uri, err := pickListenAddr("")
+	if err != nil || addr != "127.0.0.1:0" || uri != "" {
+		t.Errorf("empty: addr=%q uri=%q err=%v", addr, uri, err)
+	}
+
+	addr, uri, err = pickListenAddr("http://localhost:9876/callback")
+	if err != nil || addr != "127.0.0.1:9876" || uri != "http://localhost:9876/callback" {
+		t.Errorf("localhost: addr=%q uri=%q err=%v", addr, uri, err)
+	}
+
+	if _, _, err = pickListenAddr("http://attacker.example/cb"); err == nil {
+		t.Error("non-loopback should be rejected")
+	}
+	if _, _, err = pickListenAddr("http://localhost/cb"); err == nil {
+		t.Error("missing port should be rejected")
+	}
+	if _, _, err = pickListenAddr("ht!tp://%%"); err == nil {
+		t.Error("invalid URL should be rejected")
+	}
+}
+
+// TestBuildAuthCodeURLIncludesPKCEAndAudience verifies that PKCE and
+// Audience parameters land on the query string when set, and that an
+// unparseable AuthURL falls back to returning the input unchanged.
+func TestBuildAuthCodeURLIncludesPKCEAndAudience(t *testing.T) {
+	a := model.OAuth2Auth{AuthURL: "https://idp.example/authorize", ClientID: "ci",
+		Scope: "openid", Audience: "api.example"}
+	got := buildAuthCodeURL(a, "http://localhost:1/cb", "state-x", "challenge-y")
+	for _, want := range []string{
+		"response_type=code", "client_id=ci", "redirect_uri=",
+		"scope=openid", "audience=api.example", "state=state-x",
+		"code_challenge=challenge-y", "code_challenge_method=S256",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("buildAuthCodeURL missing %q in %q", want, got)
+		}
+	}
+
+	// Malformed AuthURL: returned unchanged (best-effort).
+	bad := buildAuthCodeURL(model.OAuth2Auth{AuthURL: "::not a url::"}, "rc", "s", "c")
+	if bad != "::not a url::" {
+		t.Errorf("malformed url got rewritten: %q", bad)
+	}
+}
+
+// TestRandomURLTokenNonPositiveByteLenErrors verifies the explicit
+// guard against zero/negative byteLen rather than producing a
+// zero-length token that would defeat the PKCE / state purpose.
+func TestRandomURLTokenNonPositiveByteLenErrors(t *testing.T) {
+	if _, err := randomURLToken(0); err == nil {
+		t.Error("randomURLToken(0) should error")
+	}
+	if _, err := randomURLToken(-1); err == nil {
+		t.Error("randomURLToken(-1) should error")
+	}
+	// Positive case: returns base64-url-encoded bytes.
+	tok, err := randomURLToken(8)
+	if err != nil {
+		t.Fatalf("randomURLToken(8): %v", err)
+	}
+	if tok == "" {
+		t.Error("randomURLToken(8) returned empty string")
+	}
+}
+
+// TestExchangeAuthorizationCodeBuildErrorSurfaces verifies an invalid
+// TokenURL surfaces from the http.NewRequest step rather than
+// panicking later.
+func TestExchangeAuthorizationCodeBuildErrorSurfaces(t *testing.T) {
+	r := &cachingResolver{httpClient: http.DefaultClient}
+	_, err := r.exchangeAuthorizationCode(context.Background(),
+		model.OAuth2Auth{TokenURL: "ht!tp://%%"}, "code", "http://localhost/cb", "")
+	if err == nil {
+		t.Error("expected build error for malformed TokenURL")
+	}
+}
+
+// TestExchangeAuthorizationCodeNon2xxErrors verifies a 4xx token
+// response from the IdP surfaces as a clear error including the body.
+func TestExchangeAuthorizationCodeNon2xxErrors(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("invalid_grant"))
+	}))
+	defer srv.Close()
+	r := &cachingResolver{httpClient: srv.Client()}
+	_, err := r.exchangeAuthorizationCode(context.Background(),
+		model.OAuth2Auth{TokenURL: srv.URL}, "c", "http://localhost/cb", "")
+	if err == nil || !strings.Contains(err.Error(), "invalid_grant") {
+		t.Errorf("err = %v, want invalid_grant in message", err)
+	}
+}

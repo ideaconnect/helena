@@ -206,6 +206,161 @@ func TestCORSAdvisory(t *testing.T) {
 	}
 }
 
+// TestBuildNilResolverSubstitutesNothing verifies that Build tolerates
+// a nil resolver — the request is sent verbatim and any unresolved
+// {{vars}} surface as the standard "unresolved variables" error.
+func TestBuildNilResolverSubstitutesNothing(t *testing.T) {
+	req, body, err := Build(context.Background(),
+		model.Request{Method: model.GET, URL: "http://x/"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build with nil resolver: %v", err)
+	}
+	if req == nil || req.URL.String() != "http://x/" {
+		t.Errorf("req.URL = %v, want http://x/", req.URL)
+	}
+	if body != nil {
+		t.Errorf("body = %q, want nil for GET", body)
+	}
+}
+
+// TestBuildMultipartReturnsError verifies that multipart body type is
+// rejected — the feature is documented as not-yet-supported and the
+// error surfaces cleanly from Build.
+func TestBuildMultipartReturnsError(t *testing.T) {
+	_, _, err := Build(context.Background(),
+		model.Request{Method: model.POST, URL: "http://x/",
+			Body: model.Body{Type: model.BodyMultipart}}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "multipart") {
+		t.Errorf("expected multipart-not-supported error, got %v", err)
+	}
+}
+
+// TestBuildInvalidURLReturnsError verifies that a URL that survives
+// var resolution but can't be parsed by url.Parse surfaces a clear
+// error rather than constructing a broken *http.Request.
+func TestBuildInvalidURLReturnsError(t *testing.T) {
+	_, _, err := Build(context.Background(),
+		model.Request{Method: model.GET, URL: "http://[::invalid"}, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "invalid URL") {
+		t.Errorf("expected invalid URL error, got %v", err)
+	}
+}
+
+// TestBuildHostHeaderOverridesReqHost verifies that a "Host" header in
+// the request sets req.Host (which Go's transport reads separately
+// from the Host header on the wire) rather than getting Added to the
+// normal header set.
+func TestBuildHostHeaderOverridesReqHost(t *testing.T) {
+	req, _, err := Build(context.Background(),
+		model.Request{Method: model.GET, URL: "http://upstream/",
+			Headers: []model.KeyValue{{Enabled: true, Key: "Host", Value: "virtual.example"}}}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if req.Host != "virtual.example" {
+		t.Errorf("req.Host = %q, want virtual.example", req.Host)
+	}
+	if got := req.Header.Get("Host"); got != "" {
+		t.Errorf("req.Header[Host] = %q, want empty (set via Host field)", got)
+	}
+}
+
+// TestBuildEmptyHeaderKeySkipped verifies that an enabled header with
+// an empty key is dropped on the way out rather than panicking inside
+// net/http.
+func TestBuildEmptyHeaderKeySkipped(t *testing.T) {
+	req, _, err := Build(context.Background(),
+		model.Request{Method: model.GET, URL: "http://x/",
+			Headers: []model.KeyValue{
+				{Enabled: true, Key: "", Value: "ignored"},
+				{Enabled: true, Key: "X-Real", Value: "kept"},
+			}}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if req.Header.Get("X-Real") != "kept" {
+		t.Errorf("X-Real header dropped: %+v", req.Header)
+	}
+}
+
+// TestBuildUnknownBodyTypeFallsBackToContent verifies that a custom /
+// unrecognised BodyType still produces a body from Content with no
+// Content-Type set — the open-collection spec allows extensions and
+// we shouldn't refuse to send.
+func TestBuildUnknownBodyTypeFallsBackToContent(t *testing.T) {
+	req, body, err := Build(context.Background(),
+		model.Request{Method: model.POST, URL: "http://x/",
+			Body: model.Body{Type: model.BodyType("custom"), Content: "payload"}}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if string(body) != "payload" {
+		t.Errorf("body = %q, want payload", body)
+	}
+	if got := req.Header.Get("Content-Type"); got != "" {
+		t.Errorf("Content-Type = %q, want empty for unknown body type", got)
+	}
+}
+
+// TestSetOAuth2ResolverStores verifies the resolver setter actually
+// installs the supplied resolver on the Client (it's then consumed
+// during Do via the captured value).
+func TestSetOAuth2ResolverStores(t *testing.T) {
+	c := New(model.DefaultSettings())
+	if c.oauth2Resolver != nil {
+		t.Fatal("oauth2Resolver should be nil before SetOAuth2Resolver")
+	}
+	fake := fakeOAuth2Resolver{}
+	c.SetOAuth2Resolver(fake)
+	if c.oauth2Resolver == nil {
+		t.Error("SetOAuth2Resolver did not install the resolver")
+	}
+}
+
+// fakeOAuth2Resolver satisfies auth.OAuth2Resolver for the
+// SetOAuth2Resolver coverage test. The interface method is never
+// called in that test — only the install path matters.
+type fakeOAuth2Resolver struct{}
+
+func (fakeOAuth2Resolver) Token(context.Context, model.OAuth2Auth) (string, error) {
+	return "", nil
+}
+
+// TestDoNetworkErrorSurfaces verifies that a Do against an
+// unreachable URL surfaces the underlying transport error rather
+// than swallowing it into a zero Response.
+func TestDoNetworkErrorSurfaces(t *testing.T) {
+	c := New(model.Settings{TimeoutSeconds: 1})
+	// 127.0.0.1:1 is the discard port — connect fails fast.
+	_, err := c.Do(context.Background(),
+		model.Request{Method: model.GET, URL: "http://127.0.0.1:1/"}, nil)
+	if err == nil {
+		t.Error("expected network error, got nil")
+	}
+}
+
+// TestDoEmitsCORSWarningWhenEnabled verifies that Settings.CORSWarning
+// turns on the corsAdvisory check, populating Response.CORSWarning
+// when the response's CORS headers would block the Origin.
+func TestDoEmitsCORSWarningWhenEnabled(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Deliberately mismatched ACAO so the advisory fires.
+		w.Header().Set("Access-Control-Allow-Origin", "https://other.example")
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer ts.Close()
+	c := New(model.Settings{CORSWarning: true})
+	resp, err := c.Do(context.Background(),
+		model.Request{Method: model.GET, URL: ts.URL,
+			Headers: []model.KeyValue{{Enabled: true, Key: "Origin", Value: "https://app.example"}}}, nil)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if resp.CORSWarning == "" {
+		t.Error("expected non-empty CORSWarning when Settings.CORSWarning is true")
+	}
+}
+
 // TestDoCapturesResolvedRequestURLAndBody verifies that Response.RequestURL
 // carries the resolved URL (vars substituted, query params merged) and
 // that Response.RequestBody carries the encoded body bytes. These are

@@ -46,6 +46,27 @@ leaves the docs describing the old behaviour is not finished. See the
 "Keep the docs in sync" section of [AGENTS.md](AGENTS.md) for the
 specific trigger conditions.
 
+## Tests are part of the change
+
+Every behaviour-affecting change MUST be paired with test work in the
+same turn:
+
+- **New behaviour** → write a test that fails before the change and
+  passes after.
+- **Changed behaviour** → update the tests that pinned the old
+  behaviour.
+- **Bug fix** → add a regression test before / alongside the fix.
+- **Signature change** → update every callsite's test, not just the
+  closest one.
+- **Run the suite** before declaring done: `go test ./... -race`.
+
+Coverage floor (Phase 8 onward): every internal package outside
+`internal/ui` is expected to stay ≥ 90% line coverage. If a change
+pushes a package below the floor, fill the gap or call out why the new
+code is genuinely untestable — silent drops are not acceptable. See
+"Keep the tests in sync" in [AGENTS.md](AGENTS.md) for the full
+trigger list.
+
 ## Auto-memory
 
 Helena project facts may be present in your auto-memory under a

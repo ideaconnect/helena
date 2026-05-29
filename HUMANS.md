@@ -105,6 +105,24 @@ The doc-quality bar is "scannable in 30 seconds." Brief beats verbose, and
 a one-sentence flow that captures the essential transition beats a
 paragraph that paraphrases the code.
 
+## Tests are part of the change
+
+Same rule as docs: when behaviour changes, the tests change in the
+same commit. Bug fixes ship with a regression test that fails on the
+unfixed code; new features ship with tests that fail before the change
+and pass after; signature changes update every callsite's test, not
+just the closest one. Before declaring the change done, run
+`go test ./... -race` and make sure nothing else broke — a failing
+test you didn't cause is still your problem to surface.
+
+From Phase 8 onward the coverage floor for every internal package
+outside `internal/ui` is ≥ 90% line coverage. If your change pushes a
+package below the floor, fill the gap in the same PR or document why
+the new code is genuinely untestable. UI tests are deferred to Phase
+11; until then, `internal/ui` is excluded from the gate. See
+[AGENTS.md](AGENTS.md) "Keep the tests in sync" for the full trigger
+list.
+
 ## Commit and PR style
 
 This is a small project; the bar is "would I want to read this commit in

@@ -91,6 +91,43 @@ func TestCollectionJSONRoundTrip(t *testing.T) {
 	}
 }
 
+// TestBodyTypeValid verifies that every documented BodyType is
+// accepted and an unknown value is rejected. Mirrors TestMethodValid
+// for the other discriminator used by the body editor.
+func TestBodyTypeValid(t *testing.T) {
+	for _, bt := range BodyTypes {
+		if !bt.Valid() {
+			t.Errorf("BodyType(%q).Valid() = false, want true", bt)
+		}
+	}
+	if BodyType("nonsense").Valid() {
+		t.Errorf("nonsense BodyType should not be valid")
+	}
+}
+
+// TestDefaultSettings verifies the documented defaults: TLS verify
+// enabled, CORS advisory on, follow redirects, 30s timeout, system
+// theme. These are the values new Helena installs land on, so a
+// regression here changes first-run behavior.
+func TestDefaultSettings(t *testing.T) {
+	got := DefaultSettings()
+	if got.InsecureSkipVerify {
+		t.Error("InsecureSkipVerify should default to false")
+	}
+	if !got.CORSWarning {
+		t.Error("CORSWarning should default to true")
+	}
+	if !got.FollowRedirects {
+		t.Error("FollowRedirects should default to true")
+	}
+	if got.TimeoutSeconds != 30 {
+		t.Errorf("TimeoutSeconds = %d, want 30", got.TimeoutSeconds)
+	}
+	if got.Theme != ThemeSystem {
+		t.Errorf("Theme = %q, want %q", got.Theme, ThemeSystem)
+	}
+}
+
 // TestScriptsIsEmpty verifies that whitespace-only hook bodies are
 // treated as empty so the UI Send pipeline can skip the scripting
 // runtime entirely.
