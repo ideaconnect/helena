@@ -39,3 +39,45 @@ func TestNewMainUIBuilds(t *testing.T) {
 	w.Resize(fyne.NewSize(1100, 720))
 	w.Close()
 }
+
+// TestSendOrAbortDispatch verifies that sendOrAbort calls sendCancel
+// when a Send is in flight (and does NOT clear it — the goroutine's
+// fyne.Do path owns the reset), and that resetSendButton restores the
+// Send button to its default appearance.
+func TestSendOrAbortDispatch(t *testing.T) {
+	test.NewApp()
+	sess, _ := session.New("")
+	m := NewMainUI(sess)
+
+	if got := m.Send.Text; got != "Send" {
+		t.Errorf("initial button text = %q, want Send", got)
+	}
+	if m.sendCancel != nil {
+		t.Error("initial sendCancel is non-nil")
+	}
+
+	// Simulate an in-flight Send by stashing a fake cancel func.
+	cancelled := false
+	m.sendCancel = func() { cancelled = true }
+	m.Send.SetText("Abort")
+
+	m.sendOrAbort()
+	if !cancelled {
+		t.Error("sendOrAbort with active sendCancel did not call cancel()")
+	}
+	if m.sendCancel == nil {
+		t.Error("sendOrAbort cleared sendCancel; goroutine teardown should own that")
+	}
+	if m.Send.Text != "Abort" {
+		t.Errorf("sendOrAbort changed button text to %q; goroutine teardown owns that too", m.Send.Text)
+	}
+
+	// resetSendButton is the canonical teardown helper.
+	m.resetSendButton()
+	if m.sendCancel != nil {
+		t.Error("resetSendButton left sendCancel non-nil")
+	}
+	if m.Send.Text != "Send" {
+		t.Errorf("resetSendButton text = %q, want Send", m.Send.Text)
+	}
+}

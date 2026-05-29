@@ -193,6 +193,51 @@ func TestRenameFolderCascadesChainRefs(t *testing.T) {
 	}
 }
 
+// TestSnapshotChainFinderResolvesByID verifies SnapshotChainFinder's
+// id → Request map resolves a pinned ChainStep.RequestID without
+// walking the path tree. This is the by-ID seam that lets chain refs
+// survive renames + folder moves of the target.
+func TestSnapshotChainFinderResolvesByID(t *testing.T) {
+	c := model.Collection{
+		Name: "Demo",
+		Auth: model.Auth{Type: model.AuthNone},
+		Folders: []model.Folder{{
+			Name: "Auth", Auth: model.Auth{Type: model.AuthInherit},
+			Requests: []model.Request{{Name: "Login", Method: model.POST, URL: "https://api/login"}},
+		}},
+	}
+	dir := filepath.Join(t.TempDir(), "demo")
+	if err := storage.Save(c, dir); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	s, _ := New(filepath.Join(t.TempDir(), "cfg.yml"))
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatalf("OpenCollection: %v", err)
+	}
+
+	loginID, ok := s.RequestIDForPath("Auth/Login")
+	if !ok || loginID == "" {
+		t.Fatalf("RequestIDForPath(Auth/Login) = %q,%v", loginID, ok)
+	}
+
+	finder := s.SnapshotChainFinder()
+	got, ok := finder.FindRequestByID(loginID)
+	if !ok {
+		t.Fatalf("FindRequestByID(%q) returned !ok", loginID)
+	}
+	if got.Name != "Login" || got.URL != "https://api/login" {
+		t.Errorf("FindRequestByID lookup = %+v, want Login", got)
+	}
+
+	// Empty id and unknown id return false.
+	if _, ok := finder.FindRequestByID(""); ok {
+		t.Error("empty id should not resolve")
+	}
+	if _, ok := finder.FindRequestByID("nope"); ok {
+		t.Error("unknown id should not resolve")
+	}
+}
+
 // TestRestoreEnvOverlay verifies that snapshot + restore round-trips
 // the overlay map: writes between the two land go away.
 func TestRestoreEnvOverlay(t *testing.T) {

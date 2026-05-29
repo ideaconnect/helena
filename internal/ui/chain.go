@@ -91,6 +91,15 @@ func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
 	ref.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil && idx < len(m.currentRequest.Chain) {
 			m.currentRequest.Chain[idx].Request = s
+			// Pin RequestID when the typed text matches a known path so
+			// the chain ref survives the target being renamed. A
+			// non-matching value clears the ID; resolution then falls
+			// back to the literal path the user typed.
+			if id, ok := m.sess.RequestIDForPath(s); ok {
+				m.currentRequest.Chain[idx].RequestID = id
+			} else {
+				m.currentRequest.Chain[idx].RequestID = ""
+			}
 		}
 	}
 	del := widget.NewButton("×", func() {

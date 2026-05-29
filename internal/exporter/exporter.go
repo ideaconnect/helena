@@ -23,7 +23,7 @@ import (
 func ToCurl(r model.Request, res *vars.Resolver, s model.Settings) (string, error) {
 	// nil OAuth2 resolver — render the request as it stands without firing
 	// a live token fetch at export time.
-	req, err := httpclient.Build(context.Background(), r, res, nil)
+	req, _, err := httpclient.Build(context.Background(), r, res, nil)
 	if err != nil {
 		return "", err
 	}
@@ -32,7 +32,7 @@ func ToCurl(r model.Request, res *vars.Resolver, s model.Settings) (string, erro
 
 // ToWget renders r as a wget command with the same semantics as ToCurl.
 func ToWget(r model.Request, res *vars.Resolver, s model.Settings) (string, error) {
-	req, err := httpclient.Build(context.Background(), r, res, nil)
+	req, _, err := httpclient.Build(context.Background(), r, res, nil)
 	if err != nil {
 		return "", err
 	}

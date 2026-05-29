@@ -30,7 +30,15 @@ there:
    returned `View` lands in this level's accumulating chain map
    under `step.Alias`. Console lines from the predecessor are
    appended to the shared `*console` slice so the UI can show the
-   full trace.
+   full trace. **Just before this call**, if a `ProgressFunc` was
+   supplied to `Resolve`, it is invoked as
+   `progress(*stepCount, total, step.Alias, sub.Name)` so the UI
+   can update its status line to "step N/total" mid-chain. **After
+   the call**, when the HTTP actually went out (`view.Request.URL`
+   non-empty), the runner appends one auto-trace line —
+   `→ chain[<alias>] <METHOD> <URL>` — to the shared console so the
+   user can see the post-pre-script wire URL of each chain step in
+   the Console panel after the Send completes.
 4. **Stop on any error.** Pre-script, HTTP, or post-script failure
    anywhere in the recursion aborts `Resolve`. The error is wrapped
    with the failing step's alias and name so the user can fix the
@@ -165,6 +173,26 @@ you change the chain-step execution path, preserve the snapshot
 finder's auth-flattening — without it, the most common chain shape
 (Login inherits OAuth2 from Auth folder, Profile chains Login)
 silently breaks.
+
+## Per-step progress callback
+
+`Resolve` accepts a `ProgressFunc` (may be `nil`) that fires once
+before each chain step's `ExecuteOnce`. Two timing details:
+
+- **`total` is pre-walked.** When `progress != nil`, `Resolve` does a
+  single cheap walk of the same tree the executor will follow,
+  applying the same visiting-set cycle skip and depth/step caps so
+  the reported total matches what will actually run. The walk does
+  not call `ExecuteOnce` and tolerates unresolvable paths by
+  skipping them (the real Resolve will surface those as errors).
+- **Callback runs on the worker goroutine.** The UI's wiring in
+  `internal/ui/shell.go` wraps the callback in `fyne.Do` so the
+  status-line update lands on the UI thread (invariant #4).
+
+The UI Send pipeline uses this to show `Chain step 2/3: Login`
+mid-chain and falls back to `Sending: <leafName>` once the chain
+finishes and the leaf is in flight. Sends with no chain pass
+through unchanged (the callback never fires).
 
 ## Failure shapes the user sees
 

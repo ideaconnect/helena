@@ -44,7 +44,7 @@ without infinite write-back loops.
 | `URL` | `*widget.Entry` | URL entry; Enter triggers `send`. |
 | `urlPreview` | `*widget.Label` | Italic label under the URL showing the resolved form (or unresolved-vars warning). Hidden when nothing to show. |
 | `Save` | `*widget.Button` | Disabled until a request is loaded. |
-| `Send` | `*widget.Button` | High-importance "Send" button; disabled while a request is in flight. |
+| `Send` | `*widget.Button` | "Send" by default (high importance) / "Abort" while a Send is in flight (warning importance). Tap routes through `sendOrAbort` which dispatches based on `sendCancel`. |
 | `Tree` | `*widget.Tree` | Collections sidebar tree. |
 | `Request` | `*container.AppTabs` | Request editor tabs: Params, Auth, Headers, Body, Docs. |
 | `Response` | `*container.AppTabs` | Response tabs: Pretty, Raw, Headers. |
@@ -73,6 +73,7 @@ without infinite write-back loops.
 | `currentRequestID` | `string` | Tree node ID for `currentRequest`; cleared when the selected node is deleted. |
 | `lastSelectedNodeID` | `string` | Last node the user selected; the basis for `parentForNew`, rename, delete, and duplicate targets. |
 | `loading` | `bool` | **Write-back suppression flag.** Set true by `loadRequest` while it pushes values into widgets so the `OnChanged` callbacks (which would write back into `currentRequest`) become no-ops. Without this, programmatic SetText/SetSelected calls would clobber the model with the previous request's data. |
+| `sendCancel` | `context.CancelFunc` | Non-nil while a Send goroutine is in flight; lets `sendOrAbort` route a button tap into context cancellation. Set on the UI thread when `send` launches the goroutine, cleared by `resetSendButton` in every teardown path. |
 | `shortcuts` | `[]shortcutSpec` | Cached shortcut table used both for canvas registration and for rendering the help dialog. |
 | `root` | `fyne.CanvasObject` | The fully assembled top-level container returned by `Root()`. |
 

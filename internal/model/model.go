@@ -113,9 +113,17 @@ type Request struct {
 // slash-separated name-path within the same collection: `"Auth/Login"`
 // resolves to the request named "Login" inside the folder named
 // "Auth". Names are case-sensitive and match the on-disk display name.
+//
+// RequestID, when non-empty, is the persistent Request.ID of the
+// target — the chain runner prefers it over Request for resolution so
+// the ref survives renames and folder moves without depending on the
+// path. Request is still written for human readability (and as a
+// fallback when the ID can't be resolved, e.g. across collections or
+// in YAML hand-edited by other tools).
 type ChainStep struct {
-	Alias   string `json:"alias"`
-	Request string `json:"request"`
+	Alias     string `json:"alias"`
+	Request   string `json:"request"`
+	RequestID string `json:"requestId,omitempty"`
 }
 
 // Scripts holds the per-request JavaScript hooks the scripting runtime

@@ -17,6 +17,7 @@ import (
 
 type ocInfo struct {
 	Name  string               `yaml:"name"`
+	ID    string               `yaml:"id,omitempty"`   // Helena-stable identifier; survives renames + folder moves. Optional on disk for back-compat — see fileToRequest.
 	Type  string               `yaml:"type,omitempty"` // http | folder | collection | environment
 	Seq   int                  `yaml:"seq,omitempty"`
 	Tags  []string             `yaml:"tags,omitempty"`
@@ -65,10 +66,14 @@ type ocRequestFile struct {
 
 // ocChainStep mirrors one entry under the on-disk `chain:` list. Extra
 // preserves keys other tools may have nested on a chain entry.
+// RequestID, when non-empty, pins the ref to the target's persistent
+// Request.ID so the entry survives the target being renamed or moved
+// to a different folder.
 type ocChainStep struct {
-	Alias   string               `yaml:"alias"`
-	Request string               `yaml:"request"`
-	Extra   map[string]yaml.Node `yaml:",inline"`
+	Alias     string               `yaml:"alias"`
+	Request   string               `yaml:"request"`
+	RequestID string               `yaml:"requestId,omitempty"`
+	Extra     map[string]yaml.Node `yaml:",inline"`
 }
 
 // ocScripts mirrors the on-disk scripts block. preRequest and
@@ -169,7 +174,7 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 	}
 	h.Auth = authToFile(r.Auth)
 	return ocRequestFile{
-		Info:    ocInfo{Name: r.Name, Type: "http", Seq: seq},
+		Info:    ocInfo{Name: r.Name, ID: r.ID, Type: "http", Seq: seq},
 		HTTP:    h,
 		Docs:    r.Docs,
 		Scripts: scriptsToFile(r.Scripts),
@@ -186,7 +191,7 @@ func chainToFile(chain []model.ChainStep) []ocChainStep {
 	}
 	out := make([]ocChainStep, len(chain))
 	for i, s := range chain {
-		out[i] = ocChainStep{Alias: s.Alias, Request: s.Request}
+		out[i] = ocChainStep{Alias: s.Alias, Request: s.Request, RequestID: s.RequestID}
 	}
 	return out
 }
@@ -199,7 +204,7 @@ func fileToChain(chain []ocChainStep) []model.ChainStep {
 	}
 	out := make([]model.ChainStep, len(chain))
 	for i, s := range chain {
-		out[i] = model.ChainStep{Alias: s.Alias, Request: s.Request}
+		out[i] = model.ChainStep{Alias: s.Alias, Request: s.Request, RequestID: s.RequestID}
 	}
 	return out
 }
@@ -222,13 +227,20 @@ func fileToScripts(f *ocScripts) model.Scripts {
 	return model.Scripts{PreRequest: f.PreRequest, PostResponse: f.PostResponse}
 }
 
-// fileToRequest maps an on-disk request DTO into the domain model. A fresh
-// ID is assigned because the OpenCollection format does not record one.
-// Missing auth in YAML resolves to AuthInherit so newly created requests
-// default to inheriting their parent's auth.
+// fileToRequest maps an on-disk request DTO into the domain model. If
+// the YAML carries `info.id` (written by an earlier Helena save) that
+// ID is preserved so chain-step `requestId` refs stay valid across
+// reloads. Files written by older Helena (or by Bruno) lack `info.id`
+// — a fresh ID is generated; the next Save will write it back so the
+// next reload preserves it. Missing auth resolves to AuthInherit so
+// newly created requests default to inheriting their parent's auth.
 func fileToRequest(f ocRequestFile) model.Request {
+	id := f.Info.ID
+	if id == "" {
+		id = model.NewID()
+	}
 	r := model.Request{
-		ID:      model.NewID(),
+		ID:      id,
 		Name:    f.Info.Name,
 		Body:    model.Body{Type: model.BodyNone},
 		Docs:    f.Docs,

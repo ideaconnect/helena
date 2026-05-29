@@ -17,6 +17,16 @@ import (
 )
 
 // Response captures the outcome of executing a request.
+//
+// RequestURL and RequestBody record what actually went on the wire —
+// the resolved URL (with {{vars}} substituted and query params merged)
+// and the encoded body bytes (URL-encoded form for form-urlencoded,
+// the wire multipart envelope for multipart, raw bytes otherwise).
+// They are populated from the *http.Request that Do built, so they
+// reflect any pre-script mutations the caller applied to the model
+// before invoking Do. chain.View consumers (and the scripting
+// `chain.<alias>.request.{url,body}` surface) read them so leaf
+// scripts can inspect what each chain step actually sent.
 type Response struct {
 	StatusCode  int
 	Status      string
@@ -26,6 +36,8 @@ type Response struct {
 	Size        int64
 	Duration    time.Duration
 	CORSWarning string // advisory only; non-empty when a browser would likely block
+	RequestURL  string
+	RequestBody []byte
 }
 
 // Client executes model.Requests with behavior derived from settings.
@@ -60,15 +72,20 @@ func New(s model.Settings) *Client {
 	return &Client{settings: s, http: hc}
 }
 
-// Build resolves variables and assembles an *http.Request. It returns an error
-// naming any unresolved {{variables}} so the caller can surface them. Build is
-// independent of any Client / settings — it's the pure "what would this
-// request look like on the wire" path used by Do and by the exporter package.
+// Build resolves variables and assembles an *http.Request. It returns
+// the request, the encoded body bytes (nil for bodyless requests),
+// and an error naming any unresolved {{variables}} so the caller can
+// surface them. The body bytes are returned separately so callers
+// that want to display the wire body (e.g. chain.View / scripting
+// `chain.<alias>.request.body`) don't need to drain `req.GetBody`.
+// Build is independent of any Client / settings — it's the pure
+// "what would this request look like on the wire" path used by Do
+// and by the exporter package.
 //
 // oauth2 may be nil; the OAuth2 case in auth.Apply then surfaces
 // ErrOAuth2NotImplemented, which is the right thing for callers like the
 // exporter that don't want to actually fetch a token at render time.
-func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth.OAuth2Resolver) (*http.Request, error) {
+func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth.OAuth2Resolver) (*http.Request, []byte, error) {
 	if res == nil {
 		res = vars.New()
 	}
@@ -82,7 +99,7 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 	rawURL := resolve(r.URL)
 	body, contentType, err := buildBody(r, resolve)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	type kv struct{ k, v string }
@@ -99,12 +116,12 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 	resolvedAuth := auth.ResolveValues(r.Auth, resolve)
 
 	if u := dedupe(missing); len(u) > 0 {
-		return nil, fmt.Errorf("unresolved variables: %s", strings.Join(u, ", "))
+		return nil, nil, fmt.Errorf("unresolved variables: %s", strings.Join(u, ", "))
 	}
 
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("invalid URL %q: %w", rawURL, err)
+		return nil, nil, fmt.Errorf("invalid URL %q: %w", rawURL, err)
 	}
 	if len(params) > 0 {
 		q := u.Query()
@@ -124,7 +141,7 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 	}
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), reader)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if body != nil {
 		b := body
@@ -155,14 +172,14 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 	// API-keys back off if their header name is taken. OAuth2 grants delegate
 	// to the supplied resolver.
 	if err := auth.Apply(ctx, req, resolvedAuth, oauth2); err != nil {
-		return nil, fmt.Errorf("auth: %w", err)
+		return nil, nil, fmt.Errorf("auth: %w", err)
 	}
-	return req, nil
+	return req, body, nil
 }
 
 // Do builds and executes the request, fully reading the response body.
 func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*Response, error) {
-	req, err := Build(ctx, r, res, c.oauth2Resolver)
+	req, body, err := Build(ctx, r, res, c.oauth2Resolver)
 	if err != nil {
 		return nil, err
 	}
@@ -181,13 +198,15 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	}
 
 	out := &Response{
-		StatusCode: resp.StatusCode,
-		Status:     resp.Status,
-		Proto:      resp.Proto,
-		Headers:    resp.Header,
-		Body:       data,
-		Size:       int64(len(data)),
-		Duration:   dur,
+		StatusCode:  resp.StatusCode,
+		Status:      resp.Status,
+		Proto:       resp.Proto,
+		Headers:     resp.Header,
+		Body:        data,
+		Size:        int64(len(data)),
+		Duration:    dur,
+		RequestURL:  req.URL.String(),
+		RequestBody: body,
 	}
 	if c.settings.CORSWarning {
 		out.CORSWarning = corsAdvisory(req.Header.Get("Origin"), resp.Header)

@@ -60,6 +60,10 @@ func (nilFinder) FindRequestByPath(string) (model.Request, bool) {
 	return model.Request{}, false
 }
 
+func (nilFinder) FindRequestByID(string) (model.Request, bool) {
+	return model.Request{}, false
+}
+
 // chainExecutor is the single execution path for both chain steps and
 // the leaf: deep-copy the request's KV slices, run the pre-script with
 // the supplied chain map bound as `chain.<alias>`, build the resolver
@@ -96,8 +100,15 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		return chain.View{}, console, err
 	}
 
+	// view.Request reflects what actually went on the wire: the
+	// resolved URL (with {{vars}} substituted and query params merged)
+	// and the encoded body bytes (URL-encoded form for form-urlencoded,
+	// multipart envelope for multipart, raw bytes otherwise). Both
+	// come from httpclient via Response so scripts reading
+	// chain.<alias>.request.{url,body} see the wire form, not the
+	// pre-resolution template.
 	view := chain.View{
-		Request: chain.RequestView{Method: string(r.Method), URL: r.URL, Body: []byte(r.Body.Content)},
+		Request: chain.RequestView{Method: string(r.Method), URL: resp.RequestURL, Body: resp.RequestBody},
 		Response: chain.ResponseView{
 			StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers,
 			Body: resp.Body, Size: resp.Size, Duration: resp.Duration, CORSWarning: resp.CORSWarning,
@@ -191,6 +202,11 @@ type MainUI struct {
 	currentRequestID   string
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
+
+	// sendCancel is non-nil while a Send goroutine is in flight; the
+	// Send button doubles as Abort in that state. Set + cleared on the
+	// UI thread only; the cancel func itself is goroutine-safe.
+	sendCancel context.CancelFunc
 
 	shortcuts []shortcutSpec
 
@@ -299,7 +315,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.corsBanner.Hide()
 	m.Status = widget.NewLabel("Ready")
 
-	m.Send.OnTapped = m.send
+	m.Send.OnTapped = m.sendOrAbort
 
 	wsBtn := widget.NewButton("Workspaces…", m.editWorkspaces)
 	envBtn := widget.NewButton("Environments…", m.editEnvironments)
@@ -445,7 +461,8 @@ func (m *MainUI) saveRequest() {
 	// Drop incomplete (empty-key) rows on save so we don't write noise to YAML.
 	m.currentRequest.Params = pruneEmptyKV(m.currentRequest.Params)
 	m.currentRequest.Headers = pruneEmptyKV(m.currentRequest.Headers)
-	m.currentRequest.Chain = pruneEmptyChain(m.currentRequest.Chain)
+	cleanedChain, halfFilledChain := pruneEmptyChain(m.currentRequest.Chain)
+	m.currentRequest.Chain = cleanedChain
 	m.rebuildParamsRows()
 	m.rebuildHeadersRows()
 	m.rebuildChainRows()
@@ -457,7 +474,14 @@ func (m *MainUI) saveRequest() {
 		}
 		return
 	}
-	m.Status.SetText("Saved: " + m.currentRequest.Name)
+	status := "Saved: " + m.currentRequest.Name
+	if halfFilledChain > 0 {
+		// Half-filled chain rows are dropped on save (the runner couldn't
+		// use them anyway). Surface the count so the user notices the
+		// lost intent and can refill them on the next edit.
+		status += fmt.Sprintf(" · dropped %d incomplete chain row(s)", halfFilledChain)
+	}
+	m.Status.SetText(status)
 }
 
 // updateURLPreview shows the resolved URL beneath the entry whenever the raw
@@ -651,7 +675,39 @@ func (m *MainUI) openCollection() {
 // the script can mutate URL / method / body / headers / params; the
 // post-response script runs once the response body is read so it can write
 // extracted values into the session env overlay.
+// sendOrAbort is the Send button's OnTapped handler. When a Send is in
+// flight (sendCancel != nil), it cancels the in-flight context — the
+// goroutine drains and the fyne.Do path resets the button via
+// resetSendButton. Otherwise it starts a fresh Send. Both branches run
+// on the UI thread; cancel() is idempotent so a double-tap is harmless.
+func (m *MainUI) sendOrAbort() {
+	if m.sendCancel != nil {
+		m.sendCancel()
+		return
+	}
+	m.send()
+}
+
+// resetSendButton restores the Send button to its default appearance
+// and clears the abort state. UI-thread only — every Send teardown
+// (success, error, panic, abort) routes through this helper inside a
+// fyne.Do block.
+func (m *MainUI) resetSendButton() {
+	m.sendCancel = nil
+	m.Send.SetText("Send")
+	m.Send.Importance = widget.HighImportance
+	m.Send.Refresh()
+}
+
 func (m *MainUI) send() {
+	if m.sendCancel != nil {
+		// A Send is already in flight — Enter / URL OnSubmitted reach
+		// this path directly (bypassing sendOrAbort), so guard here to
+		// avoid leaking the in-flight cancel func when the field gets
+		// overwritten. The button-tap dispatch goes through
+		// sendOrAbort and would Abort instead.
+		return
+	}
 	if strings.TrimSpace(m.URL.Text) == "" {
 		m.Status.SetText("Enter a URL first")
 		return
@@ -691,8 +747,16 @@ func (m *MainUI) send() {
 	}
 
 	m.Status.SetText("Sending…")
-	m.Send.Disable()
 	m.corsBanner.Hide()
+
+	// Build the cancellable context on the UI thread so the click
+	// handler (sendOrAbort) can call cancel() to abort an in-flight
+	// Send. The button text swap signals the toggled mode to the user.
+	ctx, cancel := context.WithCancel(context.Background())
+	m.sendCancel = cancel
+	m.Send.SetText("Abort")
+	m.Send.Importance = widget.WarningImportance
+	m.Send.Refresh()
 
 	// Capture the pre-script's view of method+URL so we can flag any
 	// mutation in the status line later.
@@ -704,24 +768,36 @@ func (m *MainUI) send() {
 	preOverlay := m.sess.SnapshotEnvOverlay()
 
 	go func() {
+		defer cancel()
 		defer func() {
 			if r := recover(); r != nil {
 				msg := fmt.Sprintf("Send panic: %v", r)
 				m.sess.RestoreEnvOverlay(preOverlay)
 				fyne.Do(func() {
-					m.Send.Enable()
+					m.resetSendButton()
 					m.Status.SetText(msg)
 				})
 			}
 		}()
-		ctx := context.Background()
 
-		chainMap, chainConsole, chainErr := chain.Resolve(ctx, req, finder, exec)
+		// Per-step progress feedback: chain.Resolve fires this once
+		// before each ExecuteOnce on the worker goroutine; fyne.Do
+		// marshals the status update to the UI thread.
+		progress := func(step, total int, _, name string) {
+			fyne.Do(func() {
+				m.Status.SetText(fmt.Sprintf("Chain step %d/%d: %s", step, total, name))
+			})
+		}
+		chainMap, chainConsole, chainErr := chain.Resolve(ctx, req, finder, exec, progress)
 		if chainErr != nil {
 			m.sess.RestoreEnvOverlay(preOverlay)
 			fyne.Do(func() {
-				m.Send.Enable()
-				m.Status.SetText("Chain error: " + chainErr.Error())
+				m.resetSendButton()
+				if ctx.Err() == context.Canceled {
+					m.Status.SetText("Aborted")
+				} else {
+					m.Status.SetText("Chain error: " + chainErr.Error())
+				}
 				m.responseRaw.SetText(chainErr.Error())
 				m.prettyText.SetText("")
 				m.headersText.SetText("")
@@ -731,16 +807,27 @@ func (m *MainUI) send() {
 			return
 		}
 
+		// If the chain fired, swap the status back to a generic
+		// "Sending…" so the user knows the leaf is now in flight and
+		// not stuck on the last chain step.
+		if len(chainMap) > 0 {
+			fyne.Do(func() { m.Status.SetText("Sending: " + req.Name) })
+		}
+
 		view, leafConsole, leafErr := exec.ExecuteOnce(ctx, req, chainMap)
 		consoleLines := append(chainConsole, leafConsole...)
 
 		fyne.Do(func() {
-			m.Send.Enable()
+			m.resetSendButton()
 			m.setScriptConsole(consoleLines)
 			// No HTTP completed → pre-script or HTTP failure; show the error.
 			if view.Response.StatusCode == 0 {
 				m.Response.SelectIndex(1)
-				m.Status.SetText("Error: " + leafErr.Error())
+				if ctx.Err() == context.Canceled {
+					m.Status.SetText("Aborted")
+				} else {
+					m.Status.SetText("Error: " + leafErr.Error())
+				}
 				m.responseRaw.SetText(leafErr.Error())
 				m.prettyText.SetText("")
 				m.headersText.SetText("")
@@ -957,14 +1044,23 @@ func pruneEmptyKV(kvs []model.KeyValue) []model.KeyValue {
 }
 
 // pruneEmptyChain drops chain steps where either Alias or Request is
-// blank — the user added a row but didn't fill it in, so we keep the
-// YAML clean instead of writing half-filled entries.
-func pruneEmptyChain(steps []model.ChainStep) []model.ChainStep {
-	out := steps[:0]
+// blank. Returns the cleaned slice and the count of rows that had ONE
+// of the two filled in (the user filled in part of a step, then saved
+// without completing it). Both-blank rows are dropped silently — they
+// are typically leftover "+ Add step" clicks. Callers should surface
+// the half-filled count so the user notices the lost intent.
+func pruneEmptyChain(steps []model.ChainStep) (cleaned []model.ChainStep, halfFilledDropped int) {
+	cleaned = steps[:0]
 	for _, s := range steps {
-		if strings.TrimSpace(s.Alias) != "" && strings.TrimSpace(s.Request) != "" {
-			out = append(out, s)
+		aliasFilled := strings.TrimSpace(s.Alias) != ""
+		refFilled := strings.TrimSpace(s.Request) != ""
+		if aliasFilled && refFilled {
+			cleaned = append(cleaned, s)
+			continue
+		}
+		if aliasFilled || refFilled {
+			halfFilledDropped++
 		}
 	}
-	return out
+	return cleaned, halfFilledDropped
 }

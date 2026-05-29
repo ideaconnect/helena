@@ -95,13 +95,31 @@ type Executor interface {
 	ExecuteOnce(ctx context.Context, r model.Request, chainMap map[string]View) (View, []string, error)
 }
 
-// RequestFinder resolves a chain step's `Request` field — a
-// slash-separated name path — into the actual model.Request. The
-// production implementation lives on *session.Session
-// (FindRequestByPath); tests use a small map-backed fake.
+// RequestFinder resolves a chain step's target — by stable Request.ID
+// when the step carries one, falling back to the slash-separated name
+// path otherwise. The production implementation lives on
+// *session.SnapshotChainFinder; tests use a small map-backed fake.
+//
+// FindRequestByID returns false (without error) when no request in the
+// snapshot carries the given ID; the chain runner then falls back to
+// FindRequestByPath. An empty id MUST return false so steps without a
+// pinned ID skip the ID lookup cleanly.
 type RequestFinder interface {
 	FindRequestByPath(ref string) (model.Request, bool)
+	FindRequestByID(id string) (model.Request, bool)
 }
+
+// ProgressFunc is invoked once at the start of each chain step's
+// ExecuteOnce call. step is 1-based across the whole Resolve; total
+// is the upfront-counted total (so callers can show "step 2/3").
+// alias is the step's declared alias in its parent's chain; name is
+// the resolved request's Name.
+//
+// Progress always runs on the goroutine calling Resolve. UI callers
+// must marshal to the UI thread (e.g. via fyne.Do) — the chain runner
+// is invariant 4 safe by virtue of not touching widgets itself, but
+// any UI work the callback does is not.
+type ProgressFunc func(step, total int, alias, name string)
 
 // Resolve executes every before-hook of leaf, recursively, and returns
 // the alias→View map the leaf's own scripts should see — plus the
@@ -109,18 +127,33 @@ type RequestFinder interface {
 // itself is NOT executed here; the caller (the UI Send pipeline) runs
 // it via the same Executor with the returned map.
 //
+// progress (may be nil) is called once before each chain step's
+// ExecuteOnce so callers can show "step N/total" feedback during
+// multi-step chains. When non-nil, Resolve does a single upfront
+// finder walk to compute the total — cheap (bounded by MaxChainSteps)
+// and identical to the execution-time walk so the total matches what
+// will actually run.
+//
 // Returns an error if any chain step fails to execute, if any step
 // references an unknown request path, if a cycle is detected, or if
 // the chain exceeds MaxChainDepth / MaxChainSteps. The error names the
 // offending alias / path so the user can fix it.
-func Resolve(ctx context.Context, leaf model.Request, finder RequestFinder, exec Executor) (map[string]View, []string, error) {
+func Resolve(ctx context.Context, leaf model.Request, finder RequestFinder, exec Executor, progress ProgressFunc) (map[string]View, []string, error) {
 	visiting := map[string]bool{}
 	if leaf.ID != "" {
 		visiting[leaf.ID] = true
 	}
+	total := 0
+	if progress != nil {
+		countVisiting := map[string]bool{}
+		if leaf.ID != "" {
+			countVisiting[leaf.ID] = true
+		}
+		total = countSteps(leaf.Chain, finder, countVisiting, 0)
+	}
 	var console []string
 	stepCount := 0
-	chainMap, err := resolveSteps(ctx, leaf.Chain, finder, exec, visiting, &console, 0, &stepCount)
+	chainMap, err := resolveSteps(ctx, leaf.Chain, finder, exec, visiting, &console, 0, &stepCount, progress, total)
 	return chainMap, console, err
 }
 
@@ -131,7 +164,7 @@ func Resolve(ctx context.Context, leaf model.Request, finder RequestFinder, exec
 // level (0 = leaf's direct chain); stepCount tallies total
 // ExecuteOnce calls across the whole Resolve and is shared via
 // pointer so caps apply globally.
-func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFinder, exec Executor, visiting map[string]bool, console *[]string, depth int, stepCount *int) (map[string]View, error) {
+func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFinder, exec Executor, visiting map[string]bool, console *[]string, depth int, stepCount *int, progress ProgressFunc, total int) (map[string]View, error) {
 	if depth >= MaxChainDepth {
 		return nil, fmt.Errorf("chain: depth exceeds limit %d (likely a runaway nested chain)", MaxChainDepth)
 	}
@@ -154,7 +187,7 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		if _, dup := out[step.Alias]; dup {
 			return nil, fmt.Errorf("chain: duplicate alias %q in the same request's chain", step.Alias)
 		}
-		sub, ok := finder.FindRequestByPath(step.Request)
+		sub, ok := resolveTarget(finder, step)
 		if !ok {
 			return nil, fmt.Errorf("chain: cannot resolve request %q (alias %q)", step.Request, step.Alias)
 		}
@@ -164,7 +197,7 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		if sub.ID != "" {
 			visiting[sub.ID] = true
 		}
-		subChainMap, err := resolveSteps(ctx, sub.Chain, finder, exec, visiting, console, depth+1, stepCount)
+		subChainMap, err := resolveSteps(ctx, sub.Chain, finder, exec, visiting, console, depth+1, stepCount, progress, total)
 		if err != nil {
 			return nil, err
 		}
@@ -172,8 +205,19 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 			return nil, fmt.Errorf("chain: step count exceeds limit %d (likely a fan-out attempt)", MaxChainSteps)
 		}
 		*stepCount++
+		if progress != nil {
+			progress(*stepCount, total, step.Alias, sub.Name)
+		}
 		view, lines, err := exec.ExecuteOnce(ctx, sub, subChainMap)
 		appendBounded(console, lines)
+		// Trace what actually went out for each chain step. The HTTP
+		// only ran (view.Request.URL non-empty) when pre-script + HTTP
+		// both succeeded, so this captures the post-pre-script wire
+		// URL — the value a leaf script debugging the chain would need
+		// to see. Errors are still surfaced separately.
+		if view.Request.URL != "" {
+			appendBounded(console, []string{fmt.Sprintf("→ chain[%s] %s %s", step.Alias, view.Request.Method, view.Request.URL)})
+		}
 		if err != nil {
 			return nil, fmt.Errorf("chain step %q (%s): %w", step.Alias, sub.Name, err)
 		}
@@ -183,6 +227,65 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		out[step.Alias] = view
 	}
 	return out, nil
+}
+
+// resolveTarget looks up a chain step's target via the finder. It
+// prefers the step's RequestID (a stable identifier that survives
+// renames + folder moves) and falls back to the human-readable Request
+// path when the ID is empty or not found in the snapshot. Returning
+// false leaves the caller to surface the standard "cannot resolve
+// request" error against the path field (the user-visible
+// identifier).
+func resolveTarget(finder RequestFinder, step model.ChainStep) (model.Request, bool) {
+	if step.RequestID != "" {
+		if r, ok := finder.FindRequestByID(step.RequestID); ok {
+			return r, true
+		}
+	}
+	if step.Request == "" {
+		return model.Request{}, false
+	}
+	return finder.FindRequestByPath(step.Request)
+}
+
+// countSteps mirrors the resolveSteps walk to pre-count how many
+// ExecuteOnce calls a Resolve will issue. Used only when a progress
+// callback was supplied — lets callers display "step N/total" with
+// total known upfront rather than reported step-at-a-time.
+//
+// Unresolvable refs are silently skipped (the actual Resolve will
+// error on them); cycles are skipped via the shared visiting map so
+// the count matches what Resolve will run. The total is capped at
+// MaxChainSteps for consistency with the runtime cap.
+func countSteps(steps []model.ChainStep, finder RequestFinder, visiting map[string]bool, depth int) int {
+	if depth >= MaxChainDepth {
+		return 0
+	}
+	total := 0
+	for _, step := range steps {
+		if step.Request == "" && step.RequestID == "" {
+			continue
+		}
+		sub, ok := resolveTarget(finder, step)
+		if !ok {
+			continue
+		}
+		if sub.ID != "" && visiting[sub.ID] {
+			continue
+		}
+		if sub.ID != "" {
+			visiting[sub.ID] = true
+		}
+		total += countSteps(sub.Chain, finder, visiting, depth+1)
+		total++
+		if sub.ID != "" {
+			delete(visiting, sub.ID)
+		}
+		if total >= MaxChainSteps {
+			return MaxChainSteps
+		}
+	}
+	return total
 }
 
 // appendBounded appends lines to *console, dropping any past

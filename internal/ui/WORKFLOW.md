@@ -80,9 +80,11 @@ makes `loadRequest` a single atomic UI write.
 
 ## Sending a request (UI → httpclient → fyne.Do)
 
-`send` lives at [shell.go:490](shell.go#L490). It is bound to the Send button
-(`m.Send.OnTapped = m.send`), to the URL entry's `OnSubmitted`, and to the
-Enter keyboard shortcut.
+`send` lives at [shell.go:490](shell.go#L490). The Send button is bound
+to `m.sendOrAbort` (which dispatches between starting a new Send and
+cancelling an in-flight one); the URL entry's `OnSubmitted` and the
+Enter keyboard shortcut also route through `sendOrAbort` so they
+share the same dispatch.
 
 1. Trim-check the URL; bail early if empty.
 2. Snapshot the request: a value copy of `*m.currentRequest`, or a fresh
@@ -110,21 +112,28 @@ Enter keyboard shortcut.
    `chainExecutor{rt, client, envSnap, sess}` and a
    `sessionRequestFinder{m.sess}` — these are the two adapters the
    chain runner needs.
-6. Status -> "Sending…", Send button disabled, CORS banner hidden — all on
-   the UI goroutine.
-7. **Spawn a goroutine.** Inside, the chain runner executes any
-   declared before-hooks first:
-   - Call `chain.Resolve(ctx, req, finder, exec)`. The runner walks
-     `req.Chain` in order, recursively resolves each predecessor's
-     own `Chain`, executes them via `exec.ExecuteOnce` (which is the
-     same single execution path used for the leaf — see step 8), and
-     accumulates an alias→View map plus the console output of every
-     step. Returns the leaf's chainMap (the aliases the leaf's own
-     scripts can read), the accumulated console, and the first
-     error. See [internal/chain/WORKFLOW.md](../chain/WORKFLOW.md).
-   - On error, surface `"Chain error: …"` in the status + Raw panel,
-     re-enable Send, and return. **The leaf is never executed when
-     the chain fails.**
+6. Status -> "Sending…", Send button text swapped to "Abort"
+   (warning importance), CORS banner hidden — all on the UI
+   goroutine. The `context.WithCancel` is built here and the
+   resulting `CancelFunc` stashed on `m.sendCancel`; the button
+   click handler (`sendOrAbort`) reads that field and calls
+   `cancel()` to abort an in-flight Send.
+7. **Spawn a goroutine.** Inside, `defer cancel()` releases the
+   context resources whatever the exit path. The chain runner
+   executes any declared before-hooks first:
+   - Call `chain.Resolve(ctx, req, finder, exec, progress)`. The
+     runner walks `req.Chain` in order, recursively resolves each
+     predecessor's own `Chain`, executes them via
+     `exec.ExecuteOnce` (which is the same single execution path
+     used for the leaf — see step 8), and accumulates an alias→View
+     map plus the console output of every step. Returns the leaf's
+     chainMap (the aliases the leaf's own scripts can read), the
+     accumulated console, and the first error. See
+     [internal/chain/WORKFLOW.md](../chain/WORKFLOW.md).
+   - On error, surface `"Chain error: …"` (or `"Aborted"` when
+     `ctx.Err() == context.Canceled`) in the status + Raw panel,
+     reset Send via `resetSendButton`, and return. **The leaf is
+     never executed when the chain fails.**
 8. Run the leaf via the SAME `exec.ExecuteOnce(ctx, req, chainMap)`.
    Inside one ExecuteOnce call:
    - Deep-copy Headers / Params / Body.Form so the worker can't race
@@ -146,8 +155,9 @@ Enter keyboard shortcut.
    `fyne.Do` is the only safe way to touch widgets from a non-UI
    goroutine; it schedules the callback onto Fyne's event loop.
 10. The `fyne.Do` body:
-    - Re-enables Send and renders chain console + leaf console lines
-      into `scriptConsole`.
+    - Calls `resetSendButton` (clears `m.sendCancel`, restores
+      "Send" text + high importance) and renders chain console +
+      leaf console lines into `scriptConsole`.
     - If `view.Response.StatusCode == 0`, the leaf's pre-script or
       HTTP failed: select the Raw tab, set the status line, dump the
       error into Raw, clear Pretty and Headers.
@@ -162,13 +172,30 @@ Enter keyboard shortcut.
     - If `view.Response.CORSWarning != ""`, show the orange
       `corsBanner`.
 
-The Send button is the lifecycle marker: disabled when the goroutine is in
-flight, re-enabled in the `fyne.Do` block. Pressing Enter twice in a row
-doesn't fire a second request mid-flight because Fyne's shortcut handler
-calls `m.send` which still trips on the disabled-button state implicitly
-(the second send simply queues another HTTP request but the first one was
-already in flight). The simpler invariant is: keyboard repeats are rare and
-the worst case is two concurrent sends, both safely routed through `fyne.Do`.
+The Send button is the lifecycle marker AND the abort affordance:
+
+- **Default state** — text "Send", high importance, `m.sendCancel == nil`.
+  Tap routes through `sendOrAbort` → `send()` which launches the
+  goroutine.
+- **In-flight state** — text "Abort", warning importance,
+  `m.sendCancel` holds the active context's cancel func. Tap routes
+  through `sendOrAbort` → `m.sendCancel()` which propagates
+  cancellation to `httpclient.Client.Do` (via `http.NewRequestWithContext`),
+  to `scripting.runWithTimeout` (which calls `vm.Interrupt` on
+  ctx-cancel), and out through chain.Resolve's `ctx.Err()` checks
+  in the UI's return paths.
+- **Teardown** — every fyne.Do return path (success, error, panic,
+  abort) calls `resetSendButton` to clear `m.sendCancel` and restore
+  default appearance. `cancel()` is also `defer`-called inside the
+  goroutine to release context resources regardless of the exit
+  path.
+
+The Enter shortcut and `URL.OnSubmitted` reach `m.send` directly
+(not `sendOrAbort`), but `send()` guards on `m.sendCancel != nil`
+so keyboard repeats during an in-flight Send no-op rather than
+leaking the in-flight cancel func by overwriting the field. To
+abort via keyboard the user clicks Abort or waits for the Send to
+complete.
 
 ## Saving a request to disk
 

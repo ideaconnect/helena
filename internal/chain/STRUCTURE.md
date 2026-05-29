@@ -33,8 +33,13 @@ type RequestView struct {
 }
 ```
 
-The post-resolution request snapshot. Method and URL reflect any
-mutations the pre-script made before the request went out.
+The wire-level request snapshot. URL is the resolved URL (vars
+substituted, query params merged) and Body is the encoded body bytes
+(URL-encoded form / multipart envelope / raw bytes), both lifted
+from `httpclient.Response.RequestURL` / `Response.RequestBody`.
+Method reflects any pre-script mutation. Together these let leaf
+scripts see what each chain step actually sent, not the
+pre-resolution template.
 
 ### `ResponseView` ([chain.go](chain.go))
 
@@ -79,20 +84,39 @@ any. The production implementation lives in
 ```go
 type RequestFinder interface {
     FindRequestByPath(ref string) (model.Request, bool)
+    FindRequestByID(id string) (model.Request, bool)
 }
 ```
 
-Resolves a `ChainStep.Request` field — a slash-separated name path
-relative to the active collection — into the model. The production
-implementation is `Session.FindRequestByPath`; chain tests use a
-small map-backed fake.
+Resolves a `ChainStep` target. `FindRequestByID` is consulted first
+when the step carries a non-empty `RequestID` (the stable Request.ID
+of the target, persisted to YAML at `info.id`); `FindRequestByPath`
+is the slash-separated-name fallback when the ID is empty or
+doesn't match anything in the snapshot. The production implementation
+is `session.ChainFinderSnapshot`, which owns both an O(1) id map and
+the cloned tree for path walks. Chain tests use a small map-backed
+fake with a linear by-ID scan.
+
+### `ProgressFunc` ([chain.go](chain.go))
+
+```go
+type ProgressFunc func(step, total int, alias, name string)
+```
+
+Optional callback `Resolve` invokes once before each step's
+`ExecuteOnce`. `step` is 1-based across the whole Resolve; `total`
+is pre-walked upfront so callers can render `step N/total`. Runs on
+the calling goroutine — UI callers must marshal to the UI thread
+via `fyne.Do`.
 
 ## Functions
 
 | Function | Role |
 | -------- | --- |
-| `Resolve` | Public entry. Initializes the visiting set with the leaf's ID, delegates to `resolveSteps` for the leaf's own Chain, and returns (chainMap, console, err). |
-| `resolveSteps` | Walks one request's chain. For each step: validates alias / ref, looks up the predecessor via the finder, recursively resolves its own chain, executes it via the supplied executor, and accumulates the result. Cycle detection is keyed by `Request.ID` in the shared `visiting` map. |
+| `Resolve` | Public entry. Initializes the visiting set with the leaf's ID, optionally pre-walks the chain to compute the progress total, delegates to `resolveSteps` for the leaf's own Chain, and returns (chainMap, console, err). |
+| `resolveSteps` | Walks one request's chain. For each step: validates alias / ref, looks up the predecessor via `resolveTarget` (ID-first, path-fallback), recursively resolves its own chain, fires `progress` (if any), executes the step via the supplied executor, and accumulates the result. Cycle detection is keyed by `Request.ID` in the shared `visiting` map. |
+| `resolveTarget` | Per-step target lookup. Prefers `step.RequestID` via `finder.FindRequestByID`, falls back to `step.Request` via `finder.FindRequestByPath`. Returning false leaves the caller to surface the standard "cannot resolve" error against the path field. |
+| `countSteps` | Mirrors `resolveSteps` without executing — used by `Resolve` to compute the `total` passed to `ProgressFunc`. Same visiting / depth / step-cap semantics so the count matches the runtime walk. |
 
 ## What is NOT here
 

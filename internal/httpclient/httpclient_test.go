@@ -83,7 +83,7 @@ func TestPostJSONBodyAndHeaders(t *testing.T) {
 
 // TestUnresolvedVariablesError verifies that Build returns an error naming every unresolved {{variable}}.
 func TestUnresolvedVariablesError(t *testing.T) {
-	_, err := Build(context.Background(),
+	_, _, err := Build(context.Background(),
 		model.Request{Method: model.GET, URL: "{{base}}/{{missing}}"},
 		vars.New(map[string]string{"base": "http://x"}), nil)
 	if err == nil || !strings.Contains(err.Error(), "missing") {
@@ -146,7 +146,7 @@ func TestPostFormBodyFallsBackToContent(t *testing.T) {
 // reaches the outgoing Authorization header.
 func TestBuildAppliesAuthAfterVarResolution(t *testing.T) {
 	resolver := vars.New(map[string]string{"TOKEN": "abc123"})
-	req, err := Build(context.Background(), model.Request{
+	req, _, err := Build(context.Background(), model.Request{
 		Method: model.GET,
 		URL:    "https://example.com",
 		Auth: model.Auth{
@@ -166,7 +166,7 @@ func TestBuildAppliesAuthAfterVarResolution(t *testing.T) {
 // the auth section show up in the missing-variables error alongside any
 // from URL/headers/body.
 func TestBuildReportsUnresolvedAuthVars(t *testing.T) {
-	_, err := Build(context.Background(), model.Request{
+	_, _, err := Build(context.Background(), model.Request{
 		Method: model.GET,
 		URL:    "https://example.com",
 		Auth: model.Auth{
@@ -203,5 +203,44 @@ func TestCORSAdvisory(t *testing.T) {
 		if (got != "") != tc.wantWarn {
 			t.Errorf("%s: corsAdvisory=%q, wantWarn=%v", tc.name, got, tc.wantWarn)
 		}
+	}
+}
+
+// TestDoCapturesResolvedRequestURLAndBody verifies that Response.RequestURL
+// carries the resolved URL (vars substituted, query params merged) and
+// that Response.RequestBody carries the encoded body bytes. These are
+// the values chain.View surfaces as chain.<alias>.request.{url,body}
+// — so scripts inspecting a chain step see what was actually sent, not
+// the pre-resolution template.
+func TestDoCapturesResolvedRequestURLAndBody(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	c := New(model.DefaultSettings())
+	req := model.Request{
+		Method: model.POST,
+		URL:    "{{base}}/login",
+		Params: []model.KeyValue{{Enabled: true, Key: "ts", Value: "{{ts}}"}},
+		Body: model.Body{Type: model.BodyForm, Form: []model.KeyValue{
+			{Enabled: true, Key: "user", Value: "{{u}}"},
+			{Enabled: true, Key: "pw", Value: "{{p}}"},
+		}},
+	}
+	res := vars.New(map[string]string{"base": ts.URL, "ts": "1234", "u": "alice", "p": "s3cret"})
+	resp, err := c.Do(context.Background(), req, res)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if !strings.HasPrefix(resp.RequestURL, ts.URL+"/login") {
+		t.Errorf("RequestURL = %q, want prefix %q", resp.RequestURL, ts.URL+"/login")
+	}
+	if !strings.Contains(resp.RequestURL, "ts=1234") {
+		t.Errorf("RequestURL = %q, want merged query ts=1234", resp.RequestURL)
+	}
+	got := string(resp.RequestBody)
+	if !strings.Contains(got, "user=alice") || !strings.Contains(got, "pw=s3cret") {
+		t.Errorf("RequestBody = %q, want URL-encoded form with user=alice & pw=s3cret", got)
 	}
 }

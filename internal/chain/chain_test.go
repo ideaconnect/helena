@@ -11,11 +11,25 @@ import (
 )
 
 // fakeFinder is a tiny RequestFinder backed by a path → Request map.
+// FindRequestByID does a linear ID match across the values so tests
+// can exercise the by-ID seam without a second map.
 type fakeFinder map[string]model.Request
 
 func (f fakeFinder) FindRequestByPath(ref string) (model.Request, bool) {
 	r, ok := f[ref]
 	return r, ok
+}
+
+func (f fakeFinder) FindRequestByID(id string) (model.Request, bool) {
+	if id == "" {
+		return model.Request{}, false
+	}
+	for _, r := range f {
+		if r.ID == id {
+			return r, true
+		}
+	}
+	return model.Request{}, false
 }
 
 // recordingExec captures each ExecuteOnce call so tests can assert
@@ -53,7 +67,7 @@ func (e *recordingExec) ExecuteOnce(_ context.Context, r model.Request, chainMap
 func TestResolveEmptyChain(t *testing.T) {
 	leaf := model.Request{ID: "L", Name: "Leaf"}
 	exec := newRecordingExec()
-	m, console, err := Resolve(context.Background(), leaf, fakeFinder{}, exec)
+	m, console, err := Resolve(context.Background(), leaf, fakeFinder{}, exec, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -77,7 +91,7 @@ func TestResolveSingleStep(t *testing.T) {
 	}}
 	finder := fakeFinder{"Auth/Login": login}
 	exec := newRecordingExec()
-	m, console, err := Resolve(context.Background(), leaf, finder, exec)
+	m, console, err := Resolve(context.Background(), leaf, finder, exec, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -87,7 +101,9 @@ func TestResolveSingleStep(t *testing.T) {
 	if got := strings.Join(exec.calls, ","); got != "Login" {
 		t.Errorf("calls = %q, want 'Login'", got)
 	}
-	if len(console) != 1 || console[0] != "console:Login" {
+	// console contains the script's line followed by the runner's
+	// auto-trace line for the step.
+	if len(console) != 2 || console[0] != "console:Login" {
 		t.Errorf("console = %v", console)
 	}
 }
@@ -108,7 +124,7 @@ func TestResolveRecursiveOrder(t *testing.T) {
 		"Bootstrap":  bootstrap,
 	}
 	exec := newRecordingExec()
-	m, _, err := Resolve(context.Background(), leaf, finder, exec)
+	m, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -137,7 +153,7 @@ func TestResolveCycleDirect(t *testing.T) {
 	}}
 	finder := fakeFinder{"Leaf": leaf}
 	exec := newRecordingExec()
-	_, _, err := Resolve(context.Background(), leaf, finder, exec)
+	_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Errorf("err = %v, want cycle error", err)
 	}
@@ -153,7 +169,7 @@ func TestResolveCycleIndirect(t *testing.T) {
 	}}
 	finder := fakeFinder{"A": a, "B": b}
 	exec := newRecordingExec()
-	_, _, err := Resolve(context.Background(), a, finder, exec)
+	_, _, err := Resolve(context.Background(), a, finder, exec, nil)
 	if err == nil || !strings.Contains(err.Error(), "cycle") {
 		t.Errorf("err = %v, want cycle error", err)
 	}
@@ -166,7 +182,7 @@ func TestResolveUnknownRef(t *testing.T) {
 		{Alias: "missing", Request: "DoesNotExist"},
 	}}
 	exec := newRecordingExec()
-	_, _, err := Resolve(context.Background(), leaf, fakeFinder{}, exec)
+	_, _, err := Resolve(context.Background(), leaf, fakeFinder{}, exec, nil)
 	if err == nil || !strings.Contains(err.Error(), "DoesNotExist") {
 		t.Errorf("err = %v, want unresolved-ref error", err)
 	}
@@ -182,7 +198,7 @@ func TestResolveDuplicateAlias(t *testing.T) {
 	}}
 	finder := fakeFinder{"X": a}
 	exec := newRecordingExec()
-	_, _, err := Resolve(context.Background(), leaf, finder, exec)
+	_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
 	if err == nil || !strings.Contains(err.Error(), "duplicate alias") {
 		t.Errorf("err = %v, want duplicate-alias error", err)
 	}
@@ -194,7 +210,7 @@ func TestResolveMissingAlias(t *testing.T) {
 		{Alias: "", Request: "X"},
 	}}
 	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
-	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec())
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
 	if err == nil || !strings.Contains(err.Error(), "alias") {
 		t.Errorf("err = %v, want missing-alias error", err)
 	}
@@ -208,7 +224,7 @@ func TestResolveExecutorError(t *testing.T) {
 	}}
 	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
 	exec := failingExec{}
-	_, _, err := Resolve(context.Background(), leaf, finder, exec)
+	_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
 	if err == nil || !strings.Contains(err.Error(), "boom") {
 		t.Errorf("err = %v, want error naming step 'boom'", err)
 	}
@@ -241,7 +257,7 @@ func TestResolveDepthCap(t *testing.T) {
 		finder[name] = model.Request{ID: name, Name: name, Chain: chain}
 	}
 	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{{Alias: "next", Request: "r0"}}}
-	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec())
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
 	if err == nil || !strings.Contains(err.Error(), "depth") {
 		t.Errorf("err = %v, want depth-limit error", err)
 	}
@@ -258,7 +274,7 @@ func TestResolveStepCountCap(t *testing.T) {
 		finder[name] = model.Request{ID: name, Name: name}
 		leaf.Chain = append(leaf.Chain, model.ChainStep{Alias: fmt.Sprintf("b%d", i), Request: name})
 	}
-	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec())
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
 	if err == nil || !strings.Contains(err.Error(), "step count") {
 		t.Errorf("err = %v, want step-count limit error", err)
 	}
@@ -274,7 +290,7 @@ func TestResolveAliasMustBeJSIdentifier(t *testing.T) {
 		leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
 			{Alias: bad, Request: "X"},
 		}}
-		_, _, err := Resolve(context.Background(), leaf, finder, exec)
+		_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
 		if err == nil || !strings.Contains(err.Error(), "not a valid JS identifier") {
 			t.Errorf("alias %q: err = %v, want JS-identifier error", bad, err)
 		}
@@ -288,7 +304,7 @@ func TestResolveBothBlankRowGivesTightError(t *testing.T) {
 	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
 		{Alias: "", Request: ""},
 	}}
-	_, _, err := Resolve(context.Background(), leaf, fakeFinder{}, newRecordingExec())
+	_, _, err := Resolve(context.Background(), leaf, fakeFinder{}, newRecordingExec(), nil)
 	if err == nil || !strings.Contains(err.Error(), "missing both") {
 		t.Errorf("err = %v, want both-blank error", err)
 	}
@@ -304,7 +320,7 @@ func TestResolveConsoleAccumulatorTruncates(t *testing.T) {
 		{Alias: "noisy", Request: "Noisy"},
 	}}
 	exec := &noisyExec{count: MaxChainConsoleLines + 200}
-	_, console, err := Resolve(context.Background(), leaf, fakeFinder{"Noisy": noisy}, exec)
+	_, console, err := Resolve(context.Background(), leaf, fakeFinder{"Noisy": noisy}, exec, nil)
 	if err != nil {
 		t.Fatalf("err = %v", err)
 	}
@@ -325,4 +341,122 @@ func (n *noisyExec) ExecuteOnce(context.Context, model.Request, map[string]View)
 		lines[i] = fmt.Sprintf("line %d", i)
 	}
 	return View{Response: ResponseView{StatusCode: 200}}, lines, nil
+}
+
+// TestResolveProgressCallbackFiresPerStep verifies the progress
+// callback is invoked once per ExecuteOnce in execution order, with
+// 1-based step numbers, the upfront-counted total, and the resolved
+// alias + request name.
+func TestResolveProgressCallbackFiresPerStep(t *testing.T) {
+	d := model.Request{ID: "D", Name: "D"}
+	c := model.Request{ID: "C", Name: "C"}
+	b := model.Request{ID: "B", Name: "B", Chain: []model.ChainStep{{Alias: "csrf", Request: "D"}}}
+	leaf := model.Request{ID: "A", Name: "A", Chain: []model.ChainStep{
+		{Alias: "login", Request: "B"},
+		{Alias: "info", Request: "C"},
+	}}
+	finder := fakeFinder{"D": d, "C": c, "B": b}
+
+	type event struct {
+		step, total int
+		alias, name string
+	}
+	var events []event
+	progress := func(step, total int, alias, name string) {
+		events = append(events, event{step, total, alias, name})
+	}
+
+	if _, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), progress); err != nil {
+		t.Fatalf("Resolve err = %v", err)
+	}
+
+	want := []event{
+		{1, 3, "csrf", "D"},
+		{2, 3, "login", "B"},
+		{3, 3, "info", "C"},
+	}
+	if len(events) != len(want) {
+		t.Fatalf("progress events = %d, want %d (%+v)", len(events), len(want), events)
+	}
+	for i, ev := range events {
+		if ev != want[i] {
+			t.Errorf("event[%d] = %+v, want %+v", i, ev, want[i])
+		}
+	}
+}
+
+// TestResolveEmitsPerStepTrace verifies that for each chain step
+// whose HTTP actually went out (view.Request.URL non-empty), the
+// runner appends a "→ chain[<alias>] <METHOD> <URL>" line to the
+// shared console so the user can see what each step sent — including
+// any URL/method mutations from the step's pre-script.
+func TestResolveEmitsPerStepTrace(t *testing.T) {
+	login := model.Request{ID: "B", Name: "Login", Method: model.POST, URL: "https://auth/login"}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "login", Request: "Auth/Login"},
+	}}
+	finder := fakeFinder{"Auth/Login": login}
+	_, console, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
+	if err != nil {
+		t.Fatalf("Resolve err = %v", err)
+	}
+	want := "→ chain[login] POST https://auth/login"
+	found := false
+	for _, line := range console {
+		if line == want {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected trace %q in console %+v", want, console)
+	}
+}
+
+// TestResolveByRequestIDPrefersIDOverPath verifies that when a
+// ChainStep carries a RequestID matching a known request, the runner
+// uses it even if Request (the path) refers to a different — or
+// missing — entry. Pinning RequestID is how chain refs survive renames
+// and folder moves of the target.
+func TestResolveByRequestIDPrefersIDOverPath(t *testing.T) {
+	moved := model.Request{ID: "MOVED-ID", Name: "Renamed", URL: "https://x/renamed"}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "login", Request: "Old/Path/That/No/Longer/Exists", RequestID: "MOVED-ID"},
+	}}
+	finder := fakeFinder{"NewLocation/Renamed": moved}
+	exec := newRecordingExec()
+	m, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
+	if err != nil {
+		t.Fatalf("Resolve err = %v", err)
+	}
+	if got := m["login"].Request.URL; got != "https://x/renamed" {
+		t.Errorf("by-ID resolution missed: chain[login].url = %q", got)
+	}
+}
+
+// TestResolveByRequestIDFallsBackToPath verifies that when the
+// RequestID doesn't match any known request, resolution falls back to
+// the Request path. Ensures stale IDs don't break workflows that still
+// have a valid path.
+func TestResolveByRequestIDFallsBackToPath(t *testing.T) {
+	login := model.Request{ID: "B", Name: "Login", URL: "https://auth/login"}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "login", Request: "Auth/Login", RequestID: "stale-id-never-existed"},
+	}}
+	finder := fakeFinder{"Auth/Login": login}
+	if _, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil); err != nil {
+		t.Errorf("expected fallback to path; err = %v", err)
+	}
+}
+
+// TestResolveProgressCallbackNilSafe verifies that passing nil as the
+// progress callback does not panic and runs the chain to completion.
+func TestResolveProgressCallbackNilSafe(t *testing.T) {
+	b := model.Request{ID: "B", Name: "B"}
+	leaf := model.Request{ID: "A", Name: "A", Chain: []model.ChainStep{
+		{Alias: "login", Request: "B"},
+	}}
+	if _, _, err := Resolve(context.Background(), leaf, fakeFinder{"B": b}, newRecordingExec(), nil); err != nil {
+		t.Errorf("nil-progress Resolve err = %v", err)
+	}
 }

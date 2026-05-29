@@ -57,17 +57,21 @@ func TestChainTabWriteBack(t *testing.T) {
 	}
 }
 
-// TestPruneEmptyChain verifies blank rows are dropped on save so the
-// YAML stays clean for users who clicked +Add without filling in.
+// TestPruneEmptyChain verifies blank rows are dropped on save and
+// that the half-filled count is reported so the save status line can
+// flag lost intent.
 func TestPruneEmptyChain(t *testing.T) {
 	in := []model.ChainStep{
 		{Alias: "good", Request: "X"},
-		{Alias: "", Request: "Y"},
-		{Alias: "no-ref", Request: ""},
-		{Alias: "  ", Request: "  "},
+		{Alias: "", Request: "Y"},      // half-filled: ref only
+		{Alias: "no-ref", Request: ""}, // half-filled: alias only
+		{Alias: "  ", Request: "  "},   // both-blank: silent drop
 	}
-	out := pruneEmptyChain(in)
+	out, halfFilled := pruneEmptyChain(in)
 	if len(out) != 1 || out[0].Alias != "good" {
-		t.Errorf("pruneEmptyChain = %+v, want [{good X}]", out)
+		t.Errorf("pruneEmptyChain cleaned = %+v, want [{good X}]", out)
+	}
+	if halfFilled != 2 {
+		t.Errorf("halfFilled = %d, want 2", halfFilled)
 	}
 }

@@ -21,14 +21,14 @@ the output on marshal. This is the heart of the lossless round-trip.
 
 | DTO | Mirrors | Domain counterpart |
 | --- | --- | --- |
-| `ocInfo` | the `info:` block on every file (name, type, seq, tags + Extra) | the `Name` and `Type` discrimination on each model type |
+| `ocInfo` | the `info:` block on every file (name, **id**, type, seq, tags + Extra) | the `Name`, `ID`, and `Type` discrimination on each model type. `id` is Helena's stable identifier; files without one get a fresh ID on Load that the next Save persists. |
 | `ocKV` | a header entry (name/value/disabled + Extra) | `model.KeyValue` (Key/Value/Enabled, with Disabled inverted) |
 | `ocParam` | a query/path parameter (name/value/type/disabled + Extra) | `model.KeyValue` used for `model.Request.Params` |
 | `ocBody` | a request body (`type`, `data` + Extra) | `model.Body` (`Type`, `Content`) |
 | `ocHTTP` | the `http:` block of a request (method, url, headers, params, body, auth + Extra) | the HTTP-level fields of `model.Request` |
 | `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + Extra) | `model.Request` |
 | `ocScripts` | the per-request `scripts:` block (`preRequest`, `postResponse`, + Extra) | `model.Scripts` |
-| `ocChainStep` | one entry under `chain:` (`alias`, `request`, + Extra) | `model.ChainStep` |
+| `ocChainStep` | one entry under `chain:` (`alias`, `request`, `requestId`, + Extra) | `model.ChainStep`. `requestId` pins the ref to the target's persistent `Request.ID` so renames + folder moves don't break the chain. |
 | `ocFolderFile` | one `folder.yml` (info + auth + Extra) | `model.Folder` (name + auth; folders/requests are read from the surrounding directory) |
 | `ocCollectionFile` | the root `opencollection.yml` (info + auth + Extra) | the top-level `model.Collection` (name + auth; the rest comes from the directory) |
 | `ocAuth` | the `auth:` block on requests / folders / collections (`type`, one sub-block, + Extra) | `model.Auth` |
@@ -41,7 +41,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | Function | Direction |
 | --- | --- |
 | [`requestToFile`](opencollection.go) | `model.Request` → `ocRequestFile` for marshalling. |
-| [`fileToRequest`](opencollection.go) | `ocRequestFile` → `model.Request`, assigning a fresh ID. Missing auth defaults to `AuthInherit`. |
+| [`fileToRequest`](opencollection.go) | `ocRequestFile` → `model.Request`. Preserves `info.id` when present (so chain-step `requestId` pins stay valid across reloads); generates a fresh ID when absent (the next Save persists it). Missing auth defaults to `AuthInherit`. |
 | [`envToFile`](opencollection.go) | `model.Environment` → `ocEnvironmentFile`. |
 | [`fileToEnv`](opencollection.go) | `ocEnvironmentFile` → `model.Environment`, assigning a fresh ID. |
 | [`authToFile`](opencollection.go) | `model.Auth` → `*ocAuth`. Returns nil for `""` / `Inherit` so the YAML stays clean for collections that never configured auth. |

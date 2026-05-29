@@ -490,6 +490,20 @@ func joinChainSegment(prefix, name string) string {
 	return prefix + "/" + name
 }
 
+// RequestIDForPath looks up the persistent Request.ID of the request at
+// chain-ref path `ref` in the active collection. Used by the UI's
+// Chain tab so picking a path from autocomplete also pins the chain
+// step's RequestID — the resulting reference then survives renames or
+// folder moves of the target. Returns ("", false) when no collection
+// is loaded, the path is empty, or the path doesn't resolve.
+func (s *Session) RequestIDForPath(ref string) (string, bool) {
+	r, ok := s.FindRequestByPath(ref)
+	if !ok {
+		return "", false
+	}
+	return r.ID, true
+}
+
 // SnapshotChainFinder returns a snapshot of the active collection
 // reusable from the worker goroutine: it owns its own copies of the
 // folders/requests trees plus every request's slice-backed fields, and
@@ -509,8 +523,26 @@ func (s *Session) SnapshotChainFinder() *ChainFinderSnapshot {
 	snap := &ChainFinderSnapshot{
 		folders:  cloneFoldersWithAuth(col.Folders, []model.Auth{col.Auth}),
 		requests: cloneRequestsWithAuth(col.Requests, []model.Auth{col.Auth}),
+		byID:     map[string]model.Request{},
 	}
+	indexRequestsByID(snap.byID, snap.folders, snap.requests)
 	return snap
+}
+
+// indexRequestsByID populates dst with id → Request entries for every
+// request in the cloned snapshot tree. Empty IDs are skipped; the
+// chain runner treats them as "no pinned ID" and uses the path
+// fallback. Used only at SnapshotChainFinder construction so the
+// snapshot owns a self-contained ID lookup.
+func indexRequestsByID(dst map[string]model.Request, folders []model.Folder, requests []model.Request) {
+	for _, r := range requests {
+		if r.ID != "" {
+			dst[r.ID] = r
+		}
+	}
+	for _, f := range folders {
+		indexRequestsByID(dst, f.Folders, f.Requests)
+	}
 }
 
 // ChainFinderSnapshot satisfies chain.RequestFinder and owns a deep
@@ -518,10 +550,12 @@ func (s *Session) SnapshotChainFinder() *ChainFinderSnapshot {
 // each request's Auth via auth.Resolve(own, ancestors) so chain steps
 // inherit the same way the leaf does (the Send-time leaf flattening at
 // shell.go uses EffectiveAuth; this snapshot does the same walk per
-// request).
+// request). byID is built alongside the cloned tree so chain steps
+// pinned with RequestID resolve in O(1) without walking the tree.
 type ChainFinderSnapshot struct {
 	folders  []model.Folder
 	requests []model.Request
+	byID     map[string]model.Request
 }
 
 // FindRequestByPath is the chain.RequestFinder implementation. Uses
@@ -535,6 +569,17 @@ func (f *ChainFinderSnapshot) FindRequestByPath(ref string) (model.Request, bool
 		return model.Request{}, false
 	}
 	return findRequestInContainer(f.folders, f.requests, parts)
+}
+
+// FindRequestByID is the chain.RequestFinder by-ID implementation. The
+// id map was built once at snapshot construction so this is constant
+// time and never reaches back into the live session state.
+func (f *ChainFinderSnapshot) FindRequestByID(id string) (model.Request, bool) {
+	if f == nil || id == "" {
+		return model.Request{}, false
+	}
+	r, ok := f.byID[id]
+	return r, ok
 }
 
 // cloneFoldersWithAuth deep-copies the folder tree and pre-flattens

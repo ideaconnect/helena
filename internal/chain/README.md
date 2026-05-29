@@ -96,6 +96,16 @@ token already plumbed through.
   request whose own Auth is `Inherit` carries its parent folder's
   Bearer/OAuth2 into the chained Send, just like sending it directly
   from the tree would.
+- **ID-pinned refs survive renames + folder moves.** A `ChainStep`
+  populated with `RequestID` (the target's persistent `Request.ID`,
+  written to `info.id` in YAML) resolves by ID first; the runner
+  falls back to the human-readable `Request` path only when the ID
+  doesn't match anything in the snapshot. The UI Chain tab captures
+  the target's ID automatically when the user picks a path from the
+  autocomplete; manually-typed paths leave the ID blank and resolve
+  by path. Mixing both means a renamed target still resolves
+  cleanly (the ID still matches), while imported / hand-authored
+  chains that never had an ID continue to resolve by path.
 - **Chain step URL/method mutations are not surfaced in the UI.** The
   status-line `· sent <METHOD> <URL>` suffix only fires for the LEAF
   request. A chain step's pre-script can rewrite its own
@@ -110,7 +120,10 @@ func Resolve(
     leaf model.Request,
     finder RequestFinder,
     exec Executor,
+    progress ProgressFunc,
 ) (map[string]View, []string, error)
+
+type ProgressFunc func(step, total int, alias, name string)
 
 type View struct {
     Request  RequestView
@@ -143,6 +156,7 @@ type Executor interface {
 
 type RequestFinder interface {
     FindRequestByPath(ref string) (model.Request, bool)
+    FindRequestByID(id string) (model.Request, bool)
 }
 ```
 
@@ -152,6 +166,13 @@ already executed), plus accumulated console output from every step
 the executor ran along the way. The leaf itself is run by the
 caller — the UI Send pipeline reuses the same `Executor` with the
 returned chain map.
+
+The optional `progress` callback (pass `nil` to disable) fires once
+before each chain step's `ExecuteOnce`. `step` is 1-based across the
+whole Resolve; `total` is computed upfront by a finder pre-walk so
+callers can show `step N/total`. The callback runs on the goroutine
+calling `Resolve` — UI callers must marshal to the UI thread (e.g.
+via `fyne.Do`).
 
 ## Dependencies
 

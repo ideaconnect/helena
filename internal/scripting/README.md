@@ -143,8 +143,8 @@ Each entry has two sub-objects:
 | Property | Type | Notes |
 | -------- | ---- | ----- |
 | `chain.<alias>.request.method` | string | The method the predecessor was sent with (post-pre-script mutations). |
-| `chain.<alias>.request.url` | string | URL the script set on the predecessor's `request.url` before Send — `{{vars}}` are NOT expanded here; httpclient resolves them as the predecessor's request goes out and doesn't write the resolved form back into the model. |
-| `chain.<alias>.request.body` | string | The predecessor's `request.body` after pre-script writeback. For form-urlencoded / multipart bodies whose canonical source is `Body.Form`, this string is empty — httpclient builds the wire body from `Body.Form` and that encoded form is not echoed back here. Read `chain.<alias>.request.form` (if Helena adds it) or `response.body` round-trips for the encoded form. |
+| `chain.<alias>.request.url` | string | Resolved URL the predecessor was sent to — `{{vars}}` substituted, query params merged. Matches what `httpclient.Response.RequestURL` recorded for the request. |
+| `chain.<alias>.request.body` | string | Encoded wire body of the predecessor. For `form-urlencoded` bodies the URL-encoded form; for `multipart` bodies the multipart envelope; for JSON / XML / text the raw bytes the server received. Matches `httpclient.Response.RequestBody`. Empty for bodyless requests. |
 | `chain.<alias>.response.*` | object | Identical shape to the top-level `response` global (status, statusText, headers, body, text, json, xml). **`json` and `xml` are lazy** — parsed on first access and cached, so a leaf script that only reads `chain.login.response.body` doesn't pay the parse cost. |
 
 Alias scope is **per request** — when request B runs as part of A's
