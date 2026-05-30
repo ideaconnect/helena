@@ -27,7 +27,7 @@ func (m *MainUI) actionExport() {
 	if m.currentRequest != nil {
 		req = *m.currentRequest
 	} else {
-		req = model.Request{Method: model.Method(m.Method.Selected), URL: m.URL.Text}
+		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
 	}
 
 	res := m.sess.Resolver()

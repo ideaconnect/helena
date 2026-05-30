@@ -1,0 +1,59 @@
+swagger: "2.0"
+info:
+  title: Parameters Showcase
+  version: 1.0.0
+host: api.example.com
+basePath: /
+schemes:
+  - https
+paths:
+  /search:
+    get:
+      summary: Search
+      tags:
+        - search
+      parameters:
+        - in: query
+          name: q
+          required: true
+          type: string
+        - in: query
+          name: limit
+          required: false
+          type: integer
+          default: 10
+        - in: header
+          name: X-Token
+          required: false
+          type: string
+      responses:
+        '200':
+          description: Results
+  /upload:
+    post:
+      summary: Upload
+      consumes:
+        - multipart/form-data
+      parameters:
+        - in: formData
+          name: file
+          required: true
+          type: file
+        - in: formData
+          name: caption
+          required: false
+          type: string
+      responses:
+        '201':
+          description: Uploaded
+  /items/{id}:
+    delete:
+      summary: Delete an item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          type: string
+      responses:
+        '204':
+          description: Deleted

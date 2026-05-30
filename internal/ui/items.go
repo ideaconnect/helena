@@ -75,13 +75,39 @@ func (m *MainUI) actionNewFolder() {
 	})
 }
 
+// actionRename / actionDelete / actionDuplicate are the
+// keyboard-shortcut + global-button entry points; they operate on the
+// last-selected node. They delegate to the renameNode / deleteNode /
+// duplicateNode helpers that the per-row tree icons also call so all
+// paths share the same prompt + confirmation flow.
 func (m *MainUI) actionRename() {
-	if m.win == nil {
+	if m.lastSelectedNodeID == "" {
+		m.Status.SetText("Select an item to rename")
 		return
 	}
-	id := m.lastSelectedNodeID
-	if id == "" {
-		m.Status.SetText("Select an item to rename")
+	m.renameNode(m.lastSelectedNodeID)
+}
+
+func (m *MainUI) actionDelete() {
+	if m.lastSelectedNodeID == "" {
+		m.Status.SetText("Select an item to delete")
+		return
+	}
+	m.deleteNode(m.lastSelectedNodeID)
+}
+
+func (m *MainUI) actionDuplicate() {
+	if m.lastSelectedNodeID == "" {
+		m.Status.SetText("Select an item to duplicate")
+		return
+	}
+	m.duplicateNode(m.lastSelectedNodeID)
+}
+
+// renameNode prompts for a new name and applies it to the node at id.
+// Shared by the global Rename button + per-row rename icons.
+func (m *MainUI) renameNode(id string) {
+	if m.win == nil || id == "" {
 		return
 	}
 	current := nameOfNode(m, id)
@@ -95,13 +121,12 @@ func (m *MainUI) actionRename() {
 	})
 }
 
-func (m *MainUI) actionDelete() {
-	if m.win == nil {
-		return
-	}
-	id := m.lastSelectedNodeID
-	if id == "" {
-		m.Status.SetText("Select an item to delete")
+// deleteNode asks for confirmation, then deletes the node at id.
+// Centralised so the global Delete button and the per-row delete
+// icons share the same confirmation dialog (invariant from 9.13:
+// every deletion must confirm).
+func (m *MainUI) deleteNode(id string) {
+	if m.win == nil || id == "" {
 		return
 	}
 	label := nameOfNode(m, id)
@@ -111,8 +136,9 @@ func (m *MainUI) actionDelete() {
 			if !yes {
 				return
 			}
-			// If the doomed node is the currently open request (or contains it),
-			// clear the editor so we don't keep a stale pointer.
+			// If the doomed node is the currently open request (or
+			// contains it), clear the editor so we don't keep a stale
+			// pointer into the deleted subtree.
 			if id == m.currentRequestID || isAncestor(id, m.currentRequestID) {
 				m.loadRequest(nil, "")
 			}
@@ -120,19 +146,20 @@ func (m *MainUI) actionDelete() {
 				dialog.ShowError(err, m.win)
 				return
 			}
-			m.lastSelectedNodeID = ""
+			if m.lastSelectedNodeID == id {
+				m.lastSelectedNodeID = ""
+				m.refreshTreeActions()
+			}
 			m.Tree.Refresh()
 			m.Status.SetText("Deleted: " + label)
 		}, m.win)
 }
 
-func (m *MainUI) actionDuplicate() {
-	if m.win == nil {
-		return
-	}
-	id := m.lastSelectedNodeID
-	if id == "" {
-		m.Status.SetText("Select an item to duplicate")
+// duplicateNode clones the node at id and selects the new copy. Shared
+// by the global Duplicate button (now removed in favour of row icons)
+// and the per-row copy icon on request rows.
+func (m *MainUI) duplicateNode(id string) {
+	if m.win == nil || id == "" {
 		return
 	}
 	newID, err := m.sess.DuplicateItem(id)

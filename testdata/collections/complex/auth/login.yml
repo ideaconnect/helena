@@ -1,0 +1,13 @@
+info:
+  name: Login
+  type: http
+  seq: 1
+http:
+  method: POST
+  url: https://api.example.com/login
+  body:
+    type: json
+    data: '{"username":"{{USER}}","password":"{{PASS}}"}'
+scripts:
+  postResponse: |
+    helena.env.set("TOKEN", response.json.token);

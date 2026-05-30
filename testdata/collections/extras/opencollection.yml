@@ -1,0 +1,15 @@
+# Hand-authored fixture exercising the Extras round-trip
+# invariant (AGENTS #1): unknown YAML fields on every DTO must
+# survive Save → Load bit-for-bit. Loading this directory then
+# saving it back should keep every `helena-x-*` and `tests:` key.
+info:
+  name: Extras
+  type: collection
+  helena-x-collection-marker: collection-extra
+settings:
+  customCollectionSetting: 42
+auth:
+  type: bearer
+  bearer:
+    token: extras-token
+    helena-x-bearer-marker: bearer-extra

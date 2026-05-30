@@ -1,0 +1,8 @@
+info:
+  name: Auth
+  type: folder
+  seq: 1
+auth:
+  type: bearer
+  bearer:
+    token: "{{TOKEN}}"

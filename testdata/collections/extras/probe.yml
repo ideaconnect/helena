@@ -1,0 +1,25 @@
+info:
+  name: Probe
+  type: http
+  seq: 1
+  helena-x-info-marker: info-extra
+http:
+  method: GET
+  url: https://api.example.com/probe
+  headers:
+    - name: X-Trace
+      value: trace-value
+      helena-x-header-marker: header-extra
+  params:
+    - name: q
+      value: search
+      type: query
+      helena-x-param-marker: param-extra
+scripts:
+  tests:
+    framework: external
+    runner: cypress
+chain:
+  - alias: boot
+    request: Bootstrap
+    helena-x-chain-marker: chain-extra

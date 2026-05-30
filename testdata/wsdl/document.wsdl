@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Document/literal-style WSDL with an embedded schema. Exercises
+  the importer's handling of element-typed messages (vs the
+  primitive-typed messages in rpc.wsdl).
+-->
+<definitions
+    name="Greeter"
+    targetNamespace="http://example.com/greeter"
+    xmlns:tns="http://example.com/greeter"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns="http://schemas.xmlsoap.org/wsdl/">
+
+  <types>
+    <xsd:schema targetNamespace="http://example.com/greeter">
+      <xsd:element name="HelloRequest">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="name" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+      <xsd:element name="HelloResponse">
+        <xsd:complexType>
+          <xsd:sequence>
+            <xsd:element name="greeting" type="xsd:string"/>
+          </xsd:sequence>
+        </xsd:complexType>
+      </xsd:element>
+    </xsd:schema>
+  </types>
+
+  <message name="HelloIn">
+    <part name="parameters" element="tns:HelloRequest"/>
+  </message>
+  <message name="HelloOut">
+    <part name="parameters" element="tns:HelloResponse"/>
+  </message>
+
+  <portType name="GreeterPortType">
+    <operation name="SayHello">
+      <input message="tns:HelloIn"/>
+      <output message="tns:HelloOut"/>
+    </operation>
+  </portType>
+
+  <binding name="GreeterBinding" type="tns:GreeterPortType">
+    <soap:binding style="document" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="SayHello">
+      <soap:operation soapAction="http://example.com/greeter/SayHello"/>
+      <input><soap:body use="literal"/></input>
+      <output><soap:body use="literal"/></output>
+    </operation>
+  </binding>
+
+  <service name="GreeterService">
+    <port name="GreeterPort" binding="tns:GreeterBinding">
+      <soap:address location="https://example.com/greeter"/>
+    </port>
+  </service>
+</definitions>

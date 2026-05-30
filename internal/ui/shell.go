@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/idct/helena/assets"
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
@@ -156,7 +157,7 @@ type MainUI struct {
 
 	Workspace   *widget.Select
 	Environment *widget.Select
-	Method      *widget.Select
+	Method      *methodPicker
 	URL         *widget.Entry
 	urlPreview  *widget.Label
 	Save        *widget.Button
@@ -203,6 +204,12 @@ type MainUI struct {
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
 
+	// Sidebar action buttons. addReqBtn / addFolderBtn need to disable
+	// when there's no valid parent (no active collection); refreshTreeActions
+	// keeps them in sync with the tree selection + active collection.
+	addReqBtn    *widget.Button
+	addFolderBtn *widget.Button
+
 	// sendCancel is non-nil while a Send goroutine is in flight; the
 	// Send button doubles as Abort in that state. Set + cleared on the
 	// UI thread only; the cancel func itself is goroutine-safe.
@@ -226,7 +233,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.Environment = widget.NewSelect([]string{noEnv}, m.onEnvChanged)
 	m.Environment.SetSelected(noEnv)
 
-	m.Method = widget.NewSelect(methodNames(), func(s string) {
+	m.Method = newMethodPicker(func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Method = model.Method(s)
 		}
@@ -249,7 +256,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 
 	m.Save = widget.NewButton("Save", m.saveRequest)
 	m.Save.Disable()
-	m.Send = widget.NewButton("Send", nil)
+	// Send shows just the send-diagonal-solid icon by default;
+	// abort mode swaps to text "Abort" with warning importance.
+	m.Send = widget.NewButtonWithIcon("", assets.Icon("send-diagonal-solid"), nil)
 	m.Send.Importance = widget.HighImportance
 
 	m.Tree = m.buildTree()
@@ -318,18 +327,21 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.Send.OnTapped = m.sendOrAbort
 
 	wsBtn := widget.NewButton("Workspaces…", m.editWorkspaces)
-	envBtn := widget.NewButton("Environments…", m.editEnvironments)
+	envBtn := widget.NewButton("Variables…", m.editEnvironments)
 	settingsBtn := widget.NewButton("Settings…", m.editSettings)
 	helpBtn := widget.NewButton("?", m.showShortcuts)
 	toolbar := container.NewHBox(
 		widget.NewLabel("Workspace:"), m.Workspace, wsBtn,
-		widget.NewLabel("Env:"), m.Environment, envBtn,
+		widget.NewLabel("Environment:"), m.Environment, envBtn,
 		settingsBtn, helpBtn,
 	)
 	exportBtn := widget.NewButton("Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)
 	addressBar := container.NewBorder(nil, nil, m.Method, saveSendBox, m.URL)
-	top := container.NewVBox(toolbar, addressBar, m.urlPreview)
+	// The address bar + URL preview live in the editor column (not the
+	// global top bar) so the sidebar runs floor-to-ceiling on the left
+	// and the URL bar starts exactly where the request editor starts.
+	editorTop := container.NewVBox(addressBar, m.urlPreview)
 
 	newColBtn := widget.NewButton("+ New", m.actionNewCollection)
 	openBtn := widget.NewButton("Open…", m.openCollection)
@@ -337,12 +349,15 @@ func NewMainUI(sess *session.Session) *MainUI {
 	sidebarHeader := container.NewBorder(nil, nil,
 		widget.NewLabelWithStyle("Collections", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		container.NewHBox(newColBtn, openBtn, importBtn))
+	m.addReqBtn = widget.NewButton("+ Req", m.actionNewRequest)
+	m.addFolderBtn = widget.NewButton("+ Folder", m.actionNewFolder)
+	// Rename / Duplicate / Delete moved to per-row tree icons (9.12).
+	// Only the add affordances live in the sidebar header now; the
+	// keyboard shortcuts still call actionRename / actionDelete /
+	// actionDuplicate against the last-selected node.
 	itemActions := container.NewHBox(
-		widget.NewButton("+ Req", m.actionNewRequest),
-		widget.NewButton("+ Folder", m.actionNewFolder),
-		widget.NewButton("Rename", m.actionRename),
-		widget.NewButton("Duplicate", m.actionDuplicate),
-		widget.NewButton("Delete", m.actionDelete),
+		m.addReqBtn,
+		m.addFolderBtn,
 	)
 	sidebarTop := container.NewVBox(sidebarHeader, itemActions)
 	sidebar := container.NewBorder(sidebarTop, nil, nil, nil, m.Tree)
@@ -350,12 +365,16 @@ func NewMainUI(sess *session.Session) *MainUI {
 	responsePanel := container.NewBorder(m.corsBanner, nil, nil, nil, m.Response)
 	editor := container.NewVSplit(m.Request, responsePanel)
 	editor.SetOffset(0.5)
-	body := container.NewHSplit(sidebar, editor)
+	// Editor column carries its own address bar so the sidebar runs
+	// full-height to the left of it (9.1).
+	editorColumn := container.NewBorder(editorTop, nil, nil, nil, editor)
+	body := container.NewHSplit(sidebar, editorColumn)
 	body.SetOffset(0.25)
 
-	m.root = container.NewBorder(top, m.Status, nil, nil, body)
+	m.root = container.NewBorder(toolbar, m.Status, nil, nil, body)
 
 	m.refreshEnvironments()
+	m.refreshTreeActions()
 	if id := sess.OpenRequest(); id != "" {
 		m.Tree.Select(id)
 	}
@@ -373,12 +392,22 @@ func (m *MainUI) SetWindow(w fyne.Window) {
 }
 
 func (m *MainUI) buildTree() *widget.Tree {
+	actions := rowActions{
+		onRename:    m.renameNode,
+		onDelete:    m.deleteNode,
+		onDuplicate: m.duplicateNode,
+	}
 	t := widget.NewTree(
 		func(id widget.TreeNodeID) []widget.TreeNodeID { return m.sess.Tree().ChildIDs(id) },
 		func(id widget.TreeNodeID) bool { return m.sess.Tree().IsBranch(id) },
-		func(bool) fyne.CanvasObject { return widget.NewLabel("template") },
+		func(bool) fyne.CanvasObject { return newTreeRow(actions) },
 		func(id widget.TreeNodeID, _ bool, o fyne.CanvasObject) {
-			o.(*widget.Label).SetText(m.sess.Tree().Label(id))
+			row := o.(*treeRow)
+			if r, ok := m.sess.Tree().Request(id); ok {
+				row.setRequest(id, string(r.Method), r.Name)
+			} else {
+				row.setBranch(id, m.sess.Tree().Label(id))
+			}
 		},
 	)
 	t.OnSelected = func(id widget.TreeNodeID) {
@@ -387,6 +416,7 @@ func (m *MainUI) buildTree() *widget.Tree {
 			m.sess.SetActiveCollection(ci)
 			m.refreshEnvironments()
 		}
+		m.refreshTreeActions()
 		r, ok := m.sess.Tree().Request(id)
 		if !ok {
 			return
@@ -396,6 +426,24 @@ func (m *MainUI) buildTree() *widget.Tree {
 		m.sess.SetOpenRequest(id)
 	}
 	return t
+}
+
+// refreshTreeActions enables/disables the sidebar +Req / +Folder
+// buttons based on whether parentForNew() can produce a valid parent
+// (i.e., either the user has selected a tree node or there's an
+// active collection to add to). Called from Tree.OnSelected,
+// workspace switches, and the collection open / close paths.
+func (m *MainUI) refreshTreeActions() {
+	if m.addReqBtn == nil || m.addFolderBtn == nil {
+		return // called before sidebar built
+	}
+	if m.parentForNew() == "" {
+		m.addReqBtn.Disable()
+		m.addFolderBtn.Disable()
+	} else {
+		m.addReqBtn.Enable()
+		m.addFolderBtn.Enable()
+	}
 }
 
 // loadRequest populates every editor widget from req, with the loading flag set
@@ -641,9 +689,17 @@ func (m *MainUI) onWorkspaceChanged(name string) {
 			break
 		}
 	}
+	// A workspace switch invalidates the selected node and the active
+	// collection. Reset selection state + refresh dependent widgets so
+	// the +Req / +Folder buttons and the Variables dialog read the
+	// new workspace's session, not a stale closure.
+	m.lastSelectedNodeID = ""
 	if m.Tree != nil {
+		m.Tree.UnselectAll()
 		m.Tree.Refresh()
 	}
+	m.refreshTreeActions()
+	m.refreshEnvironments()
 }
 
 // openCollection shows a folder picker and asks the session to load whatever
@@ -664,6 +720,8 @@ func (m *MainUI) openCollection() {
 				return
 			}
 			m.Tree.Refresh()
+			m.refreshTreeActions()
+			m.refreshEnvironments()
 			m.Status.SetText("Opened collection: " + u.Name())
 		}
 	}, m.win)
@@ -694,7 +752,8 @@ func (m *MainUI) sendOrAbort() {
 // fyne.Do block.
 func (m *MainUI) resetSendButton() {
 	m.sendCancel = nil
-	m.Send.SetText("Send")
+	m.Send.SetIcon(assets.Icon("send-diagonal-solid"))
+	m.Send.SetText("")
 	m.Send.Importance = widget.HighImportance
 	m.Send.Refresh()
 }
@@ -719,7 +778,7 @@ func (m *MainUI) send() {
 		// ancestor walk so httpclient sees the concrete auth.
 		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
 	} else {
-		req = model.Request{Method: model.Method(m.Method.Selected), URL: m.URL.Text}
+		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
 	}
 	// Snapshot env vars + auth state on the UI goroutine so the worker
 	// goroutine can run for ~ScriptTimeout without racing against UI
@@ -754,6 +813,10 @@ func (m *MainUI) send() {
 	// Send. The button text swap signals the toggled mode to the user.
 	ctx, cancel := context.WithCancel(context.Background())
 	m.sendCancel = cancel
+	// In abort mode the icon goes away and the button shows "Abort"
+	// in warning-importance text — visually distinct from the default
+	// icon-only Send state.
+	m.Send.SetIcon(nil)
 	m.Send.SetText("Abort")
 	m.Send.Importance = widget.WarningImportance
 	m.Send.Refresh()
@@ -891,7 +954,12 @@ func (m *MainUI) onEnvChanged(name string) {
 
 // refreshEnvironments reseeds the Environment dropdown from the active
 // collection's environment list and restores the previously selected name.
+// Tolerates being called before the Environment widget is built (e.g.
+// during Workspace dropdown's initial selection inside NewMainUI).
 func (m *MainUI) refreshEnvironments() {
+	if m.Environment == nil {
+		return
+	}
 	m.Environment.Options = append([]string{noEnv}, m.sess.CollectionEnvironmentNames()...)
 	sel := m.sess.ActiveEnvName()
 	if sel == "" {

@@ -1,0 +1,5 @@
+info:
+  name: Complex
+  type: collection
+auth:
+  type: none

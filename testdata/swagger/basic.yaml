@@ -1,0 +1,19 @@
+swagger: "2.0"
+info:
+  title: Legacy API
+  version: 1.0.0
+host: api.legacy.example.com
+basePath: /v1
+schemes:
+  - https
+paths:
+  /ping:
+    get:
+      summary: Ping
+      tags:
+        - ops
+      produces:
+        - application/json
+      responses:
+        '200':
+          description: OK

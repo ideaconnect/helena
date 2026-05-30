@@ -24,8 +24,8 @@ func TestNewMainUIBuilds(t *testing.T) {
 	if m.Root() == nil {
 		t.Fatal("Root() is nil")
 	}
-	if m.Method.Selected != "GET" {
-		t.Errorf("default method = %q, want GET", m.Method.Selected)
+	if m.Method.Selected() != "GET" {
+		t.Errorf("default method = %q, want GET", m.Method.Selected())
 	}
 	if m.Workspace.Selected != "Default" {
 		t.Errorf("workspace = %q, want Default", m.Workspace.Selected)
@@ -49,8 +49,12 @@ func TestSendOrAbortDispatch(t *testing.T) {
 	sess, _ := session.New("")
 	m := NewMainUI(sess)
 
-	if got := m.Send.Text; got != "Send" {
-		t.Errorf("initial button text = %q, want Send", got)
+	// Default state: icon set, no text.
+	if m.Send.Icon == nil {
+		t.Error("initial Send button has no icon (expected send-diagonal-solid)")
+	}
+	if m.Send.Text != "" {
+		t.Errorf("initial Send button text = %q, want empty (icon-only)", m.Send.Text)
 	}
 	if m.sendCancel != nil {
 		t.Error("initial sendCancel is non-nil")
@@ -59,6 +63,7 @@ func TestSendOrAbortDispatch(t *testing.T) {
 	// Simulate an in-flight Send by stashing a fake cancel func.
 	cancelled := false
 	m.sendCancel = func() { cancelled = true }
+	m.Send.SetIcon(nil)
 	m.Send.SetText("Abort")
 
 	m.sendOrAbort()
@@ -77,7 +82,10 @@ func TestSendOrAbortDispatch(t *testing.T) {
 	if m.sendCancel != nil {
 		t.Error("resetSendButton left sendCancel non-nil")
 	}
-	if m.Send.Text != "Send" {
-		t.Errorf("resetSendButton text = %q, want Send", m.Send.Text)
+	if m.Send.Text != "" {
+		t.Errorf("resetSendButton text = %q, want empty (icon-only)", m.Send.Text)
+	}
+	if m.Send.Icon == nil {
+		t.Error("resetSendButton did not restore the icon")
 	}
 }

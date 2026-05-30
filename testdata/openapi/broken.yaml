@@ -1,0 +1,11 @@
+# Intentionally malformed: paths block is unterminated. Used by
+# negative-path tests that verify the importer surfaces a clear
+# parse error rather than panicking on bad input.
+openapi: 3.0.0
+info:
+  title: Broken Spec
+  version: 0.0.0
+paths:
+  /broken:
+    get:
+      summary: [unterminated-array

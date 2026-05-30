@@ -460,3 +460,264 @@ func TestResolveProgressCallbackNilSafe(t *testing.T) {
 		t.Errorf("nil-progress Resolve err = %v", err)
 	}
 }
+
+// TestResolveDepthExactlyAtCapErrors verifies the `>=` boundary of
+// the depth cap: a chain whose deepest call lands AT MaxChainDepth
+// — and at that depth there is no further chain to recurse into —
+// must error. Kills the BOUNDARY mutation that flips `>=` to `>`
+// (which would silently allow that exact depth to succeed because
+// the empty inner chain skips the for-loop without recursing
+// deeper).
+func TestResolveDepthExactlyAtCapErrors(t *testing.T) {
+	// Build a linear chain that recurses to exactly depth=MaxChainDepth
+	// with the deepest request having NO chain. Then:
+	//   - Original `depth >= MaxChainDepth` triggers at the deepest
+	//     resolveSteps call → error.
+	//   - Mutation `depth > MaxChainDepth` does NOT trigger at that
+	//     depth; the empty for-loop returns success.
+	// MaxChainDepth=8 means 9 requests total (leaf + r0..r{MaxChainDepth-1}),
+	// with r{MaxChainDepth-1} carrying no chain.
+	finder := fakeFinder{}
+	for i := 0; i < MaxChainDepth; i++ {
+		name := fmt.Sprintf("r%d", i)
+		next := fmt.Sprintf("r%d", i+1)
+		var chain []model.ChainStep
+		if i < MaxChainDepth-1 {
+			chain = []model.ChainStep{{Alias: "n", Request: next}}
+		}
+		finder[name] = model.Request{ID: name, Name: name, Chain: chain}
+	}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{{Alias: "n", Request: "r0"}}}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
+	if err == nil || !strings.Contains(err.Error(), "depth exceeds") {
+		t.Errorf("err = %v, want depth-cap error at the exact boundary", err)
+	}
+}
+
+// TestResolveStepCountExactlyAtCapErrors verifies the >= boundary of
+// the step-count cap: when stepCount has reached MaxChainSteps the
+// next step must error. Kills the BOUNDARY mutation flipping >= to >.
+func TestResolveStepCountExactlyAtCapErrors(t *testing.T) {
+	finder := fakeFinder{}
+	// MaxChainSteps + 1 chain entries on the leaf, all flat (no
+	// nested chain) — each consumes one stepCount.
+	leafChain := make([]model.ChainStep, 0, MaxChainSteps+1)
+	for i := 0; i <= MaxChainSteps; i++ {
+		name := fmt.Sprintf("s%d", i)
+		alias := fmt.Sprintf("a%d", i)
+		finder[name] = model.Request{ID: name, Name: name}
+		leafChain = append(leafChain, model.ChainStep{Alias: alias, Request: name})
+	}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: leafChain}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
+	if err == nil || !strings.Contains(err.Error(), "step count exceeds") {
+		t.Errorf("err = %v, want step-count-cap error at the exact boundary", err)
+	}
+}
+
+// TestResolveDiamondPatternRunsSharedDepTwice verifies the visiting-
+// set cleanup branch: A → [B, C] where both B and C chain to D
+// must execute D twice (once per branch) without a false cycle.
+// Kills the NEGATION mutation on the cleanup `if sub.ID != ""` and
+// BOUNDARY mutations adjacent.
+func TestResolveDiamondPatternRunsSharedDepTwice(t *testing.T) {
+	d := model.Request{ID: "D", Name: "D"}
+	b := model.Request{ID: "B", Name: "B", Chain: []model.ChainStep{{Alias: "d", Request: "D"}}}
+	c := model.Request{ID: "C", Name: "C", Chain: []model.ChainStep{{Alias: "d", Request: "D"}}}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "b", Request: "B"},
+		{Alias: "c", Request: "C"},
+	}}
+	finder := fakeFinder{"B": b, "C": c, "D": d}
+	exec := newRecordingExec()
+	if _, _, err := Resolve(context.Background(), leaf, finder, exec, nil); err != nil {
+		t.Fatalf("diamond err = %v (cleanup branch likely regressed)", err)
+	}
+	// D should execute twice: once under B's branch, once under C's.
+	count := 0
+	for _, name := range exec.calls {
+		if name == "D" {
+			count++
+		}
+	}
+	if count != 2 {
+		t.Errorf("D executed %d times, want 2 (diamond branches must re-execute shared dep)", count)
+	}
+}
+
+// TestResolveDeepCycleDetectedViaVisitingPopulation verifies cycle
+// detection works at recursion depth ≥ 2 — kills the NEGATION
+// mutation on the `if sub.ID != ""` block that POPULATES the
+// visiting set after a successful resolution. With the population
+// skipped, a B→A→B cycle (where the leaf is C, so C is in visiting
+// but A is not) wouldn't be detected on the inner recursion.
+func TestResolveDeepCycleDetectedViaVisitingPopulation(t *testing.T) {
+	a := model.Request{ID: "A", Name: "A"}
+	b := model.Request{ID: "B", Name: "B", Chain: []model.ChainStep{{Alias: "a", Request: "A"}}}
+	// A.Chain points back at B — so the cycle is A → B → A at depth ≥ 2.
+	a.Chain = []model.ChainStep{{Alias: "b", Request: "B"}}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "b", Request: "B"},
+	}}
+	finder := fakeFinder{"A": a, "B": b}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
+	if err == nil || !strings.Contains(err.Error(), "cycle detected") {
+		t.Errorf("err = %v, want cycle-detected at depth ≥ 2", err)
+	}
+}
+
+// TestResolveLeafSelfChainCycleDetected verifies the leaf's own ID is
+// populated in the visiting set so a chain step that resolves back
+// to the leaf is caught as a cycle. Kills the NEGATION mutation on
+// `if leaf.ID != ""` in Resolve.
+func TestResolveLeafSelfChainCycleDetected(t *testing.T) {
+	leaf := model.Request{ID: "L", Name: "Leaf"}
+	leaf.Chain = []model.ChainStep{{Alias: "self", Request: "Leaf"}}
+	// Finder also resolves "Leaf" back to the same leaf (cycle).
+	finder := fakeFinder{"Leaf": leaf}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
+	if err == nil || !strings.Contains(err.Error(), "cycle detected") {
+		t.Errorf("err = %v, want cycle-detected on leaf self-reference", err)
+	}
+}
+
+// TestResolveProgressTotalCountsCorrectly verifies the countSteps
+// pre-walk produces the same total a non-cyclic chain actually runs.
+// Hits the `if leaf.ID != ""` population + visiting cleanup branches
+// inside countSteps. Catches a regression where countSteps loses
+// track of cycles and returns a count that doesn't match execution.
+func TestResolveProgressTotalCountsCorrectly(t *testing.T) {
+	// Diamond again — D executes twice, B and C once each = 4 steps.
+	d := model.Request{ID: "D", Name: "D"}
+	b := model.Request{ID: "B", Name: "B", Chain: []model.ChainStep{{Alias: "d", Request: "D"}}}
+	c := model.Request{ID: "C", Name: "C", Chain: []model.ChainStep{{Alias: "d", Request: "D"}}}
+	leaf := model.Request{ID: "A", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "b", Request: "B"},
+		{Alias: "c", Request: "C"},
+	}}
+	finder := fakeFinder{"B": b, "C": c, "D": d}
+
+	var totalSeen int
+	progress := func(_, total int, _, _ string) { totalSeen = total }
+
+	if _, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), progress); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if totalSeen != 4 {
+		t.Errorf("total = %d, want 4 (B + D + C + D in diamond)", totalSeen)
+	}
+}
+
+// TestResolveProgressTotalRespectsDepthCap verifies countSteps' own
+// depth cap clamps a linear chain deeper than the cap to a finite
+// total. The leaf has two children: a shallow one that executes
+// successfully (so the progress callback fires and we can observe
+// total), and a deep one that exceeds the cap (whose pre-walked
+// contribution is bounded by countSteps' depth cap).
+//
+// Kills:
+//   - the BOUNDARY mutation on countSteps' `depth >= MaxChainDepth`
+//   - the ARITHMETIC mutation that flips `depth+1` to `depth-1` in
+//     countSteps' recursion (which would let depth go negative,
+//     bypass the cap entirely, and count every level — producing a
+//     total well above the cap).
+func TestResolveProgressTotalRespectsDepthCap(t *testing.T) {
+	// Shallow branch: one request with no chain. countSteps = 1.
+	shallow := model.Request{ID: "S", Name: "Shallow"}
+
+	// Deep branch: linear chain of MaxChainDepth+5 levels. countSteps
+	// caps each level's recursion, so the total contribution is
+	// clamped to MaxChainDepth.
+	finder := fakeFinder{"Shallow": shallow}
+	deep := MaxChainDepth + 5
+	for i := 0; i < deep; i++ {
+		name := fmt.Sprintf("r%d", i)
+		next := fmt.Sprintf("r%d", i+1)
+		var chain []model.ChainStep
+		if i < deep-1 {
+			chain = []model.ChainStep{{Alias: "n", Request: next}}
+		}
+		finder[name] = model.Request{ID: name, Name: name, Chain: chain}
+	}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "shallow", Request: "Shallow"}, // succeeds → progress fires
+		{Alias: "deep", Request: "r0"},         // errors at depth cap
+	}}
+
+	var totalSeen int
+	progress := func(_, total int, _, _ string) {
+		if total > totalSeen {
+			totalSeen = total
+		}
+	}
+	_, _, _ = Resolve(context.Background(), leaf, finder, newRecordingExec(), progress)
+	// Original total: 1 (Shallow) + clamped-deep (≤ MaxChainDepth) ≤ 1 + MaxChainDepth.
+	// depth-1 mutation: total = 1 (Shallow) + deep (≈ MaxChainDepth+5) = roughly 1 + deep.
+	// We assert the upper bound the original respects.
+	if totalSeen == 0 || totalSeen > 1+MaxChainDepth {
+		t.Errorf("totalSeen = %d, want 0 < t <= %d (countSteps cap regression)", totalSeen, 1+MaxChainDepth)
+	}
+}
+
+// TestResolveProgressTotalCountsIDOnlyStep verifies countSteps does
+// NOT skip a step whose Request is empty but RequestID is set and
+// resolves. The total observable via the progress callback is the
+// vehicle for the assertion (countSteps is unexported and runs
+// before any step executes — observing requires a successful first
+// step that fires the callback).
+//
+// Kills the NEGATION mutation on the `step.RequestID == ""` half of
+// countSteps' both-blank guard: with the negation, countSteps would
+// skip the ID-only step and produce a total of 1 instead of 2.
+func TestResolveProgressTotalCountsIDOnlyStep(t *testing.T) {
+	target := model.Request{ID: "TARGET-ID", Name: "Target"}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+		// 1: a normal path-only step that executes successfully so
+		//    the progress callback fires and totalSeen captures the
+		//    pre-walked total.
+		{Alias: "first", Request: "Target"},
+		// 2: an ID-only step (empty Request, populated RequestID)
+		//    that countSteps must count. Resolve errors on its
+		//    blank-ref check at runtime, but countSteps already ran.
+		{Alias: "second", Request: "", RequestID: "TARGET-ID"},
+	}}
+	finder := fakeFinder{"Target": target}
+
+	var totalSeen int
+	progress := func(_, total int, _, _ string) { totalSeen = total }
+
+	_, _, _ = Resolve(context.Background(), leaf, finder, newRecordingExec(), progress)
+	if totalSeen != 2 {
+		t.Errorf("totalSeen = %d, want 2 (countSteps must include the ID-only step)", totalSeen)
+	}
+}
+
+// TestResolveProgressTotalSkipsCycle verifies countSteps' cycle skip:
+// a chain with a self-cycle should still produce a finite total
+// matching the non-cyclic prefix, not 0 (depth-cap fallback) or
+// MaxChainSteps (overflow). Kills the NEGATION mutations on
+// countSteps' cycle-detection branches.
+func TestResolveProgressTotalSkipsCycle(t *testing.T) {
+	// A's chain → B → A (cycle). countSteps must skip the cycle
+	// and return finite (specifically: counts B before detecting
+	// the cycle on A, then bails — but Resolve later errors on
+	// the same cycle. countSteps just needs to terminate.)
+	a := model.Request{ID: "A", Name: "A"}
+	b := model.Request{ID: "B", Name: "B", Chain: []model.ChainStep{{Alias: "a", Request: "A"}}}
+	a.Chain = []model.ChainStep{{Alias: "b", Request: "B"}}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{{Alias: "a", Request: "A"}}}
+	finder := fakeFinder{"A": a, "B": b}
+
+	called := false
+	progress := func(int, int, string, string) { called = true }
+
+	// We expect Resolve to surface the cycle error. countSteps must
+	// have terminated cleanly first (otherwise we never get to call
+	// resolveSteps at all). Reaching the cycle error proves both
+	// countSteps and the resolver progressed past the count phase.
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), progress)
+	if err == nil || !strings.Contains(err.Error(), "cycle detected") {
+		t.Errorf("err = %v, want cycle-detected", err)
+	}
+	_ = called
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sample Feed</title>
+  <updated>2026-05-30T12:00:00Z</updated>
+  <entry>
+    <id>urn:uuid:1</id>
+    <title>First</title>
+    <summary>Hello</summary>
+  </entry>
+  <entry>
+    <id>urn:uuid:2</id>
+    <title>Second</title>
+    <summary>World</summary>
+  </entry>
+</feed>

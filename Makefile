@@ -4,11 +4,23 @@ PKG := ./cmd/helena
 # Phase 8 coverage gate: every internal package outside internal/ui
 # must stay at or above this floor. UI tests are deferred to Phase 11.
 COVERAGE_FLOOR    := 90
-COVERAGE_EXCLUDES := internal/ui,cmd
+COVERAGE_EXCLUDES := internal/ui,cmd,features,integration
 COVERAGE_PROFILE  := coverage.out
 COVERAGE_HTML     := coverage.html
 
-.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate
+.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth
+
+# Phase 8.6 mutation testing: run gremlins against the five load-bearing
+# packages. Each target is invokable individually for iteration; the
+# parent `mutation` target runs all five sequentially.
+#
+# gremlins runs the test suite once per generated mutation, so the
+# wall-clock is "test-suite-runtime × mutation-count". Not gated per
+# PR — 8.7 wires this as a nightly CI job.
+GREMLINS := $(shell go env GOPATH)/bin/gremlins
+
+$(GREMLINS):
+	go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
 
 run:
 	go run $(PKG)
@@ -39,6 +51,31 @@ coverage-html:
 coverage-gate:
 	go test ./... -coverprofile=$(COVERAGE_PROFILE) -covermode=atomic
 	go run ./cmd/covergate -profile $(COVERAGE_PROFILE) -exclude $(COVERAGE_EXCLUDES) -floor $(COVERAGE_FLOOR)
+
+# gremlins uses go test under the hood. A stale test cache from a
+# previous run can short-circuit individual mutation runs and skew
+# the baseline timing, so each target invalidates the cache first.
+# --timeout-coefficient=6 gives mutated tests 6× the baseline budget
+# before being recorded as timed-out (rather than killed); some
+# chain cap-checks legitimately need the extra slack.
+GREMLINS_FLAGS := --timeout-coefficient 6
+
+mutation-chain: $(GREMLINS)
+	go clean -testcache
+	$(GREMLINS) unleash $(GREMLINS_FLAGS) ./internal/chain
+mutation-storage: $(GREMLINS)
+	go clean -testcache
+	$(GREMLINS) unleash $(GREMLINS_FLAGS) ./internal/storage
+mutation-httpclient: $(GREMLINS)
+	go clean -testcache
+	$(GREMLINS) unleash $(GREMLINS_FLAGS) ./internal/httpclient
+mutation-scripting: $(GREMLINS)
+	go clean -testcache
+	$(GREMLINS) unleash $(GREMLINS_FLAGS) ./internal/scripting
+mutation-auth: $(GREMLINS)
+	go clean -testcache
+	$(GREMLINS) unleash $(GREMLINS_FLAGS) ./internal/auth
+mutation: mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth
 
 vet:
 	go vet ./...

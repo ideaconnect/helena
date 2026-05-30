@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal RPC-style WSDL used by importer tests. The Helena WSDL
+  importer extracts each operation as a request whose body is a SOAP
+  envelope addressing that operation.
+-->
+<definitions
+    name="Calculator"
+    targetNamespace="http://example.com/calculator"
+    xmlns:tns="http://example.com/calculator"
+    xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+    xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+    xmlns="http://schemas.xmlsoap.org/wsdl/">
+
+  <message name="AddRequest">
+    <part name="a" type="xsd:int"/>
+    <part name="b" type="xsd:int"/>
+  </message>
+  <message name="AddResponse">
+    <part name="sum" type="xsd:int"/>
+  </message>
+
+  <portType name="CalculatorPortType">
+    <operation name="Add">
+      <input message="tns:AddRequest"/>
+      <output message="tns:AddResponse"/>
+    </operation>
+  </portType>
+
+  <binding name="CalculatorBinding" type="tns:CalculatorPortType">
+    <soap:binding style="rpc" transport="http://schemas.xmlsoap.org/soap/http"/>
+    <operation name="Add">
+      <soap:operation soapAction="http://example.com/calculator/Add"/>
+      <input><soap:body use="literal" namespace="http://example.com/calculator"/></input>
+      <output><soap:body use="literal" namespace="http://example.com/calculator"/></output>
+    </operation>
+  </binding>
+
+  <service name="CalculatorService">
+    <port name="CalculatorPort" binding="tns:CalculatorBinding">
+      <soap:address location="https://example.com/calculator"/>
+    </port>
+  </service>
+</definitions>

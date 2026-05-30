@@ -18,10 +18,12 @@ const (
 	DELETE  Method = "DELETE"
 	HEAD    Method = "HEAD"
 	OPTIONS Method = "OPTIONS"
+	TRACE   Method = "TRACE"
+	CONNECT Method = "CONNECT"
 )
 
 // Methods lists the HTTP methods Helena supports, in display order.
-var Methods = []Method{GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS}
+var Methods = []Method{GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT}
 
 // Valid reports whether m is a recognized HTTP method.
 func (m Method) Valid() bool {

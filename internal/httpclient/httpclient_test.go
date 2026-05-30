@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/vars"
@@ -358,6 +359,83 @@ func TestDoEmitsCORSWarningWhenEnabled(t *testing.T) {
 	}
 	if resp.CORSWarning == "" {
 		t.Error("expected non-empty CORSWarning when Settings.CORSWarning is true")
+	}
+}
+
+// TestNewAppliesSettingsTimeout verifies the underlying http.Client's
+// Timeout field reflects Settings.TimeoutSeconds: a positive value
+// becomes the exact duration, zero stays zero (no timeout). Kills
+// the boundary + negation mutations on the `if s.TimeoutSeconds > 0`
+// check and the arithmetic mutation on the seconds → Duration cast.
+func TestNewAppliesSettingsTimeout(t *testing.T) {
+	if got := New(model.Settings{TimeoutSeconds: 5}).http.Timeout; got != 5*time.Second {
+		t.Errorf("TimeoutSeconds=5 → http.Timeout = %v, want 5s", got)
+	}
+	if got := New(model.Settings{TimeoutSeconds: 0}).http.Timeout; got != 0 {
+		t.Errorf("TimeoutSeconds=0 → http.Timeout = %v, want 0 (no timeout)", got)
+	}
+	if got := New(model.Settings{TimeoutSeconds: 12}).http.Timeout; got != 12*time.Second {
+		t.Errorf("TimeoutSeconds=12 → http.Timeout = %v, want 12s", got)
+	}
+}
+
+// TestBuildDefaultsMissingMethodToGET verifies the empty-Method
+// branch in Build: when model.Request.Method is "", the produced
+// *http.Request uses "GET". Kills the NEGATION mutation flipping
+// `method == ""` to `method != ""` (which would otherwise leave
+// req.Method empty and trigger an http transport error later).
+func TestBuildDefaultsMissingMethodToGET(t *testing.T) {
+	req, _, err := Build(context.Background(),
+		model.Request{Method: "", URL: "http://x/"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if req.Method != http.MethodGet {
+		t.Errorf("req.Method = %q, want GET", req.Method)
+	}
+	// Non-empty method passes through unchanged.
+	req, _, err = Build(context.Background(),
+		model.Request{Method: model.POST, URL: "http://x/"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build POST: %v", err)
+	}
+	if req.Method != http.MethodPost {
+		t.Errorf("req.Method = %q, want POST", req.Method)
+	}
+}
+
+// TestBuildSetsContentLengthAndGetBodyForBodiedRequest verifies that
+// when the request carries a body, Build populates ContentLength to
+// len(body) and supplies a GetBody closure. Kills the NEGATION
+// mutation on `if body != nil` that would otherwise leave both
+// fields zero — net/http needs both for retries + redirects to
+// work correctly on bodied requests.
+func TestBuildSetsContentLengthAndGetBodyForBodiedRequest(t *testing.T) {
+	body := `{"k":"v"}`
+	req, _, err := Build(context.Background(),
+		model.Request{Method: model.POST, URL: "http://x/",
+			Body: model.Body{Type: model.BodyJSON, Content: body}}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build: %v", err)
+	}
+	if req.ContentLength != int64(len(body)) {
+		t.Errorf("ContentLength = %d, want %d", req.ContentLength, len(body))
+	}
+	if req.GetBody == nil {
+		t.Error("GetBody not set on bodied request — retries won't have a body")
+	}
+
+	// Bodyless request: both fields should stay zero/nil.
+	req, _, err = Build(context.Background(),
+		model.Request{Method: model.GET, URL: "http://x/"}, nil, nil)
+	if err != nil {
+		t.Fatalf("Build GET: %v", err)
+	}
+	if req.ContentLength != 0 {
+		t.Errorf("bodyless ContentLength = %d, want 0", req.ContentLength)
+	}
+	if req.GetBody != nil {
+		t.Error("GetBody set on bodyless request")
 	}
 }
 

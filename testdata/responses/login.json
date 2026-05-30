@@ -1,0 +1,9 @@
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.sample",
+  "expires_in": 3600,
+  "refresh_token": "rt-sample",
+  "user": {
+    "id": "u-1",
+    "name": "Alice"
+  }
+}

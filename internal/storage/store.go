@@ -40,6 +40,7 @@ func Save(c model.Collection, dir string) error {
 		// Merge Info.Extra (unknown info fields) too.
 		root.Info.Extra = existing.Info.Extra
 		root.Info.Tags = existing.Info.Tags
+		mergeAuthExtras(root.Auth, existing.Auth)
 	}
 	if err := writeYAML(filepath.Join(dir, collectionFile), root); err != nil {
 		return err
@@ -100,6 +101,19 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 			rf.Info.Tags = prev.Info.Tags
 			if rf.HTTP != nil && prev.HTTP != nil {
 				rf.HTTP.Extra = prev.HTTP.Extra
+				// Per-entry Extras under http.headers / http.params:
+				// pair by name (the only field a row can be keyed on
+				// after the user reorders / disables / re-enables)
+				// and copy the prior row's catch-all into the matching
+				// new row. Preserves invariant 1 at the row level so
+				// unknown sub-keys other tools authored on a single
+				// header / param survive in-place re-saves.
+				rf.HTTP.Headers = mergeKVExtras(rf.HTTP.Headers, prev.HTTP.Headers)
+				rf.HTTP.Params = mergeParamExtras(rf.HTTP.Params, prev.HTTP.Params)
+				if rf.HTTP.Body != nil && prev.HTTP.Body != nil {
+					rf.HTTP.Body.Extra = prev.HTTP.Body.Extra
+				}
+				mergeAuthExtras(rf.HTTP.Auth, prev.HTTP.Auth)
 			}
 			// Scripts: if the user cleared both hooks, scriptsToFile returns
 			// nil — but the on-disk scripts block may have carried sibling
@@ -147,6 +161,7 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 		if prev, err := readFolderFile(filepath.Join(sub, folderFile)); err == nil {
 			ff.Extra = prev.Extra
 			ff.Info.Extra = prev.Info.Extra
+			mergeAuthExtras(ff.Auth, prev.Auth)
 		}
 		if err := writeYAML(filepath.Join(sub, folderFile), ff); err != nil {
 			return err
@@ -156,6 +171,78 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 		}
 	}
 	return sweepDir(dir, keep)
+}
+
+// mergeAuthExtras copies the per-block Extra catch-alls from prev's
+// auth sub-block into next's matching sub-block. Auth carries
+// unknown fields at every level — the outer auth: block, each
+// sub-block (basic / bearer / apikey / oauth2), and any
+// externally-authored sibling — and each level has its own Extra
+// map. Without this merge, external fields at e.g. auth.bearer.
+// foo-key would round-trip out of existence on save.
+func mergeAuthExtras(next, prev *ocAuth) {
+	if next == nil || prev == nil {
+		return
+	}
+	next.Extra = prev.Extra
+	if next.Basic != nil && prev.Basic != nil {
+		next.Basic.Extra = prev.Basic.Extra
+	}
+	if next.Bearer != nil && prev.Bearer != nil {
+		next.Bearer.Extra = prev.Bearer.Extra
+	}
+	if next.APIKey != nil && prev.APIKey != nil {
+		next.APIKey.Extra = prev.APIKey.Extra
+	}
+	if next.OAuth2 != nil && prev.OAuth2 != nil {
+		next.OAuth2.Extra = prev.OAuth2.Extra
+	}
+}
+
+// mergeKVExtras pairs new and prev header rows by name and copies
+// the prior row's Extra catch-all into the matching new row. Used by
+// the request-Save path to preserve invariant 1 at the per-header
+// level. When a prior name appears more than once, the last one wins
+// (matches what yaml.Unmarshal would have produced for the same
+// repeated key).
+func mergeKVExtras(next, prev []ocKV) []ocKV {
+	if len(prev) == 0 || len(next) == 0 {
+		return next
+	}
+	byName := make(map[string]map[string]yaml.Node, len(prev))
+	for _, p := range prev {
+		if len(p.Extra) > 0 {
+			byName[p.Name] = p.Extra
+		}
+	}
+	for i := range next {
+		if e, ok := byName[next[i].Name]; ok {
+			next[i].Extra = e
+		}
+	}
+	return next
+}
+
+// mergeParamExtras is the ocParam analogue of mergeKVExtras. Kept
+// separate because ocKV and ocParam are distinct types (ocParam
+// carries the `type: query` discriminator) even though the merge
+// logic is identical.
+func mergeParamExtras(next, prev []ocParam) []ocParam {
+	if len(prev) == 0 || len(next) == 0 {
+		return next
+	}
+	byName := make(map[string]map[string]yaml.Node, len(prev))
+	for _, p := range prev {
+		if len(p.Extra) > 0 {
+			byName[p.Name] = p.Extra
+		}
+	}
+	for i := range next {
+		if e, ok := byName[next[i].Name]; ok {
+			next[i].Extra = e
+		}
+	}
+	return next
 }
 
 // sweepDir removes .yml files and folder-style subdirectories in dir that

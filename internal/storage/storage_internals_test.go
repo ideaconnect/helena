@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	"github.com/idct/helena/internal/model"
 )
 
@@ -383,6 +385,122 @@ func TestSaveSweepsOrphanRequestsBetweenSaves(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, "keep.yml")); err != nil {
 		t.Errorf("keep.yml removed by sweep: %v", err)
 	}
+}
+
+// TestMergeKVExtrasShortCircuits verifies mergeKVExtras short-circuits
+// on empty inputs (the production path for fresh writes where there
+// is no prior file to merge against).
+func TestMergeKVExtrasShortCircuits(t *testing.T) {
+	if got := mergeKVExtras(nil, []ocKV{{Name: "a"}}); got != nil {
+		t.Errorf("empty next returned non-nil: %v", got)
+	}
+	next := []ocKV{{Name: "a"}}
+	if got := mergeKVExtras(next, nil); &got[0] != &next[0] {
+		t.Error("empty prev should return next unchanged")
+	}
+}
+
+// TestMergeKVExtrasPairsByName verifies that an existing header's
+// Extra map gets copied into a re-saved header sharing the same
+// Name. Headers absent from prev keep their original (likely nil)
+// Extra.
+func TestMergeKVExtrasPairsByName(t *testing.T) {
+	prev := []ocKV{
+		{Name: "X-Trace", Extra: map[string]yaml.Node{"prev-marker": {}}},
+		{Name: "X-Empty"},
+	}
+	next := []ocKV{
+		{Name: "X-Trace"},
+		{Name: "X-New"},
+	}
+	got := mergeKVExtras(next, prev)
+	if len(got[0].Extra) != 1 {
+		t.Errorf("X-Trace Extra not merged: %+v", got[0])
+	}
+	if got[1].Extra != nil {
+		t.Errorf("X-New picked up unexpected Extra: %+v", got[1])
+	}
+}
+
+// TestMergeParamExtrasPairsByName mirrors the KV variant for the
+// query-param DTO, which is a distinct type from ocKV even though
+// the merge shape is identical.
+func TestMergeParamExtrasPairsByName(t *testing.T) {
+	prev := []ocParam{{Name: "q", Extra: map[string]yaml.Node{"prev-marker": {}}}}
+	next := []ocParam{{Name: "q"}, {Name: "limit"}}
+	got := mergeParamExtras(next, prev)
+	if len(got[0].Extra) != 1 {
+		t.Errorf("q Extra not merged: %+v", got[0])
+	}
+	if got[1].Extra != nil {
+		t.Errorf("limit picked up Extra: %+v", got[1])
+	}
+	// Empty cases.
+	if got := mergeParamExtras(nil, prev); got != nil {
+		t.Error("empty next should return nil")
+	}
+	if mergeParamExtras(next, nil) == nil {
+		t.Error("empty prev should return next, not nil")
+	}
+}
+
+// TestMergeAuthExtrasCoversEverySubBlock verifies every auth
+// sub-block (Basic, Bearer, APIKey, OAuth2) gets its Extra map
+// preserved by mergeAuthExtras when both sides have the same type
+// set. Also covers the nil-input guards.
+func TestMergeAuthExtrasCoversEverySubBlock(t *testing.T) {
+	mark := map[string]yaml.Node{"marker": {}}
+
+	cases := []struct {
+		name string
+		want *ocAuth
+		prev *ocAuth
+	}{
+		{
+			name: "basic",
+			want: &ocAuth{Type: "basic", Basic: &ocAuthBasic{}},
+			prev: &ocAuth{Type: "basic", Basic: &ocAuthBasic{Extra: mark}},
+		},
+		{
+			name: "bearer",
+			want: &ocAuth{Type: "bearer", Bearer: &ocAuthBearer{}},
+			prev: &ocAuth{Type: "bearer", Bearer: &ocAuthBearer{Extra: mark}},
+		},
+		{
+			name: "apikey",
+			want: &ocAuth{Type: "apikey", APIKey: &ocAuthAPIKey{}},
+			prev: &ocAuth{Type: "apikey", APIKey: &ocAuthAPIKey{Extra: mark}},
+		},
+		{
+			name: "oauth2",
+			want: &ocAuth{Type: "oauth2", OAuth2: &ocAuthOAuth2{}},
+			prev: &ocAuth{Type: "oauth2", OAuth2: &ocAuthOAuth2{Extra: mark}},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			mergeAuthExtras(c.want, c.prev)
+			var got map[string]yaml.Node
+			switch {
+			case c.want.Basic != nil:
+				got = c.want.Basic.Extra
+			case c.want.Bearer != nil:
+				got = c.want.Bearer.Extra
+			case c.want.APIKey != nil:
+				got = c.want.APIKey.Extra
+			case c.want.OAuth2 != nil:
+				got = c.want.OAuth2.Extra
+			}
+			if len(got) != 1 {
+				t.Errorf("%s sub-block Extra not merged: got %+v", c.name, got)
+			}
+		})
+	}
+
+	// Nil guards.
+	mergeAuthExtras(nil, &ocAuth{})
+	mergeAuthExtras(&ocAuth{}, nil)
+	mergeAuthExtras(nil, nil)
 }
 
 // TestSavePreservesScriptsExtraWhenHooksCleared verifies that an

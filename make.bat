@@ -1,7 +1,7 @@
 @echo off
 REM Helena dev convenience script — Windows .bat equivalent of the Makefile.
 REM Usage:   make.bat <target>
-REM Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean
+REM Targets: run build test coverage coverage-html coverage-gate mutation vet fmt lint tidy clean
 REM Notes:   building cmd\helena needs a C toolchain (TDM-GCC or MSYS2 mingw-w64)
 REM          on PATH because Fyne uses cgo + OpenGL.
 
@@ -13,7 +13,7 @@ set "PKG=.\cmd\helena"
 REM Phase 8 coverage gate: per-package floor for every internal/* except
 REM internal/ui (UI tests deferred to Phase 11) and cmd/* (entrypoints).
 set "COVERAGE_FLOOR=90"
-set "COVERAGE_EXCLUDES=internal/ui,cmd"
+set "COVERAGE_EXCLUDES=internal/ui,cmd,features,integration"
 set "COVERAGE_PROFILE=coverage.out"
 set "COVERAGE_HTML=coverage.html"
 
@@ -24,6 +24,7 @@ if /I "%~1"=="test"            goto :test
 if /I "%~1"=="coverage"        goto :coverage
 if /I "%~1"=="coverage-html"   goto :coverage-html
 if /I "%~1"=="coverage-gate"   goto :coverage-gate
+if /I "%~1"=="mutation"        goto :mutation
 if /I "%~1"=="vet"             goto :vet
 if /I "%~1"=="fmt"             goto :fmt
 if /I "%~1"=="lint"            goto :lint
@@ -63,6 +64,26 @@ goto :end
 go test ./... -coverprofile=%COVERAGE_PROFILE% -covermode=atomic
 if errorlevel 1 goto :end
 go run .\cmd\covergate -profile %COVERAGE_PROFILE% -exclude %COVERAGE_EXCLUDES% -floor %COVERAGE_FLOOR%
+goto :end
+
+REM Mutation testing via gremlins on the five load-bearing packages.
+REM Auto-installs gremlins on first run if it isn't on the GOPATH bin.
+:mutation
+for /f "delims=" %%G in ('go env GOPATH') do set "GREMLINS=%%G\bin\gremlins.exe"
+if not exist "%GREMLINS%" go install github.com/go-gremlins/gremlins/cmd/gremlins@latest
+REM go clean -testcache before each package: gremlins re-uses go's
+REM test cache for baseline timing; stale entries cause spurious
+REM timeouts.
+go clean -testcache
+"%GREMLINS%" unleash --timeout-coefficient 6 .\internal\chain
+go clean -testcache
+"%GREMLINS%" unleash --timeout-coefficient 6 .\internal\storage
+go clean -testcache
+"%GREMLINS%" unleash --timeout-coefficient 6 .\internal\httpclient
+go clean -testcache
+"%GREMLINS%" unleash --timeout-coefficient 6 .\internal\scripting
+go clean -testcache
+"%GREMLINS%" unleash --timeout-coefficient 6 .\internal\auth
 goto :end
 
 :vet
