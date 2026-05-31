@@ -34,9 +34,6 @@ func TestRenderResponseBodyJSONSelectsStructured(t *testing.T) {
 	if len(m.structIndex) == 0 {
 		t.Error("structIndex empty after JSON render")
 	}
-	if len(m.prettyGrid.Rows) == 0 {
-		t.Error("prettyGrid empty after JSON render")
-	}
 }
 
 // TestRenderResponseBodyXMLSelectsStructured verifies XML routes to the
@@ -61,8 +58,8 @@ func TestRenderResponseBodyNonStructuredSelectsRaw(t *testing.T) {
 	m.renderResponseBody([]byte(`{"a":1}`), "application/json")
 	m.renderResponseBody([]byte(`just text`), "text/plain")
 
-	if got := m.Response.SelectedIndex(); got != 2 {
-		t.Errorf("selected tab = %d, want 2 (Raw)", got)
+	if got := m.Response.SelectedIndex(); got != 1 {
+		t.Errorf("selected tab = %d, want 1 (Raw)", got)
 	}
 	if m.structRoot != nil {
 		t.Error("structRoot not cleared for non-structured body")
@@ -79,8 +76,8 @@ func TestRenderResponseBodyMalformedJSONFallsToRaw(t *testing.T) {
 	m := newResponseTestUI(t)
 	m.renderResponseBody([]byte(`{not json`), "application/json")
 
-	if got := m.Response.SelectedIndex(); got != 2 {
-		t.Errorf("selected tab = %d, want 2 (Raw) for malformed JSON", got)
+	if got := m.Response.SelectedIndex(); got != 1 {
+		t.Errorf("selected tab = %d, want 1 (Raw) for malformed JSON", got)
 	}
 	if m.structRoot != nil {
 		t.Error("structRoot should be nil for malformed JSON")

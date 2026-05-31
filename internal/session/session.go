@@ -59,6 +59,17 @@ func (s *Session) ActiveCollectionDir() string {
 	return s.dirs[s.activeCol]
 }
 
+// CollectionDir returns the on-disk directory of the loaded collection at
+// index i, or "" when i is out of range. Used by the UI to record which
+// collection an open tab belongs to (a stable key across collection
+// reordering, unlike the index).
+func (s *Session) CollectionDir(i int) string {
+	if i < 0 || i >= len(s.dirs) {
+		return ""
+	}
+	return s.dirs[i]
+}
+
 // reload re-reads the collections of the active workspace from disk and
 // rebuilds the per-collection active-environment map. Collections that fail to
 // load are skipped silently — the UI surfaces those failures elsewhere.
@@ -528,6 +539,81 @@ func (s *Session) RequestIDForPath(ref string) (string, bool) {
 	return r.ID, true
 }
 
+// LocateRequest finds the request carrying the persistent Request.ID
+// requestID inside the loaded collection whose source directory is dir,
+// returning its current tree node ID and a live pointer into s.cols. The
+// lookup is scoped to the owning collection (by dir) so two collections
+// that share a Request.ID — e.g. a collection forked on disk with both
+// copies opened — never resolve to each other's requests. The returned
+// node ID is freshly derived from the current tree shape, so callers can
+// rely on it after add/delete/duplicate shifts sibling indices. Returns
+// ("", nil, false) when requestID is empty, dir is not loaded, or no
+// request in that collection carries the ID.
+func (s *Session) LocateRequest(dir, requestID string) (string, *model.Request, bool) {
+	if requestID == "" {
+		return "", nil, false
+	}
+	for ci := range s.dirs {
+		if s.dirs[ci] != dir {
+			continue
+		}
+		col := &s.cols[ci]
+		return locateInContainer(strconv.Itoa(ci), col.Folders, col.Requests, requestID)
+	}
+	return "", nil, false
+}
+
+// locateInContainer searches requests then nested folders for a request
+// whose ID matches, building the tree node ID from prefix as it descends.
+// The returned *model.Request points into the passed slices (live data in
+// s.cols when the caller threads s.cols through).
+func locateInContainer(prefix string, folders []model.Folder, requests []model.Request, id string) (string, *model.Request, bool) {
+	for i := range requests {
+		if requests[i].ID == id {
+			return fmt.Sprintf("%s/r%d", prefix, i), &requests[i], true
+		}
+	}
+	for i := range folders {
+		if nodeID, req, ok := locateInContainer(fmt.Sprintf("%s/f%d", prefix, i), folders[i].Folders, folders[i].Requests, id); ok {
+			return nodeID, req, true
+		}
+	}
+	return "", nil, false
+}
+
+// ContainerRef is one selectable destination container — a collection
+// root or a folder — for the "Save As" picker: a human-readable Label and
+// the tree NodeID a new request would be added under.
+type ContainerRef struct {
+	Label  string
+	NodeID string
+}
+
+// ContainerPaths lists every container (collection root + every folder)
+// across all loaded collections in the active workspace, for the scratch
+// "Save As" destination picker. Labels are collection-qualified
+// ("MyAPI", "MyAPI / Auth", …) so duplicate folder names across
+// collections stay distinguishable. Returns nil when nothing is loaded.
+func (s *Session) ContainerPaths() []ContainerRef {
+	var out []ContainerRef
+	for ci := range s.cols {
+		col := &s.cols[ci]
+		nodeID := strconv.Itoa(ci)
+		out = append(out, ContainerRef{Label: col.Name, NodeID: nodeID})
+		collectContainerPaths(nodeID, col.Name, col.Folders, &out)
+	}
+	return out
+}
+
+func collectContainerPaths(prefix, label string, folders []model.Folder, out *[]ContainerRef) {
+	for i := range folders {
+		nodeID := fmt.Sprintf("%s/f%d", prefix, i)
+		l := label + " / " + folders[i].Name
+		*out = append(*out, ContainerRef{Label: l, NodeID: nodeID})
+		collectContainerPaths(nodeID, l, folders[i].Folders, out)
+	}
+}
+
 // SnapshotChainFinder returns a snapshot of the active collection
 // reusable from the worker goroutine: it owns its own copies of the
 // folders/requests trees plus every request's slice-backed fields, and
@@ -707,6 +793,43 @@ func (s *Session) OpenRequest() string {
 		}
 	}
 	return ""
+}
+
+// SetOpenTabs records the open editor tabs (each by owning collection dir
+// + persistent Request.ID) and which one is active, then persists once.
+// The active index is clamped into range. The legacy single OpenRequest
+// pointer is cleared because OpenTabs supersedes it — on the next launch
+// the tab list is the source of truth. Passing an empty slice clears the
+// tab state. Scratch tabs are not persistable and must be filtered out by
+// the caller before calling this.
+func (s *Session) SetOpenTabs(tabs []config.UIOpenTab, active int) {
+	if len(tabs) == 0 {
+		tabs = nil
+		active = 0
+	} else if active < 0 || active >= len(tabs) {
+		active = 0
+	}
+	s.cfg.UI.OpenTabs = tabs
+	s.cfg.UI.ActiveTab = active
+	s.cfg.UI.OpenRequest = nil
+	_ = s.persist()
+}
+
+// OpenTabs returns the persisted open tabs and the active-tab index. The
+// caller resolves each tab against the loaded collections (via
+// LocateRequest) and skips any that no longer resolve; the active index
+// is clamped here to the persisted range but the caller must re-map it
+// after dropping unresolvable tabs. Returns (nil, 0) when none persisted.
+func (s *Session) OpenTabs() ([]config.UIOpenTab, int) {
+	tabs := s.cfg.UI.OpenTabs
+	if len(tabs) == 0 {
+		return nil, 0
+	}
+	active := s.cfg.UI.ActiveTab
+	if active < 0 || active >= len(tabs) {
+		active = 0
+	}
+	return tabs, active
 }
 
 // SetWindowSize stores the window size for restoration on next launch.

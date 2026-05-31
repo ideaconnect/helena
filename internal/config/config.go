@@ -25,12 +25,24 @@ type UIOpenRequest struct {
 	NodePath   string `yaml:"path,omitempty"`
 }
 
+// UIOpenTab identifies one open editor tab by collection directory plus the
+// target's persistent Request.ID. Anchoring by ID (not node path) keeps tab
+// restoration stable across request reordering / insertion / deletion within
+// the collection. Scratch tabs (unsaved, not in any collection) are not
+// persisted, so every UIOpenTab references an on-disk request.
+type UIOpenTab struct {
+	Collection string `yaml:"collection,omitempty"`
+	RequestID  string `yaml:"requestId,omitempty"`
+}
+
 // UIState holds restorable session state: which collection/environment/request
-// the user had open, and the last window size.
+// the user had open, the open editor tabs, and the last window size.
 type UIState struct {
 	ActiveCollection string            `yaml:"activeCollection,omitempty"`
 	ActiveEnv        map[string]string `yaml:"activeEnv,omitempty"` // collection dir -> env name
 	OpenRequest      *UIOpenRequest    `yaml:"openRequest,omitempty"`
+	OpenTabs         []UIOpenTab       `yaml:"openTabs,omitempty"`
+	ActiveTab        int               `yaml:"activeTab,omitempty"`
 	WindowWidth      int               `yaml:"windowWidth,omitempty"`
 	WindowHeight     int               `yaml:"windowHeight,omitempty"`
 }

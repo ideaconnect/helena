@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/idct/helena/assets"
@@ -194,8 +195,7 @@ type MainUI struct {
 	authBasicPanel, authBearerPanel, authAPIKeyPanel, authOAuth2Panel *widget.Form
 	authFormsStack                                                    *fyne.Container
 
-	responseRaw    *widget.Entry
-	prettyGrid     *widget.TextGrid
+	responseRaw    *bodyView
 	structuredTree *widget.Tree
 	structRoot     *responsefmt.Node
 	structIndex    map[string]*responsefmt.Node
@@ -206,6 +206,19 @@ type MainUI struct {
 	currentRequestID   string
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
+
+	// Editor tab strip. tabs is the ordered set of open requests;
+	// activeTabIdx indexes the active one (-1 when none). tabBar holds the
+	// requestTab widgets + the trailing newTabBtn; rebuilt by rebuildTabBar.
+	// tabWidgets pools one requestTab per open tab so a drag gesture survives
+	// the live reorder. tabOverflowBtn opens the "list all tabs" menu.
+	// See tabs.go / tabstrip.go.
+	tabs           []*openTab
+	activeTabIdx   int
+	tabBar         *fyne.Container
+	tabWidgets     map[*openTab]*requestTab
+	newTabBtn      *widget.Button
+	tabOverflowBtn *widget.Button
 
 	// sendCancel is non-nil while a Send goroutine is in flight; the
 	// Send button doubles as Abort in that state. Set + cleared on the
@@ -233,6 +246,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.Method = newMethodPicker(func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Method = model.Method(s)
+			m.refreshActiveTabLabel()
 		}
 	})
 	m.Method.SetSelected(string(model.GET))
@@ -301,19 +315,22 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewTabItem("Docs", m.buildDocsTab()),
 	)
 
-	// Response tabs.
-	m.responseRaw = widget.NewMultiLineEntry()
-	m.responseRaw.Wrapping = fyne.TextWrapOff
-	m.responseRaw.SetPlaceHolder("Raw response body appears here after you press Send.")
-	m.prettyGrid = widget.NewTextGrid()
+	// Response tabs. Raw uses bodyView (a viewport-virtualized, soft-wrapping
+	// text viewer) instead of widget.Entry, which materializes a render object
+	// per character for the whole body and so blows memory up on large
+	// responses. Formatted JSON/XML lives in the Structured tree — there is no
+	// separate Pretty tab.
+	m.responseRaw = newBodyView("Raw response body appears here after you press Send.")
 	m.structuredTree = m.buildStructuredTree()
+	// Drop the dividers between tree rows so the Structured view reads as one
+	// continuous structure rather than a ruled table.
+	m.structuredTree.HideSeparators = true
 	m.headersText = widget.NewMultiLineEntry()
 	m.headersText.Wrapping = fyne.TextWrapOff
 	m.headersText.SetPlaceHolder("Response headers appear here after you press Send.")
 	m.Response = container.NewAppTabs(
 		container.NewTabItem("Structured", m.structuredTree),
-		container.NewTabItem("Pretty", container.NewScroll(m.prettyGrid)),
-		container.NewTabItem("Raw", container.NewScroll(m.responseRaw)),
+		container.NewTabItem("Raw", m.responseRaw),
 		container.NewTabItem("Headers", container.NewScroll(m.headersText)),
 	)
 	m.corsBanner = canvas.NewText("", color.NRGBA{R: 0xEE, G: 0x90, B: 0x10, A: 0xFF})
@@ -335,10 +352,25 @@ func NewMainUI(sess *session.Session) *MainUI {
 	exportBtn := widget.NewButton("Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)
 	addressBar := container.NewBorder(nil, nil, m.Method, saveSendBox, m.URL)
-	// The address bar + URL preview live in the editor column (not the
-	// global top bar) so the sidebar runs floor-to-ceiling on the left
-	// and the URL bar starts exactly where the request editor starts.
-	editorTop := container.NewVBox(addressBar, m.urlPreview)
+
+	// Editor tab strip above the address bar: one tab per open request (drag to
+	// reorder) plus a trailing "+" that opens a blank scratch request, all
+	// horizontally scrollable so many open tabs don't squeeze the bar. An
+	// always-visible overflow "⋮" on the right lists every tab for quick jumps
+	// when the strip overflows. rebuildTabBar renders it.
+	m.activeTabIdx = -1
+	m.tabBar = container.NewHBox()
+	m.newTabBtn = widget.NewButton("+", m.newScratchTab)
+	m.newTabBtn.Importance = widget.LowImportance
+	m.tabOverflowBtn = widget.NewButtonWithIcon("", theme.MoreVerticalIcon(), m.showTabMenu)
+	m.tabOverflowBtn.Importance = widget.LowImportance
+	m.rebuildTabBar() // hides the overflow button while no tabs are open
+	tabRow := container.NewBorder(nil, nil, nil, m.tabOverflowBtn, container.NewHScroll(m.tabBar))
+
+	// The tab strip + address bar + URL preview live in the editor column (not
+	// the global top bar) so the sidebar runs floor-to-ceiling on the left and
+	// the URL bar starts exactly where the request editor starts.
+	editorTop := container.NewVBox(tabRow, addressBar, m.urlPreview)
 
 	newColBtn := widget.NewButton("+ New", m.actionNewCollection)
 	openBtn := widget.NewButton("Open…", m.openCollection)
@@ -351,7 +383,10 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// Rename / Duplicate / Delete are likewise per-row.
 	sidebar := container.NewBorder(sidebarHeader, nil, nil, nil, m.Tree)
 
-	responsePanel := container.NewBorder(m.corsBanner, nil, nil, nil, m.Response)
+	copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), m.copyActiveResponse)
+	copyBtn.Importance = widget.LowImportance
+	responseHeader := container.NewBorder(nil, nil, nil, copyBtn, m.corsBanner)
+	responsePanel := container.NewBorder(responseHeader, nil, nil, nil, m.Response)
 	editor := container.NewVSplit(m.Request, responsePanel)
 	editor.SetOffset(0.5)
 	// Editor column carries its own address bar so the sidebar runs
@@ -363,9 +398,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.root = container.NewBorder(toolbar, m.Status, nil, nil, body)
 
 	m.refreshEnvironments()
-	if id := sess.OpenRequest(); id != "" {
-		m.Tree.Select(id)
-	}
+	m.restoreTabs()
 	return m
 }
 
@@ -402,17 +435,17 @@ func (m *MainUI) buildTree() *widget.Tree {
 	)
 	t.OnSelected = func(id widget.TreeNodeID) {
 		m.lastSelectedNodeID = id
+		if _, ok := m.sess.Tree().Request(id); ok {
+			// Request node — open or focus its tab. activateTab makes the
+			// owning collection active and refreshes environments, so the
+			// collection-activation below is only for folder/collection rows.
+			m.openOrActivate(id)
+			return
+		}
 		if ci := m.sess.Tree().CollectionIndex(id); ci >= 0 {
 			m.sess.SetActiveCollection(ci)
 			m.refreshEnvironments()
 		}
-		r, ok := m.sess.Tree().Request(id)
-		if !ok {
-			return
-		}
-		m.loadRequest(r, id)
-		m.Status.SetText("Loaded: " + r.Name)
-		m.sess.SetOpenRequest(id)
 	}
 	return t
 }
@@ -475,6 +508,12 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 func (m *MainUI) saveRequest() {
 	if m.currentRequest == nil {
 		m.Status.SetText("No request selected")
+		return
+	}
+	// A scratch tab isn't in any collection yet — saving means choosing a
+	// destination, which commitScratchTab then converts into a tree-backed tab.
+	if t := m.activeTab(); t != nil && t.scratch {
+		m.saveScratchTabAs(t)
 		return
 	}
 	// Drop incomplete (empty-key) rows on save so we don't write noise to YAML.
@@ -654,16 +693,25 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func()) fyn
 // the session which workspace is now active and refreshes the tree so the
 // sidebar shows that workspace's collections.
 func (m *MainUI) onWorkspaceChanged(name string) {
+	prev := m.sess.ActiveIndex()
 	for i, n := range m.sess.WorkspaceNames() {
 		if n == name {
 			m.sess.SetActive(i)
 			break
 		}
 	}
-	// A workspace switch invalidates the selected node and the active
-	// collection. Reset selection state + refresh dependent widgets so
-	// the Variables dialog reads the new workspace's session, not a
-	// stale closure.
+	if m.sess.ActiveIndex() == prev {
+		// No actual switch — including the initial SetSelected during
+		// construction, when the editor widgets don't exist yet. Bail before
+		// touching them.
+		return
+	}
+	// A workspace switch reloads the collections, invalidating every open
+	// tab's cached node ID + live pointer (and the active collection). Close
+	// all tabs and clear the editor so nothing stale survives; reset selection
+	// state + refresh dependent widgets so the Variables dialog reads the new
+	// workspace's session, not a stale closure.
+	m.closeAllTabs()
 	m.lastSelectedNodeID = ""
 	if m.Tree != nil {
 		m.Tree.UnselectAll()
@@ -799,6 +847,12 @@ func (m *MainUI) send() {
 	// Failing chains shouldn't leak partial state into the next Send.
 	preOverlay := m.sess.SnapshotEnvOverlay()
 
+	// Capture the tab that initiated this Send so the async completion
+	// attaches the response to it and only repaints the shared panel if it is
+	// still active (the user may switch tabs mid-Send). nil when no tab is
+	// open (a bare-URL Send).
+	initTab := m.activeTab()
+
 	go func() {
 		defer cancel()
 		defer func() {
@@ -823,18 +877,14 @@ func (m *MainUI) send() {
 		chainMap, chainConsole, chainErr := chain.Resolve(ctx, req, finder, exec, progress)
 		if chainErr != nil {
 			m.sess.RestoreEnvOverlay(preOverlay)
+			status := "Chain error: " + chainErr.Error()
+			if ctx.Err() == context.Canceled {
+				status = "Aborted"
+			}
+			resp := &tabResponse{isError: true, errText: chainErr.Error(), status: status, console: chainConsole}
 			fyne.Do(func() {
 				m.resetSendButton()
-				if ctx.Err() == context.Canceled {
-					m.Status.SetText("Aborted")
-				} else {
-					m.Status.SetText("Chain error: " + chainErr.Error())
-				}
-				m.responseRaw.SetText(chainErr.Error())
-				m.clearRichResponse()
-				m.headersText.SetText("")
-				m.Response.SelectIndex(2)
-				m.setScriptConsole(chainConsole)
+				m.deliverResponse(initTab, resp)
 			})
 			return
 		}
@@ -849,28 +899,23 @@ func (m *MainUI) send() {
 		view, leafConsole, leafErr := exec.ExecuteOnce(ctx, req, chainMap)
 		consoleLines := append(chainConsole, leafConsole...)
 
-		fyne.Do(func() {
-			m.resetSendButton()
-			m.setScriptConsole(consoleLines)
-			// No HTTP completed → pre-script or HTTP failure; show the error.
-			if view.Response.StatusCode == 0 {
-				m.Response.SelectIndex(2)
-				if ctx.Err() == context.Canceled {
-					m.Status.SetText("Aborted")
-				} else {
-					m.Status.SetText("Error: " + leafErr.Error())
-				}
-				m.responseRaw.SetText(leafErr.Error())
-				m.clearRichResponse()
-				m.headersText.SetText("")
-				return
+		// Build the tab response off the UI goroutine (pure formatting, no
+		// widget access); the fyne.Do block only resets the button + delivers.
+		var resp *tabResponse
+		if view.Response.StatusCode == 0 {
+			// No HTTP completed → pre-script or HTTP failure.
+			errText := ""
+			if leafErr != nil {
+				errText = leafErr.Error()
 			}
+			status := "Error: " + errText
+			if ctx.Err() == context.Canceled {
+				status = "Aborted"
+			}
+			resp = &tabResponse{isError: true, errText: errText, status: status, console: consoleLines}
+		} else {
 			// HTTP completed → render response. leafErr (if any) is a
 			// post-script error; surfaced as a status-line suffix.
-			m.responseRaw.SetText(string(view.Response.Body))
-			m.headersText.SetText(responsefmt.FormatHeaders(view.Response.Headers))
-			m.renderResponseBody(view.Response.Body, view.Response.Headers.Get("Content-Type"))
-
 			status := fmt.Sprintf("%s · %s · %s",
 				view.Response.Status,
 				responsefmt.HumanSize(view.Response.Size),
@@ -881,12 +926,23 @@ func (m *MainUI) send() {
 			if leafErr != nil {
 				status += " · " + leafErr.Error()
 			}
-			m.Status.SetText(status)
+			cors := ""
 			if view.Response.CORSWarning != "" {
-				m.corsBanner.Text = "⚠ CORS: " + view.Response.CORSWarning
-				m.corsBanner.Refresh()
-				m.corsBanner.Show()
+				cors = "⚠ CORS: " + view.Response.CORSWarning
 			}
+			resp = &tabResponse{
+				rawBody:     string(view.Response.Body),
+				headersText: responsefmt.FormatHeaders(view.Response.Headers),
+				contentType: view.Response.Headers.Get("Content-Type"),
+				status:      status,
+				cors:        cors,
+				console:     consoleLines,
+			}
+		}
+
+		fyne.Do(func() {
+			m.resetSendButton()
+			m.deliverResponse(initTab, resp)
 		})
 	}()
 }

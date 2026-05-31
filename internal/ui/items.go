@@ -63,6 +63,7 @@ func (m *MainUI) addRequestUnder(parent string) {
 			return
 		}
 		m.Tree.Refresh()
+		m.reconcileTabs() // the append may have shifted sibling node IDs
 		m.Tree.OpenBranch(parent)
 		m.Tree.Select(newID)
 		m.Status.SetText("Added request: " + name)
@@ -129,6 +130,7 @@ func (m *MainUI) renameNode(id string) {
 			return
 		}
 		m.Tree.Refresh()
+		m.reconcileTabs() // refresh any open tab's label for the renamed request
 		m.Status.SetText("Renamed: " + name)
 	})
 }
@@ -182,6 +184,9 @@ func (m *MainUI) deleteNode(id string) {
 			m.lastSelectedNodeID = ""
 		}
 		m.Tree.Refresh()
+		// Drop tabs for the deleted request (or every request in a removed
+		// collection) and remap surviving tabs' shifted node IDs.
+		m.reconcileTabs()
 		if isCollection {
 			m.refreshEnvironments()
 			m.Status.SetText("Removed collection: " + label)
@@ -204,6 +209,7 @@ func (m *MainUI) duplicateNode(id string) {
 		return
 	}
 	m.Tree.Refresh()
+	m.reconcileTabs() // the insert shifted later siblings' node IDs
 	m.Tree.Select(newID)
 	m.Status.SetText("Duplicated")
 }

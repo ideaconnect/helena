@@ -16,10 +16,15 @@
 | [chain.go](chain.go) | `buildChainTab` — the list of (Alias, Request path) rows for declaring before-hooks. `loadChainTab` / `rebuildChainRows` / `addChainStep` / `buildChainRow` follow the same patterns as the Params and Headers tabs. |
 | [auth.go](auth.go) | `buildAuthTab`, `loadAuthTab`, `refreshAuthVisibility`, `refreshAuthInheritLabel`, and the `ensureBasic`/`ensureBearer`/`ensureAPIKey`/`ensureOAuth2` lazy allocators for the per-type sub-structs. |
 | [oauth2.go](oauth2.go) | `fyneAuthCodeStarter` — adapter that hands the authorization URL to `fyne.CurrentApp().OpenURL`. The `newAuthCodeStarter` package-level var lets tests swap in a fake. |
-| [responseview.go](responseview.go) | Response Structured + Pretty rendering: `tokenColor` palette, `setColoredGrid` (token stream → colored `TextGrid`), `buildStructuredTree` / `showStructured` / `renderResponseBody` / `clearRichResponse`. Consumes `responsefmt.Token` / `Node`. |
+| [responseview.go](responseview.go) | Response Structured rendering: `tokenColor` palette, `copyActiveResponse` (Copy button), `buildStructuredTree` / `showStructured` / `renderResponseBody` / `clearRichResponse`. Consumes `responsefmt.Token` / `Node`. |
+| [bodyview.go](bodyview.go) | `bodyView` — a read-only, viewport-virtualized, soft-wrapping text viewer (on `widget.List` + per-line `bodyRow`) for the Raw tab. Replaces `widget.Entry`, which materialized a render object per character for the whole body and blew up memory on large responses. Focusable; copies the full body on Ctrl+C. Defines `styledRun`, `wrapLines`. |
+| [tabs.go](tabs.go) | Editor tab-strip state on `MainUI`: the `openTab` / `tabResponse` types and `openOrActivate` / `activateTab` / `closeTab` / `closeAllTabs` / `reconcileTabs` / `newScratchTab` / `saveScratchTabAs` / `commitScratchTab`, the per-tab response helpers (`deliverResponse` / `applyResponse` / `clearResponsePanel`), persistence (`persistTabs` / `restoreTabs`), the pool-based `rebuildTabBar`, drag-reorder (`dragTab` / `otherTabCenters` / `applyDragTarget` / `dragEnd` + the pure `moveTabModel` / `dropIndex`), and the overflow menu (`tabMenuItems` / `showTabMenu`). |
+| [tabstrip.go](tabstrip.go) | `requestTab` — the per-tab custom widget (BaseWidget + `Tapped` + `Draggable` + SimpleRenderer): colored method chip + name + close `×` over a highlight rectangle. Mirrors the `methodPicker` / `treeRow` idiom. |
 | [theme.go](theme.go) | `ApplyTheme` plus the `themeName` / `themeFromName` string mapping used by the picker. |
 | [shortcuts.go](shortcuts.go) | `shortcutSpec`, `registerShortcuts`, `showShortcuts`, `shortcutModifierName`, and `shortcutRowLayout`. |
 | [shell_test.go](shell_test.go) | `NewMainUI` construction + headless layout smoke test. |
+| [tabs_test.go](tabs_test.go) | Tab open/activate dedup, per-tab response capture + restore (incl. inactive-tab delivery), scratch `+` + Save-As conversion, reconcile-after-delete drop+remap, close-tab neighbor/clear, launch restore, drag-reorder (`dropIndex` / `moveTabModel` / `applyDragTarget` keeps active + persists), and the overflow menu items. |
+| [tabstrip_test.go](tabstrip_test.go) | `requestTab` widget: label/active toggling and tap → select / close callbacks. |
 | [docs_test.go](docs_test.go) | Docs editor load + preview + write-back, plus clear-on-nil behaviour. |
 | [scripts_test.go](scripts_test.go) | Scripts tab load + write-back, loading-flag suppression across request swaps, clear-on-nil for both editors and the console, console rendering (incl. truncation), and the `sessionEnvBridge` adapter. |
 | [chain_test.go](chain_test.go) | Chain tab load + add/delete, loading-flag suppression across request swaps, and `pruneEmptyChain` save-time filter. |
@@ -48,7 +53,7 @@ without infinite write-back loops.
 | `Send` | `*widget.Button` | "Send" by default (high importance) / "Abort" while a Send is in flight (warning importance). Tap routes through `sendOrAbort` which dispatches based on `sendCancel`. |
 | `Tree` | `*widget.Tree` | Collections sidebar tree. |
 | `Request` | `*container.AppTabs` | Request editor tabs: Params, Auth, Headers, Body, Docs. |
-| `Response` | `*container.AppTabs` | Response tabs: Structured, Pretty, Raw, Headers. `renderResponseBody` selects the richest tab that parsed (Structured > Pretty > Raw). |
+| `Response` | `*container.AppTabs` | Response tabs: Structured, Raw, Headers. `renderResponseBody` selects Structured when the body parsed, else Raw. |
 | `Status` | `*widget.Label` | Footer status line. |
 | `paramsRows` | `*fyne.Container` | VBox of KV rows for query params. |
 | `headersRows` | `*fyne.Container` | VBox of KV rows for headers. |
@@ -66,16 +71,21 @@ without infinite write-back loops.
 | `authNonePanel` / `authInheritPanel` / `authBasicPanel` / `authBearerPanel` / `authAPIKeyPanel` / `authOAuth2Panel` | containers / `*widget.Form` | The six stacked form panels; only the one matching the selected Type is shown. |
 | `authFormsStack` | `*fyne.Container` (Stack) | Stack container holding all six panels — `refreshAuthVisibility` hides every panel then shows the active one. |
 | `authOAuth2ClearTokens` | `*widget.Button` | "Clear cached tokens" button on the OAuth2 panel — calls `Session.TokenCache().ClearAll()` so a rotated client secret forces the next Send to refetch. |
-| `responseRaw` | `*widget.Entry` | Raw response body view. |
-| `prettyGrid` | `*widget.TextGrid` | Pretty tab: pretty-printed JSON/XML, syntax-colored one cell per rune via `setColoredGrid`. |
+| `responseRaw` | `*bodyView` | Raw response body view (viewport-virtualized; see bodyview.go). |
 | `structuredTree` | `*widget.Tree` | Structured tab: foldable JSON/XML tree built by `buildStructuredTree`, reading from `structRoot` / `structIndex`. |
 | `structRoot` | `*responsefmt.Node` | Root of the parsed Structured tree for the current response (nil when the body isn't structured JSON/XML). |
 | `structIndex` | `map[string]*responsefmt.Node` | ID → node lookup so the tree's `childUIDs` / `isBranch` callbacks resolve in O(1). Rebuilt by `showStructured`. |
 | `headersText` | `*widget.Entry` | Response headers view. |
 | `corsBanner` | `*canvas.Text` | Orange banner above the response panel surfacing CORS warnings. |
-| `currentRequest` | `*model.Request` | Pointer to the request currently bound to the editor widgets. Direct writes happen via `OnChanged` callbacks. |
-| `currentRequestID` | `string` | Tree node ID for `currentRequest`; cleared when the selected node is deleted. |
+| `currentRequest` | `*model.Request` | Pointer to the request bound to the editor widgets — the active tab's request (a live tree pointer, or a scratch tab's owned value). Direct writes happen via `OnChanged` callbacks. |
+| `currentRequestID` | `string` | Tree **node ID** for `currentRequest` (`""` for a scratch tab). Re-derived on every tab activation / `reconcileTabs`; consumed as a path by `EffectiveAuth`, `refreshAuthInheritLabel`, and the delete guard, so it must stay a node ID, never a `Request.ID`. |
 | `lastSelectedNodeID` | `string` | Last node the user selected; the basis for `parentForNew`, rename, delete, and duplicate targets. |
+| `tabs` | `[]*openTab` | Open editor tabs, in strip order. Each holds a `Request.ID` identity, owning collection dir (scratch: `""` + an owned `scratchReq`), a cached node ID (re-derived by `reconcileTabs`), and a cached `tabResponse`. See [tabs.go](tabs.go). |
+| `activeTabIdx` | `int` | Index of the active tab in `tabs`, or `-1` when none is open. |
+| `tabBar` | `*fyne.Container` | HBox (inside an HScroll) of `requestTab` widgets + the trailing `newTabBtn`; rebuilt by `rebuildTabBar`. |
+| `tabWidgets` | `map[*openTab]*requestTab` | Pool of one `requestTab` per open tab. Reusing widgets across rebuilds keeps a drag gesture bound to its instance through a live reorder. |
+| `newTabBtn` | `*widget.Button` | The `+` affordance that opens a blank scratch tab via `newScratchTab`. |
+| `tabOverflowBtn` | `*widget.Button` | The `⋮` button right of the strip; opens the overflow menu (`showTabMenu`) listing every tab for quick jumps. Hidden when no tab is open. |
 | `loading` | `bool` | **Write-back suppression flag.** Set true by `loadRequest` while it pushes values into widgets so the `OnChanged` callbacks (which would write back into `currentRequest`) become no-ops. Without this, programmatic SetText/SetSelected calls would clobber the model with the previous request's data. |
 | `sendCancel` | `context.CancelFunc` | Non-nil while a Send goroutine is in flight; lets `sendOrAbort` route a button tap into context cancellation. Set on the UI thread when `send` launches the goroutine, cleared by `resetSendButton` in every teardown path. |
 | `shortcuts` | `[]shortcutSpec` | Cached shortcut table used both for canvas registration and for rendering the help dialog. |
@@ -141,7 +151,8 @@ See [WORKFLOW.md](WORKFLOW.md) for the full lifecycle. The short version:
 1. `cmd/helena` creates the `fyne.App` and `*session.Session`.
 2. `ui.ApplyTheme` runs before any window exists.
 3. `mainUI := ui.NewMainUI(sess)` builds every widget and assigns them to the
-   exported fields.
+   exported fields, then calls `restoreTabs` to reopen the previously open tabs
+   (falling back to the legacy single open request).
 4. The window is created, then `mainUI.SetWindow(w)` records the dialog parent
    and registers shortcuts against `w.Canvas()`.
 5. `w.SetContent(mainUI.Root())` shows the UI.

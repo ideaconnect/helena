@@ -4,9 +4,9 @@
 
 | File | Responsibility |
 | --- | --- |
-| [session.go](session.go) | `Session` type, constructor `New`, workspace switching, active collection / environment, UI state persistence (open request, window size, settings), `Resolver()`, env overlay (`SetEnvOverlay` / `EnvOverlay` / `ClearEnvOverlay` / `SnapshotEnvOverlay` / `SnapshotActiveEnvVars`), and `FindRequestByPath` used by [internal/chain](../chain/). |
+| [session.go](session.go) | `Session` type, constructor `New`, workspace switching, active collection / environment, UI state persistence (open request, open tabs, window size, settings), `Resolver()`, env overlay (`SetEnvOverlay` / `EnvOverlay` / `ClearEnvOverlay` / `SnapshotEnvOverlay` / `SnapshotActiveEnvVars`), request location for the UI tab strip (`LocateRequest`, `ContainerPaths` / `ContainerRef`, `CollectionDir`), open-tab persistence (`SetOpenTabs` / `OpenTabs`), and `FindRequestByPath` used by [internal/chain](../chain/). |
 | [tree.go](tree.go) | `Tree` navigation model used by the Fyne `widget.Tree`. Defines the node ID format and the lookups that drive `widget.Tree` callbacks. |
-| [items.go](items.go) | Tree mutation: `AddRequest`, `AddFolder`, `RenameItem`, `DeleteItem`, `DuplicateItem`. Each one mutates the in-memory collection through pointer access and calls `SaveActiveCollection`. |
+| [items.go](items.go) | Tree mutation: `AddRequest`, `AddRequestValue`, `AddFolder`, `RenameItem`, `DeleteItem`, `DuplicateItem`. Each one mutates the in-memory collection through pointer access and calls `SaveActiveCollection`. |
 | [workspace.go](workspace.go) | Workspace CRUD: `AddWorkspace`, `RenameWorkspace`, `DeleteWorkspace`. |
 | [env.go](env.go) | Plain-text environment-variable parsing and formatting: `ParseEnvVars` / `FormatEnvVars`. |
 | [session_test.go](session_test.go) | Open-collection persistence + tree navigation. |
@@ -17,6 +17,7 @@
 | [session_save_test.go](session_save_test.go) | Round-trip of request edits through Tree pointer + save. |
 | [session_settings_test.go](session_settings_test.go) | Settings persistence. |
 | [session_uistate_test.go](session_uistate_test.go) | UI state persistence (active collection, active env, open request, window size) and stability across collection reordering. |
+| [session_tabs_test.go](session_tabs_test.go) | `LocateRequest` (root / nested / not-found / re-derive-after-delete / collection-scoped duplicate IDs), `AddRequestValue`, `ContainerPaths`, `CollectionDir`, and `SetOpenTabs` / `OpenTabs` round-trip + stability across request reordering. |
 | [workspace_test.go](workspace_test.go) | Workspace add/rename/delete, including the "cannot delete last" rule. |
 | [items_test.go](items_test.go) | Add/Rename/Delete/Duplicate tree items. |
 
@@ -104,7 +105,10 @@ The `Session` constructor wraps these types from [`internal/config`](../config/)
 - `config.Config` — workspaces, active index, settings, UI state.
 - `config.Workspace` — workspace name + list of collection directories.
 - `config.UIState` — active collection path, active environment per
-  collection path, open-request reference, window size.
+  collection path, open-request reference, open tabs + active tab, window size.
 - `config.UIOpenRequest` — open-request reference: `{Collection path, NodePath}`
   where `NodePath` is the slash-separated node ID minus the collection index
   segment (e.g. `f1/r0`).
+- `config.UIOpenTab` — open-tab reference: `{Collection path, RequestID}`.
+  Anchored by `Request.ID` (not node path) so a restored tab survives request
+  reordering within the collection.

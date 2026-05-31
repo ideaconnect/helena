@@ -33,6 +33,36 @@ func (s *Session) AddRequest(parentID, name string) (string, error) {
 	return newID, nil
 }
 
+// AddRequestValue appends a fully-populated request r to the container at
+// parentID (a collection node like "0" or a folder node like "0/f1") and
+// persists. It is the populated sibling of AddRequest: used when saving a
+// scratch tab into a collection, where the request already carries the
+// user's edited method/URL/headers/body/scripts/etc. A fresh Request.ID
+// is always minted (r.ID is overwritten) so the on-disk request gets a
+// stable identity independent of the scratch tab's synthetic one. The
+// caller is responsible for making parentID's collection the active one
+// first, since persistence writes the active collection. Returns the new
+// request's tree node ID.
+func (s *Session) AddRequestValue(parentID string, r model.Request) (string, error) {
+	_, _, requestsP := s.containerAtPtr(parentID)
+	if requestsP == nil {
+		return "", fmt.Errorf("invalid parent: %q", parentID)
+	}
+	if strings.TrimSpace(r.Name) == "" {
+		return "", fmt.Errorf("name cannot be empty")
+	}
+	r.ID = model.NewID()
+	if r.Method == "" {
+		r.Method = model.GET
+	}
+	*requestsP = append(*requestsP, r)
+	newID := fmt.Sprintf("%s/r%d", parentID, len(*requestsP)-1)
+	if err := s.SaveActiveCollection(); err != nil {
+		return "", err
+	}
+	return newID, nil
+}
+
 // AddFolder appends a new empty folder named name to the container at parentID
 // and persists. Returns the new folder's tree node ID.
 func (s *Session) AddFolder(parentID, name string) (string, error) {

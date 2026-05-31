@@ -34,6 +34,8 @@ when displaying or sending requests.
 - `Session.SaveActiveCollection() error` — write the active collection back to
   its source directory.
 - `Session.ActiveCollection() int` / `Session.SetActiveCollection(i int)`
+- `Session.CollectionDir(i int) string` — on-disk directory of the loaded
+  collection at index `i` (a stable key for open tabs across reordering).
 - `Session.AddWorkspace(name string) error`
 - `Session.RenameWorkspace(i int, name string) error`
 - `Session.DeleteWorkspace(i int) error`
@@ -44,6 +46,14 @@ when displaying or sending requests.
 - `Session.EffectiveAuth(nodeID string) model.Auth` — flatten Inherit for the
   request at `nodeID` by walking the folder → collection chain via
   [internal/auth](../auth/).
+- `Session.LocateRequest(dir, requestID string) (string, *model.Request, bool)`
+  — find a request by its persistent `Request.ID` within the collection at
+  `dir`, returning its current node ID + a live pointer. Scoped to the owning
+  collection so a forked-and-reopened collection's duplicate IDs never cross.
+  Used by the UI tab strip to re-derive node IDs after tree mutations.
+- `Session.ContainerPaths() []ContainerRef` — every container (collection roots
+  + folders) across loaded collections, as `{Label, NodeID}` destinations for
+  the scratch-tab "Save As" picker.
 - `Tree.ChildIDs(id string) []string`
 - `Tree.IsBranch(id string) bool`
 - `Tree.Label(id string) string`
@@ -56,6 +66,9 @@ when displaying or sending requests.
 ### Tree item mutation
 
 - `Session.AddRequest(parentID, name string) (string, error)`
+- `Session.AddRequestValue(parentID string, r model.Request) (string, error)` —
+  the populated sibling of `AddRequest`: inserts a fully-formed request (mints a
+  fresh ID), used when saving a scratch tab into a collection.
 - `Session.AddFolder(parentID, name string) (string, error)`
 - `Session.RenameItem(nodeID, name string) error`
 - `Session.DeleteItem(nodeID string) error`
@@ -76,7 +89,13 @@ when displaying or sending requests.
 ### Settings & UI state
 
 - `Session.Settings() model.Settings` / `Session.SetSettings(st model.Settings)`
-- `Session.SetOpenRequest(nodeID string)` / `Session.OpenRequest() string`
+- `Session.SetOpenRequest(nodeID string)` / `Session.OpenRequest() string` —
+  legacy single-open-request state; superseded by the tab set below but kept as
+  a restore fallback.
+- `Session.SetOpenTabs(tabs []config.UIOpenTab, active int)` /
+  `Session.OpenTabs() ([]config.UIOpenTab, int)` — the open editor tabs (by
+  collection dir + `Request.ID`) and the active index. `SetOpenTabs` clears the
+  legacy `OpenRequest`.
 - `Session.SetWindowSize(w, h int)` / `Session.WindowSize() (int, int)`
 
 ### OAuth2 tokens
@@ -91,6 +110,8 @@ when displaying or sending requests.
 - `Session` — the in-memory application state for the active workspace.
 - `Tree` — navigable view over the loaded collections, see
   [STRUCTURE.md](STRUCTURE.md).
+- `ContainerRef` — a `{Label, NodeID}` destination container returned by
+  `ContainerPaths` for the scratch-tab "Save As" picker.
 
 ## Dependencies
 

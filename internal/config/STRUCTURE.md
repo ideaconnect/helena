@@ -5,9 +5,9 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level godoc only. |
-| [config.go](config.go) | All persisted types (`Config`, `Workspace`, `UIState`, `UIOpenRequest`), defaults, path lookup, and `Load`/`Save`. |
+| [config.go](config.go) | All persisted types (`Config`, `Workspace`, `UIState`, `UIOpenRequest`, `UIOpenTab`), defaults, path lookup, and `Load`/`Save`. |
 | [config_test.go](config_test.go) | Round-trip and edge-case tests: missing file, empty path, save/load fidelity, clamping of `Active`. |
-| [config_ui_test.go](config_ui_test.go) | Round-trip test for `UIState` (active collection, env map, open request pointer, window size). |
+| [config_ui_test.go](config_ui_test.go) | Round-trip test for `UIState` (active collection, env map, open request pointer, open tabs + active index, window size) and the empty-tabs `omitempty` check. |
 
 ## Type catalog
 
@@ -22,14 +22,21 @@ The root persisted document.
 A workspace entry inside the config.
 - `Collections` — directory paths of OpenCollection folders the workspace currently includes. Collection contents are read by `internal/storage`, not by this package.
 
-### `UIState` — [config.go:30](config.go#L30)
+### `UIState` — [config.go:40](config.go#L40)
 Restorable session state.
 - `ActiveCollection` — directory path of the collection that was selected.
 - `ActiveEnv` — map of collection-dir -> environment name, so each collection remembers its own active environment.
-- `OpenRequest` — pointer to the request that had focus, or `nil` if none.
+- `OpenRequest` — pointer to the request that had focus, or `nil` if none. Legacy single-request state; superseded by `OpenTabs` but kept as a restore fallback for configs written before tabs existed.
+- `OpenTabs` — the open editor tabs (`omitempty`, so a tab-less session keeps a clean file).
+- `ActiveTab` — index into `OpenTabs` of the focused tab (`omitempty`).
 - `WindowWidth` / `WindowHeight` — last window size; restored at startup so the app reopens at its previous size.
 
 ### `UIOpenRequest` — [config.go:23](config.go#L23)
 Locates an open request without using slice indices.
 - `Collection` — directory path of the owning collection.
 - `NodePath` — in-collection node path like `"f0/r1"` (the OpenCollection layout uses these directory-style paths so restoration is stable across reorders/renames of siblings).
+
+### `UIOpenTab` — [config.go:33](config.go#L33)
+Locates one open editor tab.
+- `Collection` — directory path of the owning collection.
+- `RequestID` — the target's persistent `Request.ID`. Anchoring by ID (not node path) keeps a restored tab pointing at the right request even after siblings are reordered, inserted, or deleted. Scratch (unsaved) tabs are not persistable and never produce a `UIOpenTab`.

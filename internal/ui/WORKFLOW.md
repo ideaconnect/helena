@@ -19,10 +19,13 @@ nil-`win` guard, the off-UI-goroutine send), it is called out explicitly.
 6. `w := a.NewWindow("Helena")` and `w.Resize(...)` honour the session's
    remembered window size (default 1100x720).
 7. `mainUI := ui.NewMainUI(sess)` —
-   ([shell.go:67](shell.go#L67)) builds every widget, wires `OnChanged`
-   callbacks, assembles the toolbar / address bar / sidebar / split layout,
-   calls `refreshEnvironments`, and if `sess.OpenRequest()` is non-empty
-   selects the previously open node.
+   ([shell.go:67](shell.go#L67)) builds every widget (including the editor tab
+   strip above the address bar), wires `OnChanged` callbacks, assembles the
+   toolbar / address bar / sidebar / split layout, calls `refreshEnvironments`,
+   and then `restoreTabs` — which reopens the persisted `OpenTabs` (resolving
+   each by collection dir + `Request.ID`) and activates the previously active
+   one, or falls back to the legacy single `OpenRequest` when no tab set is
+   stored. See "Editor tabs" below.
 8. `mainUI.SetWindow(w)` — ([shell.go:216](shell.go#L216)) records `m.win` and
    calls `registerShortcuts`. **Before this call `m.win` is nil and dialog
    actions short-circuit.** Keyboard shortcuts are not yet active either.
@@ -39,11 +42,17 @@ Each row in the collections tree carries an ID. The handler is registered in
 1. The tree fires `OnSelected(id)`.
 2. `m.lastSelectedNodeID = id` (used later by `parentForNew`, rename, delete,
    duplicate).
-3. If the ID resolves to a collection (`sess.Tree().CollectionIndex(id) >= 0`),
-   `sess.SetActiveCollection(...)` updates the active collection and
-   `refreshEnvironments` reseeds the Environment dropdown for that collection.
-4. `sess.Tree().Request(id)` returns the `*model.Request` if the node is a
-   request. Otherwise the handler returns and the editor remains as it was.
+3. If the ID is a **request** node, `m.openOrActivate(id)` opens (or focuses) its
+   tab — see "Editor tabs" below — and the handler returns. Activation handles
+   making the owning collection active + refreshing environments.
+4. Otherwise (a folder / collection row), if the ID resolves to a collection
+   (`sess.Tree().CollectionIndex(id) >= 0`), `sess.SetActiveCollection(...)`
+   updates the active collection and `refreshEnvironments` reseeds the
+   Environment dropdown.
+
+`loadRequest` is the shared editor-binding step that tab activation calls (it is
+no longer invoked directly from the tree handler):
+
 5. `m.loadRequest(req, id)` — ([shell.go:249](shell.go#L249)) **sets
    `m.loading = true` for the duration**, then:
    - Stores `currentRequest` / `currentRequestID`.
@@ -54,8 +63,10 @@ Each row in the collections tree carries an ID. The handler is registered in
      request's KV row widgets and create new ones bound to the new slice.
    - Calls `refreshDocsPreview` and `updateURLPreview`.
    The deferred `m.loading = false` re-arms widget write-back.
-6. Status line shows `"Loaded: <name>"` and `sess.SetOpenRequest(id)` records
-   the selection for next launch.
+
+   The status line (`"Loaded: <name>"`), the cached-response restore, and tab
+   persistence are done by `activateTab` around this `loadRequest` call — not by
+   `loadRequest` itself.
 
 ### Why the loading flag matters
 
@@ -77,6 +88,68 @@ SetText on `BodyContent` would do the same — but inside more complex
 programmatic updates (KV rows, body type changes that reset content) the
 write-back loop can clobber freshly loaded data with stale values. The flag
 makes `loadRequest` a single atomic UI write.
+
+## Editor tabs
+
+The editor keeps many requests open at once as a tab strip above the address
+bar (an HScroll of `requestTab` widgets + a trailing `+`). All tabs share the
+**one** editor + response panel; switching a tab re-points the binding via
+`loadRequest`, exactly like the old single-request flow. The logic lives in
+[tabs.go](tabs.go); the widget in [tabstrip.go](tabstrip.go).
+
+**Identity vs. node ID — the load-bearing rule.** A tab's identity is the
+target's persistent `Request.ID`. A tree node ID (`0/f1/r0`) is *not* identity:
+it shifts when siblings are inserted/deleted. So `activateTab` and
+`reconcileTabs` always **re-derive** the live node ID from the `Request.ID` via
+`session.LocateRequest(dir, requestID)`, and `m.currentRequestID` is kept as
+that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
+`refreshAuthInheritLabel`, and the delete guard all parse it as a path.
+
+- **Open / activate.** `openOrActivate(nodeID)`: read the request's ID; if a tab
+  already has it, `activateTab` it; else append a new tab and activate. Activate
+  re-derives the node ID, makes the owning collection active + refreshes
+  environments, runs `loadRequest`, restores the tab's cached response via
+  `applyResponse(tab.resp)`, rebuilds the strip, and `persistTabs`.
+- **Reorder + overflow.** `requestTab` is `fyne.Draggable`; dragging live-reorders
+  the strip. `rebuildTabBar` pools one widget per `*openTab` (`tabWidgets`) and
+  only re-arranges the container's objects, so the dragged widget instance — and
+  therefore the gesture — survives each reorder. `dragTab` reads the other tabs'
+  on-screen centers (`otherTabCenters`), maps the pointer X to an insertion index
+  (`dropIndex`), and `applyDragTarget` re-inserts the tab (`moveTabModel`) while
+  keeping the active tab active; `dragEnd` persists the new order. Fyne
+  distinguishes tap from drag, so dragging never also selects. The `⋮`
+  overflow button right of the strip opens a menu of every open tab
+  (`tabMenuItems`, the active one checked) for jumping to one scrolled out of
+  view.
+- **Per-tab response.** Each tab caches a `tabResponse` (raw body, header dump,
+  content type, status line, CORS text, console, error flag). `send` captures
+  the initiating tab; the worker builds the `tabResponse` off-thread and the
+  `fyne.Do` block calls `deliverResponse(initTab, resp)`, which **always** stores
+  it on `initTab` and repaints the shared panel **only if that tab is still
+  active** (the user may switch tabs mid-Send). `applyResponse` is also the
+  restore path on tab switch. Only one Send runs at a time (`sendCancel`), so
+  there are no concurrent per-tab sends.
+- **Reconcile.** Every tree mutation (add / rename / duplicate / delete, in
+  [items.go](items.go); also `RemoveCollection`) is followed by `reconcileTabs`:
+  re-derive each tree-backed tab's node ID by `Request.ID`, drop tabs whose
+  request vanished, re-point the active tab's `currentRequest` / `currentRequestID`
+  in place (so in-flight edits survive a slice relocation), and rebuild the strip.
+- **Scratch `+` and Save As.** `newScratchTab` opens a blank request the tab
+  *owns* (`scratchReq`, `currentRequestID == ""`). Saving a scratch tab routes to
+  `saveScratchTabAs` → a name + destination-container dialog (`ContainerPaths`) →
+  `commitScratchTab`: make the chosen collection active, `AddRequestValue` (mints
+  a fresh ID, one save), then convert the tab to tree-backed and re-activate.
+  Closing a scratch tab with content confirms first (its edits would be lost);
+  closing a tree-backed tab is silent (edits live in the tree until the app
+  exits, as before).
+- **Persistence.** `persistTabs` writes the tree-backed tabs (by collection dir +
+  `Request.ID`) and the active index in one `SetOpenTabs` call; scratch tabs are
+  never persisted. `restoreTabs` reopens them on launch.
+- **Workspace switch.** `onWorkspaceChanged` reloads the collections — every
+  cached node ID / pointer is invalidated — so it `closeAllTabs` + clears the
+  editor (also fixing a pre-existing stale-`currentRequest` window across
+  `reload`). v1 tabs are global; switching workspaces closes the strip and per-
+  workspace tab memory is not kept.
 
 ## Sending a request (UI → httpclient → fyne.Do)
 
@@ -154,28 +227,27 @@ share the same dispatch.
 9. Inside the goroutine, marshal results back via `fyne.Do(func() { ... })`.
    `fyne.Do` is the only safe way to touch widgets from a non-UI
    goroutine; it schedules the callback onto Fyne's event loop.
-10. The `fyne.Do` body:
-    - Calls `resetSendButton` (clears `m.sendCancel`, restores
-      "Send" text + high importance) and renders chain console +
-      leaf console lines into `scriptConsole`.
-    - If `view.Response.StatusCode == 0`, the leaf's pre-script or
-      HTTP failed: select the Raw tab, set the status line, dump the
-      error into Raw, and call `clearRichResponse` (blanks the
-      Structured + Pretty tabs) plus clear Headers.
-    - Otherwise render from `view.Response`: fill `responseRaw`,
-      `headersText`, then call `renderResponseBody(body, contentType)`.
-      That fills the Pretty tab via `responsefmt.PrettyJSON` /
-      `PrettyXML` + `HighlightJSON` / `HighlightXML` → `setColoredGrid`,
-      and the Structured tab via `responsefmt.ParseJSON` / `ParseXML` →
-      `showStructured` (a `widget.Tree` with native fold/expand). It
-      then auto-selects the richest tab that succeeded: Structured if
-      the body parsed into a tree, else Pretty if it colored, else Raw.
-    - Set status to `"<Status> · <size> · <duration>"`, possibly
-      suffixed with `· sent <METHOD> <URL>` (pre-script mutated
-      method or URL) and / or `· post-script: <err>` if the leaf's
-      post-script failed.
-    - If `view.Response.CORSWarning != ""`, show the orange
-      `corsBanner`.
+10. The worker builds a `tabResponse` **off the UI goroutine** (pure
+    formatting — no widget access):
+    - On `view.Response.StatusCode == 0` (pre-script or HTTP failure,
+      or abort): an error `tabResponse` carrying the error text + a
+      `"Error: …"` / `"Aborted"` status.
+    - Otherwise a success `tabResponse` with the raw body, the
+      `FormatHeaders` dump, the content type, a
+      `"<Status> · <size> · <duration>"` status (suffixed `· sent
+      <METHOD> <URL>` if the pre-script mutated method/URL, and the
+      post-script error if any), the CORS banner text, and the
+      console lines.
+    The `fyne.Do` body then just calls `resetSendButton` and
+    `deliverResponse(initTab, resp)`. `deliverResponse` stores `resp`
+    on the tab that started the Send and, only if that tab is still
+    active, calls `applyResponse` — which pushes the body into
+    `responseRaw`, the headers into `headersText`, runs
+    `renderResponseBody` (JSON/XML → `showStructured`, a `widget.Tree`
+    with native fold/expand and `HideSeparators`; Structured selected
+    when the body parsed, else Raw), sets the status + console, and
+    shows/hides the `corsBanner`. The chain-error path (step 7) builds
+    and delivers its error `tabResponse` the same way.
 
 The Send button is the lifecycle marker AND the abort affordance:
 

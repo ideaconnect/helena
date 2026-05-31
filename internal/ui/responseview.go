@@ -37,28 +37,6 @@ func tokenColor(k responsefmt.TokenKind) color.Color {
 	}
 }
 
-// setColoredGrid renders a token stream into a TextGrid, one cell per rune,
-// each cell foreground-colored by its token kind. A newline starts a new row.
-// Passing nil tokens clears the grid.
-func setColoredGrid(tg *widget.TextGrid, tokens []responsefmt.Token) {
-	var rows []widget.TextGridRow
-	cur := widget.TextGridRow{}
-	for _, tok := range tokens {
-		style := &widget.CustomTextGridStyle{FGColor: tokenColor(tok.Kind)}
-		for _, r := range tok.Text {
-			if r == '\n' {
-				rows = append(rows, cur)
-				cur = widget.TextGridRow{}
-				continue
-			}
-			cur.Cells = append(cur.Cells, widget.TextGridCell{Rune: r, Style: style})
-		}
-	}
-	rows = append(rows, cur)
-	tg.Rows = rows
-	tg.Refresh()
-}
-
 // buildStructuredTree constructs the Response "Structured" tab's tree. The
 // tree reads from m.structRoot / m.structIndex, which showStructured swaps in
 // after each response; an empty index renders a blank tree.
@@ -118,53 +96,57 @@ func (m *MainUI) buildStructuredTree() *widget.Tree {
 	)
 }
 
-// renderResponseBody fills the Structured and Pretty tabs from a response body
-// and content type, then selects the richest tab that succeeded: Structured if
-// the body parsed into a tree, else Pretty if it formatted + colored, else Raw.
-// JSON and XML are the only structured types; anything else clears both rich
-// views and leaves the user on Raw.
+// renderResponseBody parses a JSON or XML body into the Structured tree and
+// selects the Structured tab when it parses; anything that doesn't parse clears
+// the tree and leaves the user on Raw. Raw always holds the exact bytes (set by
+// the caller), so it is the universal fallback.
 func (m *MainUI) renderResponseBody(body []byte, contentType string) {
-	var haveStruct, havePretty bool
+	var haveStruct bool
 	switch {
 	case responsefmt.IsJSON(contentType):
-		if p, err := responsefmt.PrettyJSON(body); err == nil {
-			setColoredGrid(m.prettyGrid, responsefmt.HighlightJSON(p))
-			havePretty = true
-		}
 		if root, err := responsefmt.ParseJSON(body); err == nil {
 			m.showStructured(root)
 			haveStruct = true
 		}
 	case responsefmt.IsXML(contentType):
-		if p, err := responsefmt.PrettyXML(body); err == nil {
-			setColoredGrid(m.prettyGrid, responsefmt.HighlightXML(p))
-			havePretty = true
-		}
 		if root, err := responsefmt.ParseXML(body); err == nil {
 			m.showStructured(root)
 			haveStruct = true
 		}
 	}
-	if !havePretty {
-		setColoredGrid(m.prettyGrid, nil)
-	}
-	if !haveStruct {
+	if haveStruct {
+		m.Response.SelectIndex(0) // Structured
+	} else {
 		m.showStructured(nil)
-	}
-	switch {
-	case haveStruct:
-		m.Response.SelectIndex(0)
-	case havePretty:
-		m.Response.SelectIndex(1)
-	default:
-		m.Response.SelectIndex(2)
+		m.Response.SelectIndex(1) // Raw
 	}
 }
 
-// clearRichResponse blanks the Structured and Pretty tabs — used on error
-// paths that put the failure text on the Raw tab instead.
+// copyActiveResponse copies the text of the currently selected Response tab to
+// the clipboard, behind the Copy button. Structured has no flat text, so it
+// copies the raw body alongside Raw; Headers copies the header dump. This is the
+// button-driven companion to bodyView's Ctrl+C.
+func (m *MainUI) copyActiveResponse() {
+	var text string
+	switch m.Response.SelectedIndex() {
+	case 2:
+		text = m.headersText.Text
+	default: // Structured (0) and Raw (1) → the raw body.
+		text = m.responseRaw.full
+	}
+	if text == "" {
+		return
+	}
+	if app := fyne.CurrentApp(); app != nil {
+		if cb := app.Clipboard(); cb != nil {
+			cb.SetContent(text)
+		}
+	}
+}
+
+// clearRichResponse blanks the Structured tab — used on error paths that put
+// the failure text on the Raw tab instead.
 func (m *MainUI) clearRichResponse() {
-	setColoredGrid(m.prettyGrid, nil)
 	m.showStructured(nil)
 }
 
