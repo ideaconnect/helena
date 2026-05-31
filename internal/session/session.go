@@ -5,6 +5,7 @@
 package session
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"sync"
@@ -144,6 +145,29 @@ func (s *Session) OpenCollection(dir string) error {
 	s.dirs = append(s.dirs, dir)
 	s.activeCol = len(s.cols) - 1
 	s.cfg.UI.ActiveCollection = dir
+	return s.persist()
+}
+
+// RemoveCollection removes the collection at index i from the active
+// workspace's collections list. The on-disk directory is left
+// untouched — this is purely a "remove from this workspace" action,
+// matching the Postman/Bruno convention. Out-of-range i is a no-op
+// returning a clear error.
+func (s *Session) RemoveCollection(i int) error {
+	if s.activeCol < 0 {
+		return fmt.Errorf("no active workspace")
+	}
+	w := &s.cfg.Workspaces[s.cfg.Active]
+	if i < 0 || i >= len(w.Collections) {
+		return fmt.Errorf("collection index %d out of range", i)
+	}
+	w.Collections = append(w.Collections[:i], w.Collections[i+1:]...)
+	// If the active collection was the one removed, clear the UI
+	// state pointer so reload doesn't try to re-select a missing dir.
+	if i < len(s.dirs) && s.cfg.UI.ActiveCollection == s.dirs[i] {
+		s.cfg.UI.ActiveCollection = ""
+	}
+	s.reload()
 	return s.persist()
 }
 

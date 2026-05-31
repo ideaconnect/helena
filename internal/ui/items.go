@@ -10,10 +10,15 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// parentForNew returns the container ID to add a new item into based on the
-// currently selected tree node. Selecting a folder/collection adds inside it;
-// selecting a request adds as a sibling; with nothing selected, falls back to
-// the active collection's root.
+// parentForNew returns the container ID to add a new item into based
+// on the currently selected tree node. Selecting a folder/collection
+// adds inside it; selecting a request adds as a sibling; with nothing
+// selected, falls back to the active collection's root. Returns ""
+// when no collection is loaded — callers (the keyboard shortcut path)
+// should no-op in that case.
+//
+// The per-row + Req / + Folder icons take a parent ID directly (the
+// row they live on) so they don't go through this helper.
 func (m *MainUI) parentForNew() string {
 	if m.lastSelectedNodeID != "" {
 		id := m.lastSelectedNodeID
@@ -33,13 +38,22 @@ func (m *MainUI) parentForNew() string {
 	return ""
 }
 
+// actionNewRequest is the keyboard-shortcut entry point — adds a
+// request to the row inferred by parentForNew. Quietly no-ops when
+// there's no collection to add into (no UI thrash from a stray N
+// keystroke before a workspace is opened).
 func (m *MainUI) actionNewRequest() {
-	if m.win == nil {
-		return
+	if parent := m.parentForNew(); parent != "" {
+		m.addRequestUnder(parent)
 	}
-	parent := m.parentForNew()
-	if parent == "" {
-		m.Status.SetText("Open a collection first")
+}
+
+// addRequestUnder prompts for a name and adds a request as a child
+// of the given parent (collection or folder). Shared by the per-row
+// add-request icon — there is no global add-request affordance any
+// more; every container row carries its own.
+func (m *MainUI) addRequestUnder(parent string) {
+	if m.win == nil || parent == "" {
 		return
 	}
 	m.promptName("New request", "Request name", "Untitled Request", func(name string) {
@@ -49,18 +63,15 @@ func (m *MainUI) actionNewRequest() {
 			return
 		}
 		m.Tree.Refresh()
+		m.Tree.OpenBranch(parent)
 		m.Tree.Select(newID)
 		m.Status.SetText("Added request: " + name)
 	})
 }
 
-func (m *MainUI) actionNewFolder() {
-	if m.win == nil {
-		return
-	}
-	parent := m.parentForNew()
-	if parent == "" {
-		m.Status.SetText("Open a collection first")
+// addFolderUnder is the folder analogue of addRequestUnder.
+func (m *MainUI) addFolderUnder(parent string) {
+	if m.win == nil || parent == "" {
 		return
 	}
 	m.promptName("New folder", "Folder name", "Untitled", func(name string) {
@@ -70,6 +81,7 @@ func (m *MainUI) actionNewFolder() {
 			return
 		}
 		m.Tree.Refresh()
+		m.Tree.OpenBranch(parent)
 		m.Tree.OpenBranch(newID)
 		m.Status.SetText("Added folder: " + name)
 	})
@@ -125,34 +137,58 @@ func (m *MainUI) renameNode(id string) {
 // Centralised so the global Delete button and the per-row delete
 // icons share the same confirmation dialog (invariant from 9.13:
 // every deletion must confirm).
+//
+// Collection-level IDs (no "/") route to Session.RemoveCollection
+// so the on-disk dir is left intact — Postman/Bruno convention is
+// "remove from this workspace", not "delete the files". Folder /
+// request IDs go through Session.DeleteItem which does mutate the
+// tree on disk.
 func (m *MainUI) deleteNode(id string) {
 	if m.win == nil || id == "" {
 		return
 	}
 	label := nameOfNode(m, id)
-	dialog.ShowConfirm("Delete?",
-		fmt.Sprintf("Delete %q? This cannot be undone.", label),
-		func(yes bool) {
-			if !yes {
+	isCollection := !strings.Contains(id, "/")
+	prompt := fmt.Sprintf("Delete %q? This cannot be undone.", label)
+	if isCollection {
+		prompt = fmt.Sprintf("Remove collection %q from this workspace?\nThe folder on disk stays untouched.", label)
+	}
+	dialog.ShowConfirm("Delete?", prompt, func(yes bool) {
+		if !yes {
+			return
+		}
+		// If the doomed node is the currently open request (or
+		// contains it), clear the editor so we don't keep a stale
+		// pointer into the deleted subtree.
+		if id == m.currentRequestID || isAncestor(id, m.currentRequestID) {
+			m.loadRequest(nil, "")
+		}
+		var err error
+		if isCollection {
+			ci, convErr := strconv.Atoi(id)
+			if convErr != nil {
+				dialog.ShowError(fmt.Errorf("invalid collection id %q: %w", id, convErr), m.win)
 				return
 			}
-			// If the doomed node is the currently open request (or
-			// contains it), clear the editor so we don't keep a stale
-			// pointer into the deleted subtree.
-			if id == m.currentRequestID || isAncestor(id, m.currentRequestID) {
-				m.loadRequest(nil, "")
-			}
-			if err := m.sess.DeleteItem(id); err != nil {
-				dialog.ShowError(err, m.win)
-				return
-			}
-			if m.lastSelectedNodeID == id {
-				m.lastSelectedNodeID = ""
-				m.refreshTreeActions()
-			}
-			m.Tree.Refresh()
+			err = m.sess.RemoveCollection(ci)
+		} else {
+			err = m.sess.DeleteItem(id)
+		}
+		if err != nil {
+			dialog.ShowError(err, m.win)
+			return
+		}
+		if m.lastSelectedNodeID == id {
+			m.lastSelectedNodeID = ""
+		}
+		m.Tree.Refresh()
+		if isCollection {
+			m.refreshEnvironments()
+			m.Status.SetText("Removed collection: " + label)
+		} else {
 			m.Status.SetText("Deleted: " + label)
-		}, m.win)
+		}
+	}, m.win)
 }
 
 // duplicateNode clones the node at id and selects the new copy. Shared

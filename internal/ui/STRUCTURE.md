@@ -16,6 +16,7 @@
 | [chain.go](chain.go) | `buildChainTab` — the list of (Alias, Request path) rows for declaring before-hooks. `loadChainTab` / `rebuildChainRows` / `addChainStep` / `buildChainRow` follow the same patterns as the Params and Headers tabs. |
 | [auth.go](auth.go) | `buildAuthTab`, `loadAuthTab`, `refreshAuthVisibility`, `refreshAuthInheritLabel`, and the `ensureBasic`/`ensureBearer`/`ensureAPIKey`/`ensureOAuth2` lazy allocators for the per-type sub-structs. |
 | [oauth2.go](oauth2.go) | `fyneAuthCodeStarter` — adapter that hands the authorization URL to `fyne.CurrentApp().OpenURL`. The `newAuthCodeStarter` package-level var lets tests swap in a fake. |
+| [responseview.go](responseview.go) | Response Structured + Pretty rendering: `tokenColor` palette, `setColoredGrid` (token stream → colored `TextGrid`), `buildStructuredTree` / `showStructured` / `renderResponseBody` / `clearRichResponse`. Consumes `responsefmt.Token` / `Node`. |
 | [theme.go](theme.go) | `ApplyTheme` plus the `themeName` / `themeFromName` string mapping used by the picker. |
 | [shortcuts.go](shortcuts.go) | `shortcutSpec`, `registerShortcuts`, `showShortcuts`, `shortcutModifierName`, and `shortcutRowLayout`. |
 | [shell_test.go](shell_test.go) | `NewMainUI` construction + headless layout smoke test. |
@@ -47,7 +48,7 @@ without infinite write-back loops.
 | `Send` | `*widget.Button` | "Send" by default (high importance) / "Abort" while a Send is in flight (warning importance). Tap routes through `sendOrAbort` which dispatches based on `sendCancel`. |
 | `Tree` | `*widget.Tree` | Collections sidebar tree. |
 | `Request` | `*container.AppTabs` | Request editor tabs: Params, Auth, Headers, Body, Docs. |
-| `Response` | `*container.AppTabs` | Response tabs: Pretty, Raw, Headers. |
+| `Response` | `*container.AppTabs` | Response tabs: Structured, Pretty, Raw, Headers. `renderResponseBody` selects the richest tab that parsed (Structured > Pretty > Raw). |
 | `Status` | `*widget.Label` | Footer status line. |
 | `paramsRows` | `*fyne.Container` | VBox of KV rows for query params. |
 | `headersRows` | `*fyne.Container` | VBox of KV rows for headers. |
@@ -66,7 +67,10 @@ without infinite write-back loops.
 | `authFormsStack` | `*fyne.Container` (Stack) | Stack container holding all six panels — `refreshAuthVisibility` hides every panel then shows the active one. |
 | `authOAuth2ClearTokens` | `*widget.Button` | "Clear cached tokens" button on the OAuth2 panel — calls `Session.TokenCache().ClearAll()` so a rotated client secret forces the next Send to refetch. |
 | `responseRaw` | `*widget.Entry` | Raw response body view. |
-| `prettyText` | `*widget.Entry` | Pretty-printed JSON/XML view. |
+| `prettyGrid` | `*widget.TextGrid` | Pretty tab: pretty-printed JSON/XML, syntax-colored one cell per rune via `setColoredGrid`. |
+| `structuredTree` | `*widget.Tree` | Structured tab: foldable JSON/XML tree built by `buildStructuredTree`, reading from `structRoot` / `structIndex`. |
+| `structRoot` | `*responsefmt.Node` | Root of the parsed Structured tree for the current response (nil when the body isn't structured JSON/XML). |
+| `structIndex` | `map[string]*responsefmt.Node` | ID → node lookup so the tree's `childUIDs` / `isBranch` callbacks resolve in O(1). Rebuilt by `showStructured`. |
 | `headersText` | `*widget.Entry` | Response headers view. |
 | `corsBanner` | `*canvas.Text` | Orange banner above the response panel surfacing CORS warnings. |
 | `currentRequest` | `*model.Request` | Pointer to the request currently bound to the editor widgets. Direct writes happen via `OnChanged` callbacks. |

@@ -194,21 +194,18 @@ type MainUI struct {
 	authBasicPanel, authBearerPanel, authAPIKeyPanel, authOAuth2Panel *widget.Form
 	authFormsStack                                                    *fyne.Container
 
-	responseRaw *widget.Entry
-	prettyText  *widget.Entry
-	headersText *widget.Entry
-	corsBanner  *canvas.Text
+	responseRaw    *widget.Entry
+	prettyGrid     *widget.TextGrid
+	structuredTree *widget.Tree
+	structRoot     *responsefmt.Node
+	structIndex    map[string]*responsefmt.Node
+	headersText    *widget.Entry
+	corsBanner     *canvas.Text
 
 	currentRequest     *model.Request
 	currentRequestID   string
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
-
-	// Sidebar action buttons. addReqBtn / addFolderBtn need to disable
-	// when there's no valid parent (no active collection); refreshTreeActions
-	// keeps them in sync with the tree selection + active collection.
-	addReqBtn    *widget.Button
-	addFolderBtn *widget.Button
 
 	// sendCancel is non-nil while a Send goroutine is in flight; the
 	// Send button doubles as Abort in that state. Set + cleared on the
@@ -308,14 +305,14 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.responseRaw = widget.NewMultiLineEntry()
 	m.responseRaw.Wrapping = fyne.TextWrapOff
 	m.responseRaw.SetPlaceHolder("Raw response body appears here after you press Send.")
-	m.prettyText = widget.NewMultiLineEntry()
-	m.prettyText.Wrapping = fyne.TextWrapOff
-	m.prettyText.SetPlaceHolder("Pretty-printed JSON / XML appears here for matching responses.")
+	m.prettyGrid = widget.NewTextGrid()
+	m.structuredTree = m.buildStructuredTree()
 	m.headersText = widget.NewMultiLineEntry()
 	m.headersText.Wrapping = fyne.TextWrapOff
 	m.headersText.SetPlaceHolder("Response headers appear here after you press Send.")
 	m.Response = container.NewAppTabs(
-		container.NewTabItem("Pretty", container.NewScroll(m.prettyText)),
+		container.NewTabItem("Structured", m.structuredTree),
+		container.NewTabItem("Pretty", container.NewScroll(m.prettyGrid)),
 		container.NewTabItem("Raw", container.NewScroll(m.responseRaw)),
 		container.NewTabItem("Headers", container.NewScroll(m.headersText)),
 	)
@@ -349,18 +346,10 @@ func NewMainUI(sess *session.Session) *MainUI {
 	sidebarHeader := container.NewBorder(nil, nil,
 		widget.NewLabelWithStyle("Collections", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		container.NewHBox(newColBtn, openBtn, importBtn))
-	m.addReqBtn = widget.NewButton("+ Req", m.actionNewRequest)
-	m.addFolderBtn = widget.NewButton("+ Folder", m.actionNewFolder)
-	// Rename / Duplicate / Delete moved to per-row tree icons (9.12).
-	// Only the add affordances live in the sidebar header now; the
-	// keyboard shortcuts still call actionRename / actionDelete /
-	// actionDuplicate against the last-selected node.
-	itemActions := container.NewHBox(
-		m.addReqBtn,
-		m.addFolderBtn,
-	)
-	sidebarTop := container.NewVBox(sidebarHeader, itemActions)
-	sidebar := container.NewBorder(sidebarTop, nil, nil, nil, m.Tree)
+	// + Req / + Folder live on each branch row (collection + folder)
+	// via the per-row tree icons — no global affordance any more.
+	// Rename / Duplicate / Delete are likewise per-row.
+	sidebar := container.NewBorder(sidebarHeader, nil, nil, nil, m.Tree)
 
 	responsePanel := container.NewBorder(m.corsBanner, nil, nil, nil, m.Response)
 	editor := container.NewVSplit(m.Request, responsePanel)
@@ -374,7 +363,6 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.root = container.NewBorder(toolbar, m.Status, nil, nil, body)
 
 	m.refreshEnvironments()
-	m.refreshTreeActions()
 	if id := sess.OpenRequest(); id != "" {
 		m.Tree.Select(id)
 	}
@@ -393,9 +381,11 @@ func (m *MainUI) SetWindow(w fyne.Window) {
 
 func (m *MainUI) buildTree() *widget.Tree {
 	actions := rowActions{
-		onRename:    m.renameNode,
-		onDelete:    m.deleteNode,
-		onDuplicate: m.duplicateNode,
+		onRename:     m.renameNode,
+		onDelete:     m.deleteNode,
+		onDuplicate:  m.duplicateNode,
+		onAddRequest: m.addRequestUnder,
+		onAddFolder:  m.addFolderUnder,
 	}
 	t := widget.NewTree(
 		func(id widget.TreeNodeID) []widget.TreeNodeID { return m.sess.Tree().ChildIDs(id) },
@@ -416,7 +406,6 @@ func (m *MainUI) buildTree() *widget.Tree {
 			m.sess.SetActiveCollection(ci)
 			m.refreshEnvironments()
 		}
-		m.refreshTreeActions()
 		r, ok := m.sess.Tree().Request(id)
 		if !ok {
 			return
@@ -426,24 +415,6 @@ func (m *MainUI) buildTree() *widget.Tree {
 		m.sess.SetOpenRequest(id)
 	}
 	return t
-}
-
-// refreshTreeActions enables/disables the sidebar +Req / +Folder
-// buttons based on whether parentForNew() can produce a valid parent
-// (i.e., either the user has selected a tree node or there's an
-// active collection to add to). Called from Tree.OnSelected,
-// workspace switches, and the collection open / close paths.
-func (m *MainUI) refreshTreeActions() {
-	if m.addReqBtn == nil || m.addFolderBtn == nil {
-		return // called before sidebar built
-	}
-	if m.parentForNew() == "" {
-		m.addReqBtn.Disable()
-		m.addFolderBtn.Disable()
-	} else {
-		m.addReqBtn.Enable()
-		m.addFolderBtn.Enable()
-	}
 }
 
 // loadRequest populates every editor widget from req, with the loading flag set
@@ -691,14 +662,13 @@ func (m *MainUI) onWorkspaceChanged(name string) {
 	}
 	// A workspace switch invalidates the selected node and the active
 	// collection. Reset selection state + refresh dependent widgets so
-	// the +Req / +Folder buttons and the Variables dialog read the
-	// new workspace's session, not a stale closure.
+	// the Variables dialog reads the new workspace's session, not a
+	// stale closure.
 	m.lastSelectedNodeID = ""
 	if m.Tree != nil {
 		m.Tree.UnselectAll()
 		m.Tree.Refresh()
 	}
-	m.refreshTreeActions()
 	m.refreshEnvironments()
 }
 
@@ -720,7 +690,6 @@ func (m *MainUI) openCollection() {
 				return
 			}
 			m.Tree.Refresh()
-			m.refreshTreeActions()
 			m.refreshEnvironments()
 			m.Status.SetText("Opened collection: " + u.Name())
 		}
@@ -862,9 +831,9 @@ func (m *MainUI) send() {
 					m.Status.SetText("Chain error: " + chainErr.Error())
 				}
 				m.responseRaw.SetText(chainErr.Error())
-				m.prettyText.SetText("")
+				m.clearRichResponse()
 				m.headersText.SetText("")
-				m.Response.SelectIndex(1)
+				m.Response.SelectIndex(2)
 				m.setScriptConsole(chainConsole)
 			})
 			return
@@ -885,14 +854,14 @@ func (m *MainUI) send() {
 			m.setScriptConsole(consoleLines)
 			// No HTTP completed → pre-script or HTTP failure; show the error.
 			if view.Response.StatusCode == 0 {
-				m.Response.SelectIndex(1)
+				m.Response.SelectIndex(2)
 				if ctx.Err() == context.Canceled {
 					m.Status.SetText("Aborted")
 				} else {
 					m.Status.SetText("Error: " + leafErr.Error())
 				}
 				m.responseRaw.SetText(leafErr.Error())
-				m.prettyText.SetText("")
+				m.clearRichResponse()
 				m.headersText.SetText("")
 				return
 			}
@@ -900,25 +869,7 @@ func (m *MainUI) send() {
 			// post-script error; surfaced as a status-line suffix.
 			m.responseRaw.SetText(string(view.Response.Body))
 			m.headersText.SetText(responsefmt.FormatHeaders(view.Response.Headers))
-
-			pretty := ""
-			ct := view.Response.Headers.Get("Content-Type")
-			switch {
-			case responsefmt.IsJSON(ct):
-				if p, perr := responsefmt.PrettyJSON(view.Response.Body); perr == nil {
-					pretty = p
-				}
-			case responsefmt.IsXML(ct):
-				if p, perr := responsefmt.PrettyXML(view.Response.Body); perr == nil {
-					pretty = p
-				}
-			}
-			m.prettyText.SetText(pretty)
-			if pretty != "" {
-				m.Response.SelectIndex(0)
-			} else {
-				m.Response.SelectIndex(1)
-			}
+			m.renderResponseBody(view.Response.Body, view.Response.Headers.Get("Content-Type"))
 
 			status := fmt.Sprintf("%s · %s · %s",
 				view.Response.Status,

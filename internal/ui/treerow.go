@@ -13,12 +13,19 @@ import (
 )
 
 // rowActions bundles the row-icon callbacks the tree row's
-// rename / delete / duplicate buttons invoke. Each takes the row's
-// current ID (captured by the row from setRequest / setBranch).
+// buttons invoke. Each takes the row's current ID (captured by the
+// row from setRequest / setBranch).
+//
+// onAddRequest / onAddFolder are only used on branch rows (collections
+// + folders) — the per-row +Req / +Folder icons replace the global
+// sidebar buttons, so adding into a folder no longer requires
+// selecting it first.
 type rowActions struct {
-	onRename    func(id string)
-	onDelete    func(id string)
-	onDuplicate func(id string) // requests only; folders / collections leave it nil
+	onRename     func(id string)
+	onDelete     func(id string)
+	onDuplicate  func(id string) // requests only; folders / collections leave it nil
+	onAddRequest func(parentID string)
+	onAddFolder  func(parentID string)
 }
 
 // treeRow is the per-row template the Collections tree uses. It
@@ -32,14 +39,16 @@ type rowActions struct {
 // per-row button callbacks operate on the right node.
 type treeRow struct {
 	widget.BaseWidget
-	id        string
-	prefix    *widget.Icon
-	method    *canvas.Text
-	name      *widget.Label
-	renameBtn *widget.Button
-	dupBtn    *widget.Button
-	delBtn    *widget.Button
-	actions   rowActions
+	id           string
+	prefix       *widget.Icon
+	method       *canvas.Text
+	name         *widget.Label
+	addReqBtn    *widget.Button
+	addFolderBtn *widget.Button
+	renameBtn    *widget.Button
+	dupBtn       *widget.Button
+	delBtn       *widget.Button
+	actions      rowActions
 }
 
 func newTreeRow(actions rowActions) *treeRow {
@@ -50,6 +59,16 @@ func newTreeRow(actions rowActions) *treeRow {
 		actions: actions,
 	}
 	r.method.TextStyle = fyne.TextStyle{Bold: true}
+	r.addReqBtn = widget.NewButtonWithIcon("", assets.Icon("page-plus"), func() {
+		if r.actions.onAddRequest != nil {
+			r.actions.onAddRequest(r.id)
+		}
+	})
+	r.addFolderBtn = widget.NewButtonWithIcon("", assets.Icon("folder-plus"), func() {
+		if r.actions.onAddFolder != nil {
+			r.actions.onAddFolder(r.id)
+		}
+	})
 	r.renameBtn = widget.NewButtonWithIcon("", assets.Icon("input-field"), func() {
 		if r.actions.onRename != nil {
 			r.actions.onRename(r.id)
@@ -65,9 +84,11 @@ func newTreeRow(actions rowActions) *treeRow {
 			r.actions.onDelete(r.id)
 		}
 	})
-	// Visual styling: low-importance for rename / duplicate (neutral
-	// edits), danger-importance for delete (so the red tint matches
-	// the icon's intent).
+	// Visual styling: low-importance for add / rename / duplicate
+	// (neutral edits), danger-importance for delete so the red tint
+	// matches the icon's intent.
+	r.addReqBtn.Importance = widget.LowImportance
+	r.addFolderBtn.Importance = widget.LowImportance
 	r.renameBtn.Importance = widget.LowImportance
 	r.dupBtn.Importance = widget.LowImportance
 	r.delBtn.Importance = widget.DangerImportance
@@ -76,7 +97,8 @@ func newTreeRow(actions rowActions) *treeRow {
 }
 
 // setRequest configures the row as a request: arrow + colored bold
-// method chip + name + all three action icons.
+// method chip + name + rename / duplicate / delete icons. Requests
+// are leaves so they don't carry +Req / +Folder buttons.
 func (r *treeRow) setRequest(id, method, name string) {
 	r.id = id
 	r.prefix.Show()
@@ -85,18 +107,24 @@ func (r *treeRow) setRequest(id, method, name string) {
 	r.method.Show()
 	r.method.Refresh()
 	r.name.SetText(name)
+	r.addReqBtn.Hide()
+	r.addFolderBtn.Hide()
 	r.dupBtn.Show()
 }
 
-// setBranch configures the row as a folder or collection: just the
-// label + rename / delete icons (no arrow, no method chip, no
-// duplicate — duplicating a collection isn't a Helena primitive).
+// setBranch configures the row as a folder or collection: label +
+// +Req / +Folder add icons + rename / delete. Branches are
+// containers, so the add affordances live here (replacing the
+// global sidebar buttons). No duplicate icon — duplicating an
+// entire folder / collection isn't a Helena primitive.
 func (r *treeRow) setBranch(id, label string) {
 	r.id = id
 	r.prefix.Hide()
 	r.method.Text = ""
 	r.method.Hide()
 	r.name.SetText(label)
+	r.addReqBtn.Show()
+	r.addFolderBtn.Show()
 	r.dupBtn.Hide()
 }
 
@@ -105,7 +133,7 @@ func (r *treeRow) CreateRenderer() fyne.WidgetRenderer {
 	// pushed to the right via a stretchable spacer (NewBorder with
 	// the action HBox in the trailing slot).
 	leading := container.NewHBox(r.prefix, r.method, r.name)
-	trailing := container.NewHBox(r.renameBtn, r.dupBtn, r.delBtn)
+	trailing := container.NewHBox(r.addReqBtn, r.addFolderBtn, r.renameBtn, r.dupBtn, r.delBtn)
 	// Tiny vertical-divider canvas-rectangle to give the buttons a
 	// small visual gap from the label without inserting padding that
 	// would make tree rows taller.

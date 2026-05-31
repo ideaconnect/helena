@@ -81,6 +81,50 @@ func TestActiveIndexReflectsWorkspaceSwitch(t *testing.T) {
 	}
 }
 
+// TestRemoveCollectionDropsFromWorkspaceAndKeepsFiles verifies the
+// per-row collection delete path: RemoveCollection drops the dir
+// from the active workspace's list, persists the change, and leaves
+// the on-disk directory untouched (Postman/Bruno convention).
+func TestRemoveCollectionDropsFromWorkspaceAndKeepsFiles(t *testing.T) {
+	tmp := t.TempDir()
+	a := makeColl(t, tmp, "A")
+	b := makeColl(t, tmp, "B")
+	cfg := filepath.Join(tmp, "cfg.yml")
+	s, _ := New(cfg)
+	if err := s.OpenCollection(a); err != nil {
+		t.Fatalf("Open A: %v", err)
+	}
+	if err := s.OpenCollection(b); err != nil {
+		t.Fatalf("Open B: %v", err)
+	}
+
+	if err := s.RemoveCollection(0); err != nil {
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	cols := s.Collections()
+	if len(cols) != 1 || cols[0].Name != "B" {
+		t.Errorf("after remove cols = %+v, want only B", cols)
+	}
+	// A's on-disk directory must still exist.
+	if _, err := storage.Load(a); err != nil {
+		t.Errorf("A's dir gone after RemoveCollection: %v", err)
+	}
+
+	// Out-of-range index returns a clear error rather than panicking.
+	if err := s.RemoveCollection(99); err == nil {
+		t.Error("expected error for out-of-range index")
+	}
+	if err := s.RemoveCollection(-1); err == nil {
+		t.Error("expected error for negative index")
+	}
+
+	// New session against the same cfg reflects the removal.
+	s2, _ := New(cfg)
+	if got := s2.Collections(); len(got) != 1 || got[0].Name != "B" {
+		t.Errorf("after reload cols = %+v, want only B", got)
+	}
+}
+
 // TestSetActiveCollectionUpdatesActiveAndPersists verifies that
 // switching the active collection updates the activeCol index and is
 // reflected in ActiveCollectionDir.

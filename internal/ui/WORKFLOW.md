@@ -160,11 +160,16 @@ share the same dispatch.
       leaf console lines into `scriptConsole`.
     - If `view.Response.StatusCode == 0`, the leaf's pre-script or
       HTTP failed: select the Raw tab, set the status line, dump the
-      error into Raw, clear Pretty and Headers.
+      error into Raw, and call `clearRichResponse` (blanks the
+      Structured + Pretty tabs) plus clear Headers.
     - Otherwise render from `view.Response`: fill `responseRaw`,
-      `headersText`; run `responsefmt.PrettyJSON` / `PrettyXML`
-      based on Content-Type to fill Pretty when applicable; select
-      Pretty or Raw depending on whether pretty-printing succeeded.
+      `headersText`, then call `renderResponseBody(body, contentType)`.
+      That fills the Pretty tab via `responsefmt.PrettyJSON` /
+      `PrettyXML` + `HighlightJSON` / `HighlightXML` → `setColoredGrid`,
+      and the Structured tab via `responsefmt.ParseJSON` / `ParseXML` →
+      `showStructured` (a `widget.Tree` with native fold/expand). It
+      then auto-selects the richest tab that succeeded: Structured if
+      the body parsed into a tree, else Pretty if it colored, else Raw.
     - Set status to `"<Status> · <size> · <duration>"`, possibly
       suffixed with `· sent <METHOD> <URL>` (pre-script mutated
       method or URL) and / or `· post-script: <err>` if the leaf's
