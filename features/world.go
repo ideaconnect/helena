@@ -406,7 +406,7 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	if preErr != nil {
 		return chain.View{}, console, preErr
 	}
-	resolver := vars.New(e.w.envSnap, e.w.sess.SnapshotEnvOverlay())
+	resolver := vars.New(e.w.envSnap, e.w.sess.SnapshotEnvOverlay()).WithFallback(chain.VarLookup(chainMap))
 	resp, err := e.w.client.Do(ctx, r, resolver)
 	if err != nil {
 		return chain.View{}, console, err

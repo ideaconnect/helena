@@ -7,16 +7,26 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
-// ApplyTheme switches the app's theme according to t. ThemeSystem follows the
-// OS appearance (Fyne's default theme respects the system variant).
+// ApplyTheme installs Helena's custom theme (see helena_theme.go) pinned to the
+// variant for t. ThemeLight/ThemeDark force that variant; ThemeSystem follows
+// the OS appearance. The custom theme embeds the stock theme, so anything it
+// doesn't override behaves as before.
 func ApplyTheme(app fyne.App, t model.Theme) {
+	app.Settings().SetTheme(newHelenaTheme(t))
+}
+
+// variantFor maps a Helena Theme to the Fyne theme variant PrettyView keys its
+// palette on. ThemeSystem defers to whatever variant the running app reports.
+// Needed because ApplyTheme swaps the whole theme object without flipping the
+// app's variant, so PrettyView must be told the variant explicitly to repaint.
+func variantFor(t model.Theme) fyne.ThemeVariant {
 	switch t {
 	case model.ThemeLight:
-		app.Settings().SetTheme(theme.LightTheme())
+		return theme.VariantLight
 	case model.ThemeDark:
-		app.Settings().SetTheme(theme.DarkTheme())
+		return theme.VariantDark
 	default:
-		app.Settings().SetTheme(theme.DefaultTheme())
+		return fyne.CurrentApp().Settings().ThemeVariant()
 	}
 }
 

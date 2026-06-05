@@ -48,26 +48,6 @@ func TestPrettyXMLStripsInputWhitespace(t *testing.T) {
 	}
 }
 
-// TestIsJSONIsXML verifies content-type sniffing matches JSON/XML variants (incl. vnd.api+json, SOAP) without false positives.
-func TestIsJSONIsXML(t *testing.T) {
-	for _, ct := range []string{"application/json", "application/vnd.api+json", "APPLICATION/JSON"} {
-		if !IsJSON(ct) {
-			t.Errorf("IsJSON(%q) = false", ct)
-		}
-	}
-	if IsJSON("text/plain") {
-		t.Errorf("IsJSON false-positive")
-	}
-	for _, ct := range []string{"application/xml", "text/xml", "application/soap+xml"} {
-		if !IsXML(ct) {
-			t.Errorf("IsXML(%q) = false", ct)
-		}
-	}
-	if IsXML("application/json") {
-		t.Errorf("IsXML false-positive")
-	}
-}
-
 // TestFormatHeaders verifies that headers are emitted sorted by name with one line per value.
 func TestFormatHeaders(t *testing.T) {
 	h := http.Header{

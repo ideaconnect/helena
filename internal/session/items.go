@@ -298,6 +298,197 @@ func (s *Session) DuplicateItem(nodeID string) (string, error) {
 	return "", fmt.Errorf("not duplicable: %s", nodeID)
 }
 
+// MoveNode moves the folder or request at srcID into the container at
+// dstParentID (a collection root like "0" or a folder like "0/f1") at position
+// index, within the SAME collection, and persists. index is interpreted
+// against the destination container as the caller currently sees it (before
+// the move); MoveNode adjusts for the source's removal when both ends share a
+// container. Cross-collection moves and dropping a folder into itself or a
+// descendant are rejected. Chain references whose path prefix changed are
+// rewritten, mirroring RenameItem. Returns the moved node's new tree node ID.
+func (s *Session) MoveNode(srcID, dstParentID string, index int) (string, error) {
+	srcParent, kind, srcIdx, ok := parseLeaf(srcID)
+	if !ok || (kind != "f" && kind != "r") {
+		return "", fmt.Errorf("not movable: %q", srcID)
+	}
+	ci := nodeCollectionIndex(srcID)
+	if ci < 0 || ci >= len(s.cols) {
+		return "", fmt.Errorf("invalid node: %q", srcID)
+	}
+	if ci != nodeCollectionIndex(dstParentID) {
+		return "", fmt.Errorf("cross-collection moves are not supported")
+	}
+	// A folder can't be dropped into itself or its own descendant.
+	if dstParentID == srcID || strings.HasPrefix(dstParentID, srcID+"/") {
+		return "", fmt.Errorf("cannot move a folder into itself")
+	}
+
+	// Capture the destination container's stable identity (a folder model.ID,
+	// or "" for the collection root) so we can re-find it after the removal
+	// shifts positional node IDs.
+	dstFolderID, ok := s.folderIDForContainer(dstParentID, ci)
+	if !ok {
+		return "", fmt.Errorf("invalid drop target: %q", dstParentID)
+	}
+
+	oldPath := s.nodeNamePath(srcID)
+
+	// Pull the moved item out of its source container.
+	_, srcFoldersP, srcReqsP := s.containerAtPtr(srcParent)
+	var movedFolder model.Folder
+	var movedReq model.Request
+	var movedModelID string
+	switch kind {
+	case "f":
+		if srcFoldersP == nil || srcIdx < 0 || srcIdx >= len(*srcFoldersP) {
+			return "", fmt.Errorf("invalid folder %q", srcID)
+		}
+		movedFolder = (*srcFoldersP)[srcIdx]
+		// A stable, unique ID is needed to relocate the item after the removal
+		// reshuffles positional node IDs. Mint one only if missing (legacy
+		// collections) — never rewrite an existing ID, since open tabs track
+		// requests by it.
+		if movedFolder.ID == "" {
+			movedFolder.ID = model.NewID()
+		}
+		movedModelID = movedFolder.ID
+		*srcFoldersP = slices.Delete(*srcFoldersP, srcIdx, srcIdx+1)
+	case "r":
+		if srcReqsP == nil || srcIdx < 0 || srcIdx >= len(*srcReqsP) {
+			return "", fmt.Errorf("invalid request %q", srcID)
+		}
+		movedReq = (*srcReqsP)[srcIdx]
+		if movedReq.ID == "" {
+			movedReq.ID = model.NewID()
+		}
+		movedModelID = movedReq.ID
+		*srcReqsP = slices.Delete(*srcReqsP, srcIdx, srcIdx+1)
+	}
+
+	// Same-container reorder: removing the source shifted everything after it
+	// down by one, so a target index past the source decrements by one.
+	if srcParent == dstParentID && srcIdx < index {
+		index--
+	}
+
+	// Re-resolve the destination container (the removal may have invalidated a
+	// positional pointer) and insert.
+	dstFoldersP, dstReqsP := s.containerByFolderID(ci, dstFolderID)
+	if dstFoldersP == nil {
+		return "", fmt.Errorf("drop target no longer exists")
+	}
+	switch kind {
+	case "f":
+		index = clampIndex(index, len(*dstFoldersP))
+		*dstFoldersP = slices.Insert(*dstFoldersP, index, movedFolder)
+	case "r":
+		index = clampIndex(index, len(*dstReqsP))
+		*dstReqsP = slices.Insert(*dstReqsP, index, movedReq)
+	}
+
+	newID := s.nodeIDOfModel(ci, kind, movedModelID)
+
+	// Cascade chain refs whose prefix was the moved subtree's old path.
+	if oldPath != "" {
+		if newPath := s.nodeNamePath(newID); newPath != "" && newPath != oldPath {
+			cascadeChainRefs(&s.cols[ci], strings.Split(oldPath, "/"), strings.Split(newPath, "/"))
+		}
+	}
+
+	if err := s.saveCollection(ci); err != nil {
+		return "", err
+	}
+	return newID, nil
+}
+
+func clampIndex(i, n int) int {
+	if i < 0 {
+		return 0
+	}
+	if i > n {
+		return n
+	}
+	return i
+}
+
+// folderIDForContainer validates that containerID (within collection ci) is a
+// container and returns the model.ID of the folder it names, or "" for the
+// collection root. ok is false when containerID isn't a valid container.
+func (s *Session) folderIDForContainer(containerID string, ci int) (folderID string, ok bool) {
+	if containerID == strconv.Itoa(ci) {
+		return "", true // collection root
+	}
+	parent, kind, idx, parsed := parseLeaf(containerID)
+	if !parsed || kind != "f" {
+		return "", false
+	}
+	_, foldersP, _ := s.containerAtPtr(parent)
+	if foldersP == nil || idx < 0 || idx >= len(*foldersP) {
+		return "", false
+	}
+	f := &(*foldersP)[idx]
+	if f.ID == "" { // backfill so the container survives the removal re-resolve
+		f.ID = model.NewID()
+	}
+	return f.ID, true
+}
+
+// containerByFolderID returns the child (Folders, Requests) slice pointers of
+// the folder with the given model ID inside collection ci, or the collection
+// root's slices when folderID is "". Returns nil pointers if not found.
+func (s *Session) containerByFolderID(ci int, folderID string) (*[]model.Folder, *[]model.Request) {
+	if ci < 0 || ci >= len(s.cols) {
+		return nil, nil
+	}
+	col := &s.cols[ci]
+	if folderID == "" {
+		return &col.Folders, &col.Requests
+	}
+	var walk func(foldersP *[]model.Folder) (*[]model.Folder, *[]model.Request)
+	walk = func(foldersP *[]model.Folder) (*[]model.Folder, *[]model.Request) {
+		for i := range *foldersP {
+			f := &(*foldersP)[i]
+			if f.ID == folderID {
+				return &f.Folders, &f.Requests
+			}
+			if a, b := walk(&f.Folders); a != nil {
+				return a, b
+			}
+		}
+		return nil, nil
+	}
+	return walk(&col.Folders)
+}
+
+// nodeIDOfModel returns the positional tree node ID of the folder or request
+// ("f"/"r") with the given model.ID inside collection ci, or "" if not found.
+func (s *Session) nodeIDOfModel(ci int, kind, modelID string) string {
+	if ci < 0 || ci >= len(s.cols) {
+		return ""
+	}
+	var walk func(prefix string, folders []model.Folder, requests []model.Request) string
+	walk = func(prefix string, folders []model.Folder, requests []model.Request) string {
+		if kind == "r" {
+			for i := range requests {
+				if requests[i].ID == modelID {
+					return fmt.Sprintf("%s/r%d", prefix, i)
+				}
+			}
+		}
+		for i := range folders {
+			id := fmt.Sprintf("%s/f%d", prefix, i)
+			if kind == "f" && folders[i].ID == modelID {
+				return id
+			}
+			if got := walk(id, folders[i].Folders, folders[i].Requests); got != "" {
+				return got
+			}
+		}
+		return ""
+	}
+	return walk(strconv.Itoa(ci), s.cols[ci].Folders, s.cols[ci].Requests)
+}
+
 // containerAtPtr returns pointers to the (Folders, Requests) slices of the
 // container at id, plus its owning collection. id like "0" addresses a
 // collection's root; "0/f1" addresses folder 1 of collection 0; "0/f1/f0"

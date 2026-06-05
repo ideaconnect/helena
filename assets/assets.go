@@ -1,7 +1,8 @@
-// Package assets embeds static files (the application icon and the
-// iconoir SVGs used across the UI) so they ship inside the single
-// Helena binary. Iconoir is MIT-licensed; full text in
-// assets/icons/LICENSE-iconoir.md.
+// Package assets embeds static files (the application icon, the Font Awesome
+// SVGs used across the UI, and the Inter + JetBrains Mono typefaces) so they
+// ship inside the single Helena binary. Font Awesome Free icons are CC BY 4.0
+// (assets/icons/LICENSE-fontawesome.txt); Inter and JetBrains Mono are
+// SIL-OFL-1.1-licensed (assets/fonts/LICENSE-*.txt). See THIRD_PARTY_NOTICES.md.
 package assets
 
 import (
@@ -23,6 +24,13 @@ var AppIcon []byte
 //go:embed icons/*.svg
 var iconFS embed.FS
 
+// fontFS holds the embedded TTFs under assets/fonts/ (Inter for the UI,
+// JetBrains Mono for monospace). Use Font(name) to fetch one as a Fyne
+// resource for a custom theme's Font(style) method.
+//
+//go:embed fonts/*.ttf
+var fontFS embed.FS
+
 // Icon returns the SVG resource at icons/<name>.svg as a fyne.Resource.
 // Panics if the icon isn't embedded — call sites are static so a typo
 // is a build-time-fixable bug, not a runtime concern. Resources are
@@ -34,4 +42,16 @@ func Icon(name string) fyne.Resource {
 		panic(fmt.Errorf("assets: missing icon %q (check assets/icons/): %w", name, err))
 	}
 	return fyne.NewStaticResource(name+".svg", b)
+}
+
+// Font returns the TTF resource at fonts/<name>.ttf as a fyne.Resource.
+// Panics if the font isn't embedded — like Icon, call sites are static so
+// a typo is a build-time bug. Cache the result locally for hot paths.
+func Font(name string) fyne.Resource {
+	path := "fonts/" + name + ".ttf"
+	b, err := fontFS.ReadFile(path)
+	if err != nil {
+		panic(fmt.Errorf("assets: missing font %q (check assets/fonts/): %w", name, err))
+	}
+	return fyne.NewStaticResource(name+".ttf", b)
 }

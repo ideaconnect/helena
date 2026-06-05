@@ -86,23 +86,23 @@ func TestPerTabResponseRestore(t *testing.T) {
 
 	m.activateTab(0)
 	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: "FIRST-BODY", status: "200 OK"})
-	if m.responseRaw.full != "FIRST-BODY" {
-		t.Fatalf("after deliver to tab0: raw = %q, want FIRST-BODY", m.responseRaw.full)
+	if string(m.pv.Source()) != "FIRST-BODY" {
+		t.Fatalf("after deliver to tab0: raw = %q, want FIRST-BODY", string(m.pv.Source()))
 	}
 
 	m.activateTab(1) // tab1 has no response → panel clears
-	if m.responseRaw.full != "" {
-		t.Errorf("tab1 raw = %q, want empty", m.responseRaw.full)
+	if string(m.pv.Source()) != "" {
+		t.Errorf("tab1 raw = %q, want empty", string(m.pv.Source()))
 	}
 	m.deliverResponse(m.tabs[1], &tabResponse{rawBody: "SECOND-BODY", status: "201"})
 
 	m.activateTab(0) // back to tab0 → its body restored
-	if m.responseRaw.full != "FIRST-BODY" {
-		t.Errorf("tab0 restored raw = %q, want FIRST-BODY", m.responseRaw.full)
+	if string(m.pv.Source()) != "FIRST-BODY" {
+		t.Errorf("tab0 restored raw = %q, want FIRST-BODY", string(m.pv.Source()))
 	}
 	m.activateTab(1)
-	if m.responseRaw.full != "SECOND-BODY" {
-		t.Errorf("tab1 restored raw = %q, want SECOND-BODY", m.responseRaw.full)
+	if string(m.pv.Source()) != "SECOND-BODY" {
+		t.Errorf("tab1 restored raw = %q, want SECOND-BODY", string(m.pv.Source()))
 	}
 }
 
@@ -118,15 +118,15 @@ func TestDeliverResponseToInactiveTabDoesNotRepaint(t *testing.T) {
 	m.activateTab(1) // user switched to tab 1 mid-Send
 	m.deliverResponse(initTab, &tabResponse{rawBody: "LATE", status: "200"})
 
-	if m.responseRaw.full == "LATE" {
+	if string(m.pv.Source()) == "LATE" {
 		t.Error("inactive tab's response repainted the active panel")
 	}
 	if initTab.resp == nil || initTab.resp.rawBody != "LATE" {
 		t.Error("response not stored on the originating tab")
 	}
 	m.activateTab(0)
-	if m.responseRaw.full != "LATE" {
-		t.Errorf("originating tab raw after switch back = %q, want LATE", m.responseRaw.full)
+	if string(m.pv.Source()) != "LATE" {
+		t.Errorf("originating tab raw after switch back = %q, want LATE", string(m.pv.Source()))
 	}
 }
 

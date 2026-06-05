@@ -1,145 +1,98 @@
 package ui
 
 import (
-	"image/color"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/widget"
-
-	"github.com/idct/helena/assets"
 )
 
-// rowActions bundles the row-icon callbacks the tree row's
-// buttons invoke. Each takes the row's current ID (captured by the
-// row from setRequest / setBranch).
+// treeRow is the per-row template the Collections tree uses: a brand-colored
+// bold method chip (requests only — see method.go) followed by the name
+// (branches: just the label).
 //
-// onAddRequest / onAddFolder are only used on branch rows (collections
-// + folders) — the per-row +Req / +Folder icons replace the global
-// sidebar buttons, so adding into a folder no longer requires
-// selecting it first.
-type rowActions struct {
-	onRename     func(id string)
-	onDelete     func(id string)
-	onDuplicate  func(id string) // requests only; folders / collections leave it nil
-	onAddRequest func(parentID string)
-	onAddFolder  func(parentID string)
-}
-
-// treeRow is the per-row template the Collections tree uses. It
-// renders:
-//   - requests as `→ METHOD  Name   [rename] [duplicate] [delete]`
-//     with the METHOD chip in its brand color (see method.go).
-//   - branches (folders + collections) as `Label   [rename] [delete]`.
+// It is a display widget plus drag source: it implements fyne.Draggable so a
+// row can be picked up and dropped elsewhere in the tree (see treedrag.go), but
+// NOT Tappable — the enclosing tree node still handles selection (a full-width
+// tap, distinct from a drag) and paints the full-width hover + selection
+// backgrounds. Node actions live on the sidebar toolbar (shell.go). The name
+// ellipsis-truncates so long names never overflow the panel.
 //
-// One template is recycled across many tree rows by Fyne; setRequest /
-// setBranch updates the visible widgets + the captured id so the
-// per-row button callbacks operate on the right node.
+// One template is recycled across many rows by Fyne; setRequest / setBranch
+// update the visible widgets and the captured id for the bound node so the drag
+// callbacks act on the right node.
 type treeRow struct {
 	widget.BaseWidget
-	id           string
-	prefix       *widget.Icon
-	method       *canvas.Text
-	name         *widget.Label
-	addReqBtn    *widget.Button
-	addFolderBtn *widget.Button
-	renameBtn    *widget.Button
-	dupBtn       *widget.Button
-	delBtn       *widget.Button
-	actions      rowActions
+	id        string
+	method    *canvas.Text
+	name      *widget.Label
+	onDrag    func(id string, e *fyne.DragEvent)
+	onDragEnd func(id string)
+	dragging  func() bool // reports whether a tree drag is currently in flight
 }
 
-func newTreeRow(actions rowActions) *treeRow {
+func newTreeRow(onDrag func(string, *fyne.DragEvent), onDragEnd func(string), dragging func() bool) *treeRow {
+	name := widget.NewLabel("")
+	name.Truncation = fyne.TextTruncateEllipsis
 	r := &treeRow{
-		prefix:  widget.NewIcon(assets.Icon("nav-arrow-right")),
-		method:  canvas.NewText("", nil),
-		name:    widget.NewLabel(""),
-		actions: actions,
+		method:    canvas.NewText("", nil),
+		name:      name,
+		onDrag:    onDrag,
+		onDragEnd: onDragEnd,
+		dragging:  dragging,
 	}
 	r.method.TextStyle = fyne.TextStyle{Bold: true}
-	r.addReqBtn = widget.NewButtonWithIcon("", assets.Icon("page-plus"), func() {
-		if r.actions.onAddRequest != nil {
-			r.actions.onAddRequest(r.id)
-		}
-	})
-	r.addFolderBtn = widget.NewButtonWithIcon("", assets.Icon("folder-plus"), func() {
-		if r.actions.onAddFolder != nil {
-			r.actions.onAddFolder(r.id)
-		}
-	})
-	r.renameBtn = widget.NewButtonWithIcon("", assets.Icon("input-field"), func() {
-		if r.actions.onRename != nil {
-			r.actions.onRename(r.id)
-		}
-	})
-	r.dupBtn = widget.NewButtonWithIcon("", assets.Icon("copy"), func() {
-		if r.actions.onDuplicate != nil {
-			r.actions.onDuplicate(r.id)
-		}
-	})
-	r.delBtn = widget.NewButtonWithIcon("", assets.Icon("xmark-circle-solid"), func() {
-		if r.actions.onDelete != nil {
-			r.actions.onDelete(r.id)
-		}
-	})
-	// Visual styling: low-importance for add / rename / duplicate
-	// (neutral edits), danger-importance for delete so the red tint
-	// matches the icon's intent.
-	r.addReqBtn.Importance = widget.LowImportance
-	r.addFolderBtn.Importance = widget.LowImportance
-	r.renameBtn.Importance = widget.LowImportance
-	r.dupBtn.Importance = widget.LowImportance
-	r.delBtn.Importance = widget.DangerImportance
 	r.ExtendBaseWidget(r)
 	return r
 }
 
-// setRequest configures the row as a request: arrow + colored bold
-// method chip + name + rename / duplicate / delete icons. Requests
-// are leaves so they don't carry +Req / +Folder buttons.
+// Cursor implements desktop.Cursorable: while a drag is in flight the row shows
+// a grab (pointer) cursor so the gesture reads as moving the node. Fyne
+// recomputes the cursor from the object under the pointer on every move, even
+// during a drag, so this flips as soon as the drag starts. Fyne has no
+// dedicated "grabbing" cursor, so the hand pointer stands in.
+func (r *treeRow) Cursor() desktop.Cursor {
+	if r.dragging != nil && r.dragging() {
+		return desktop.PointerCursor
+	}
+	return desktop.DefaultCursor
+}
+
+// setRequest configures the row as a request: colored bold method chip + name.
 func (r *treeRow) setRequest(id, method, name string) {
 	r.id = id
-	r.prefix.Show()
 	r.method.Text = method
 	r.method.Color = methodColor(method)
 	r.method.Show()
 	r.method.Refresh()
 	r.name.SetText(name)
-	r.addReqBtn.Hide()
-	r.addFolderBtn.Hide()
-	r.dupBtn.Show()
 }
 
-// setBranch configures the row as a folder or collection: label +
-// +Req / +Folder add icons + rename / delete. Branches are
-// containers, so the add affordances live here (replacing the
-// global sidebar buttons). No duplicate icon — duplicating an
-// entire folder / collection isn't a Helena primitive.
+// setBranch configures the row as a folder or collection: just a label.
 func (r *treeRow) setBranch(id, label string) {
 	r.id = id
-	r.prefix.Hide()
 	r.method.Text = ""
 	r.method.Hide()
 	r.name.SetText(label)
-	r.addReqBtn.Show()
-	r.addFolderBtn.Show()
-	r.dupBtn.Hide()
+}
+
+// Dragged / DragEnd make the row a drag source. The tree node distinguishes a
+// tap (select) from a drag by movement, so dragging does not also select.
+func (r *treeRow) Dragged(e *fyne.DragEvent) {
+	if r.onDrag != nil {
+		r.onDrag(r.id, e)
+	}
+}
+
+func (r *treeRow) DragEnd() {
+	if r.onDragEnd != nil {
+		r.onDragEnd(r.id)
+	}
 }
 
 func (r *treeRow) CreateRenderer() fyne.WidgetRenderer {
-	// Layout: arrow + method chip + name on the left; action icons
-	// pushed to the right via a stretchable spacer (NewBorder with
-	// the action HBox in the trailing slot).
-	leading := container.NewHBox(r.prefix, r.method, r.name)
-	trailing := container.NewHBox(r.addReqBtn, r.addFolderBtn, r.renameBtn, r.dupBtn, r.delBtn)
-	// Tiny vertical-divider canvas-rectangle to give the buttons a
-	// small visual gap from the label without inserting padding that
-	// would make tree rows taller.
-	spacer := canvas.NewRectangle(color.Transparent)
-	spacer.SetMinSize(fyne.NewSize(8, 1))
-	row := container.New(layout.NewBorderLayout(nil, nil, nil, trailing),
-		trailing, container.NewHBox(leading, spacer))
-	return widget.NewSimpleRenderer(row)
+	// Method chip on the left, name filling the rest (it truncates to the row
+	// width). No background of its own — the tree node paints hover/selection.
+	return widget.NewSimpleRenderer(container.NewBorder(nil, nil, r.method, nil, r.name))
 }

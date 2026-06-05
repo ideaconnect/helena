@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	fynetooltip "github.com/dweymouth/fyne-tooltip"
 
 	"github.com/idct/helena/assets"
 	"github.com/idct/helena/internal/config"
@@ -42,7 +43,9 @@ func main() {
 
 	mainUI := ui.NewMainUI(sess)
 	mainUI.SetWindow(w)
-	w.SetContent(mainUI.Root())
+	// Wrap in a tooltip layer (fyne-tooltip) so the icon-only toolbar buttons can
+	// show hover tooltips — Fyne core has no tooltip support.
+	w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))
 
 	a.Lifecycle().SetOnStopped(func() {
 		size := w.Canvas().Size()

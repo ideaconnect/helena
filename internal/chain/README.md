@@ -112,6 +112,28 @@ token already plumbed through.
   `request.url`, but the only place that mutation is visible is the
   step's own `console.log` output, which lands in the Console panel.
 
+## Chain results as `{{variables}}`
+
+The alias→`View` map `Resolve` returns can also back the `{{}}` template
+resolver, so a chained result is usable as an ordinary variable — in the URL,
+params, headers, body, and **auth fields** (e.g. a Bearer token set to
+`{{chain.login.response.json.token}}`). The Send path wires this by attaching
+`VarLookup(chainMap)` as the resolver's fallback
+(`vars.New(...).WithFallback(chain.VarLookup(chainMap))`), so it is scoped to the
+same per-request aliases the leaf's scripts see. Supported template paths:
+
+```
+{{chain.<alias>.response.json.<dotted.path>}}   # array elements by index: items.0.id
+{{chain.<alias>.response.headers.<Header-Name>}}
+{{chain.<alias>.response.status | .statusText | .body | .text}}
+{{chain.<alias>.request.method | .url | .body}}
+```
+
+Only scalar JSON leaves resolve (string / number / bool; `null` → empty); a path
+landing on an object/array, an unknown alias, or a missing field returns
+not-found, so `httpclient.Build` reports it as an unresolved variable. XML bodies
+are not navigable from templates — scripts (`chain.<alias>.response.xml`) are.
+
 ## Public API
 
 ```go
@@ -122,6 +144,10 @@ func Resolve(
     exec Executor,
     progress ProgressFunc,
 ) (map[string]View, []string, error)
+
+// VarLookup returns a vars.Resolver fallback resolving {{chain.<alias>.…}}
+// template names against chain results. See "Chain results as {{variables}}".
+func VarLookup(views map[string]View) func(name string) (string, bool)
 
 type ProgressFunc func(step, total int, alias, name string)
 

@@ -116,11 +116,10 @@ restoration is stable across collection reordering.
 Two distinct edit surfaces feed into the same save path:
 
 - Tree mutation helpers ([items.go](items.go)) — `AddRequest`, `AddFolder`,
-  `RenameItem`, `DeleteItem`, `DuplicateItem`. Each one walks the tree via
-  `containerAtPtr` (which returns pointers into the in-memory model), applies
-  the mutation, and calls `Session.SaveActiveCollection()`. If save fails the
-  in-memory state may be ahead of disk; the caller is expected to surface the
-  error.
+  `RenameItem`, `DeleteItem`, `DuplicateItem`, `MoveNode`. Each one walks the
+  tree via `containerAtPtr` (which returns pointers into the in-memory model),
+  applies the mutation, and persists. If save fails the in-memory state may be
+  ahead of disk; the caller is expected to surface the error.
 - Direct edits — the request editor in the UI gets a pointer from
   `Tree.Request(id)` and mutates fields in place (URL, headers, body, …).
   When the user triggers save (e.g. closes the tab, hits the save shortcut),
@@ -136,6 +135,17 @@ When an entire folder is duplicated, `DuplicateItem` does a deep copy through
 `deepCopyFolder` / `deepCopyRequest` so the copy's slices (Headers, Params,
 Form, nested Folders and Requests) are independent of the original. New IDs
 are assigned at every level so the duplicate is treated as a fresh item.
+
+`MoveNode` (the drag-and-drop relocation, same collection only) is the one
+mutation where positional node IDs can't be trusted across the change: removing
+the source shifts the indices of later siblings, which can invalidate a
+positional pointer to the destination. So it captures the destination by a
+stable folder `model.ID` (minting one only if a legacy item lacks it — an
+existing request ID is never rewritten, since open tabs track requests by it),
+removes the source, re-resolves the destination by that ID, inserts, then
+cascades chain references whose name-path prefix changed (mirroring
+`RenameItem`). `MoveCollection` reorders `cols`/`dirs` and the workspace's dir
+list in lockstep and keeps the active-collection pointer on its collection.
 
 ## Resolving effective auth
 

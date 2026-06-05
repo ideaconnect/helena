@@ -28,12 +28,12 @@ func TestRequestTabLabelAndActive(t *testing.T) {
 	}
 
 	rt.setActive(true)
-	if rt.bg.FillColor != theme.Color(theme.ColorNameSelection) {
-		t.Error("setActive(true) did not fill the highlight rectangle")
+	if rt.bg.FillColor != theme.Color(theme.ColorNameBackground) {
+		t.Error("setActive(true) did not fill with the content background")
 	}
 	rt.setActive(false)
 	if rt.bg.FillColor != color.Transparent {
-		t.Error("setActive(false) did not clear the highlight rectangle")
+		t.Error("setActive(false) did not clear the background")
 	}
 }
 

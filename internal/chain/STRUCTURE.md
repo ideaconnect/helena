@@ -5,7 +5,9 @@
 | File | Purpose |
 | ---- | ------- |
 | [chain.go](chain.go) | The whole package: types (`View`, `RequestView`, `ResponseView`), interfaces (`Executor`, `RequestFinder`), and the recursive `Resolve` + `resolveSteps` runner with cycle detection. |
+| [chainvars.go](chainvars.go) | `VarLookup` — a `vars.Resolver` fallback that resolves `{{chain.<alias>.…}}` template names against a chain-result map (JSON path / headers / status / body / request fields). Lets chain results be used as ordinary `{{variables}}` anywhere, including auth fields. |
 | [chain_test.go](chain_test.go) | Behavioural suite — empty chain no-op, single-step, recursive ordering A→B→C, direct + indirect cycle detection, unresolved ref, duplicate alias, missing alias, executor failure propagation. |
+| [chainvars_test.go](chainvars_test.go) | `VarLookup` across the JSON / headers / status / body / request surfaces, array indices, null/scalar-only rules, and the not-found cases (unknown alias / path, malformed JSON, missing prefix). |
 
 ## Types
 

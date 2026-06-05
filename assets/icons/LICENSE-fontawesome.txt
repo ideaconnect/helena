@@ -1,0 +1,17 @@
+Font Awesome Free
+https://fontawesome.com
+Copyright 2024 Fonticons, Inc.
+
+The .svg files in this directory that carry the "Font Awesome Free" header
+comment are part of Font Awesome Free and are used as Helena's UI icons. Per
+the Font Awesome Free license (https://fontawesome.com/license/free):
+
+  - Icons:  Creative Commons Attribution 4.0 International (CC BY 4.0)
+            https://creativecommons.org/licenses/by/4.0/
+  - Fonts:  SIL OFL 1.1
+  - Code:   MIT License
+
+Only the SVG icons are bundled here, so the applicable license is CC BY 4.0.
+Attribution: "Font Awesome Free by Fonticons, Inc." Each SVG also embeds this
+notice in a leading comment. The icons are used unmodified except for adding
+fill="currentColor" so they pick up the application theme colour.

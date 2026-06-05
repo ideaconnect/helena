@@ -15,7 +15,8 @@ const maxPasses = 10
 // Scopes are supplied lowest-precedence first; later scopes override earlier
 // ones — e.g. New(collectionVars, envVars, dotEnvVars).
 type Resolver struct {
-	scopes []map[string]string
+	scopes   []map[string]string
+	fallback func(name string) (string, bool)
 }
 
 // New builds a Resolver from scopes ordered low to high precedence.
@@ -23,12 +24,25 @@ func New(scopes ...map[string]string) *Resolver {
 	return &Resolver{scopes: scopes}
 }
 
-// Lookup returns the highest-precedence value for name.
+// WithFallback attaches a dynamic lookup consulted for any name no scope
+// resolves. It lets callers inject namespaced values — e.g.
+// {{chain.<alias>.response.json.token}} backed by chain results — without the
+// resolver knowing their source. Returns r for chaining. Passing nil clears it.
+func (r *Resolver) WithFallback(fn func(name string) (string, bool)) *Resolver {
+	r.fallback = fn
+	return r
+}
+
+// Lookup returns the highest-precedence value for name, falling back to the
+// dynamic lookup (if any) when no scope has it.
 func (r *Resolver) Lookup(name string) (string, bool) {
 	for i := len(r.scopes) - 1; i >= 0; i-- {
 		if v, ok := r.scopes[i][name]; ok {
 			return v, true
 		}
+	}
+	if r.fallback != nil {
+		return r.fallback(name)
 	}
 	return "", false
 }

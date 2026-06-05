@@ -7,12 +7,14 @@
 | [doc.go](doc.go) | Package-level godoc only. |
 | [vars.go](vars.go) | The `Resolver` type, regex, fixed-point loop, and missing-name collector. |
 | [vars_test.go](vars_test.go) | Tests for plain substitution, whitespace tolerance, precedence stacking, chained refs, missing-name reporting, and cycle termination. |
+| [fallback_test.go](fallback_test.go) | `WithFallback`: the dynamic lookup resolves names no scope has, scopes still win, and a nil fallback is unchanged behavior. |
 
 ## Type catalog
 
 ### `Resolver` — [vars.go:17](vars.go#L17)
 A wrapper over an ordered slice of scope maps.
 - `scopes` (unexported) — passed to `New` low-to-high; `Lookup` scans from the top of the stack down, so the last scope wins.
+- `fallback` (unexported) — optional `func(name) (string, bool)` set by `WithFallback`, consulted by `Lookup` only when no scope resolves a name. Used to plug in the `{{chain.<alias>…}}` namespace (`chain.VarLookup`) without coupling `vars` to `chain`.
 
 ## Non-trivial internals
 

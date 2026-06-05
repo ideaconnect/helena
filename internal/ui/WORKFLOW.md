@@ -34,6 +34,59 @@ nil-`win` guard, the off-UI-goroutine send), it is called out explicitly.
     final window size into the session.
 11. `w.ShowAndRun()` — Fyne main loop.
 
+## Sidebar node actions
+
+Tree rows ([treerow.go](treerow.go)) are pure display widgets (method chip +
+name). They implement neither Tappable nor Hoverable, so the enclosing tree node
+handles selection on a full-width tap and paints the full-width hover +
+selection backgrounds itself — a clean, uncluttered highlight.
+
+Node actions live on a toolbar above the tree (built in `NewMainUI`): icon
+buttons for **add request, add folder, rename, clone, delete**, wired to
+`actionNewRequest` / `actionNewFolder` / `actionRename` / `actionDuplicate` /
+`actionDelete` ([items.go](items.go)) — the same entry points the keyboard
+shortcuts use. Add request/folder target `parentForNew` (selected
+folder/collection, a selected request's parent, or the active collection root);
+rename/clone/delete operate on `lastSelectedNodeID`.
+
+`refreshSidebarActions` reconciles the toolbar's enable state with the
+selection: rename/delete need a selection, clone needs a selected *request*, and
+add request/folder stay enabled. It is called from the tree's `OnSelected` and
+after a deletion that clears the selection.
+
+The tree is wrapped in a `container.ThemeOverride` (`sidebarTheme`,
+[helena_theme.go](helena_theme.go)) that shrinks the inline-icon + padding sizes
+so per-level indentation is shallower and icons denser — scoped to the sidebar.
+
+## Drag-and-drop reordering
+
+Tree rows are `fyne.Draggable` (drag source) but not Tappable, so a click still
+selects via the tree node while a drag reorders. The flow ([treedrag.go](treedrag.go)):
+
+1. Each bound row registers itself in `m.treeRows[row] = id` (the `buildTree`
+   update callback). This is the hit-test registry.
+2. On `Dragged`, `dragTreeNode` records `dragSrcID` + the pointer's
+   `AbsolutePosition`, then `computeDrop` resolves a `dropPlan`: `rowAt` finds
+   the row under the pointer (only visible rows inside the tree viewport, so
+   pooled off-screen rows don't false-match), and the top/bottom half of that
+   row plus the source/target kinds decide the plan —
+   - dragging a **collection** → `planCollectionDrop` (reorder among
+     collections, `Session.MoveCollection`);
+   - dragging a **folder/request** → `planNodeDrop`: drop INTO a folder/
+     collection (bottom half of a branch), a sibling before/after a same-kind
+     row, or append. Cross-collection drops and folder-into-self/descendant are
+     rejected (plan invalid).
+   `showDropIndicator` draws the insert line or the into-outline for the live plan.
+3. On `DragEnd`, `dropTreeNode` re-resolves the plan at the last position and
+   `applyDrop` calls `Session.MoveNode` / `MoveCollection`, then `Tree.Refresh`
+   + `reconcileTabs` (node IDs shifted) and re-selects the moved node.
+
+The row also implements `desktop.Cursorable`: while `dragActive` is set it
+returns a grab (pointer) cursor. Fyne recomputes the cursor from the object
+under the pointer on every mouse move — and that path isn't gated by the drag —
+so the cursor flips to "grab" as soon as the drag crosses the move threshold and
+back on release.
+
 ## Selecting a tree node and loading a request
 
 Each row in the collections tree carries an ID. The handler is registered in
@@ -122,13 +175,14 @@ that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
   (`tabMenuItems`, the active one checked) for jumping to one scrolled out of
   view.
 - **Per-tab response.** Each tab caches a `tabResponse` (raw body, header dump,
-  content type, status line, CORS text, console, error flag). `send` captures
-  the initiating tab; the worker builds the `tabResponse` off-thread and the
-  `fyne.Do` block calls `deliverResponse(initTab, resp)`, which **always** stores
-  it on `initTab` and repaints the shared panel **only if that tab is still
-  active** (the user may switch tabs mid-Send). `applyResponse` is also the
-  restore path on tab switch. Only one Send runs at a time (`sendCancel`), so
-  there are no concurrent per-tab sends.
+  status line, CORS text, console, error flag). `send` captures the initiating
+  tab; the worker builds the `tabResponse` off-thread and the `fyne.Do` block
+  calls `deliverResponse(initTab, resp)`, which **always** stores it on `initTab`
+  and repaints the shared panel **only if that tab is still active** (the user
+  may switch tabs mid-Send). `applyResponse` feeds the body to the PrettyView
+  (`pv.SetData`, auto-detecting format) and is also the restore path on tab
+  switch. Only one Send runs at a time (`sendCancel`), so there are no
+  concurrent per-tab sends.
 - **Reconcile.** Every tree mutation (add / rename / duplicate / delete, in
   [items.go](items.go); also `RemoveCollection`) is followed by `reconcileTabs`:
   re-derive each tree-backed tab's node ID by `Request.ID`, drop tabs whose
@@ -216,7 +270,11 @@ share the same dispatch.
      HTTP).
    - Build the resolver from `envSnap` + a fresh
      `Session.SnapshotEnvOverlay()` so any `helena.env.set` from
-     chain steps or this pre-script is visible to `httpclient.Build`.
+     chain steps or this pre-script is visible to `httpclient.Build`,
+     and attach `.WithFallback(chain.VarLookup(chainMap))` so this
+     request's `{{chain.<alias>.response.json.token}}`-style templates
+     (URL, params, headers, body, auth) resolve against its chain
+     results.
    - Call `client.Do(ctx, req, resolver)`. HTTP failure returns a
      fatal error.
    - Build the chain.View from the successful response (carries
@@ -233,21 +291,24 @@ share the same dispatch.
       or abort): an error `tabResponse` carrying the error text + a
       `"Error: …"` / `"Aborted"` status.
     - Otherwise a success `tabResponse` with the raw body, the
-      `FormatHeaders` dump, the content type, a
-      `"<Status> · <size> · <duration>"` status (suffixed `· sent
-      <METHOD> <URL>` if the pre-script mutated method/URL, and the
-      post-script error if any), the CORS banner text, and the
-      console lines.
+      `FormatHeaders` dump, a `"<Status> · <size> · <duration>"`
+      status (suffixed `· sent <METHOD> <URL>` if the pre-script
+      mutated method/URL, and the post-script error if any), the CORS
+      banner text, and the console lines.
     The `fyne.Do` body then just calls `resetSendButton` and
     `deliverResponse(initTab, resp)`. `deliverResponse` stores `resp`
     on the tab that started the Send and, only if that tab is still
-    active, calls `applyResponse` — which pushes the body into
-    `responseRaw`, the headers into `headersText`, runs
-    `renderResponseBody` (JSON/XML → `showStructured`, a `widget.Tree`
-    with native fold/expand and `HideSeparators`; Structured selected
-    when the body parsed, else Raw), sets the status + console, and
-    shows/hides the `corsBanner`. The chain-error path (step 7) builds
-    and delivers its error `tabResponse` the same way.
+    active, calls `applyResponse` — which selects the Body tab, feeds
+    the body to the PrettyView (`m.pv.SetData([]byte(rawBody),
+    prettyview.FormatAuto)` on success, `FormatRaw` for an error
+    string so it can't be mis-rendered as structured), pushes the
+    headers into `headersText`, sets the status + console, and
+    shows/hides the `corsBanner`. PrettyView auto-detects JSON / XML /
+    HTML (raw fallback) and renders it virtualized with fold +
+    highlighting; there is no separate Structured/Raw tab any more.
+    The chain-error path (step 7) builds and delivers its error
+    `tabResponse` the same way. (Per-tab restore on a tab switch goes
+    through the same `applyResponse(tab.resp)`.)
 
 The Send button is the lifecycle marker AND the abort affordance:
 
@@ -364,14 +425,24 @@ The Environments… button opens `editEnvironments` at
 
 ## Changing theme
 
-The Settings… button opens `editSettings` at [shell.go:643](shell.go#L643).
-The Theme row is a Select pre-populated via `themeName(s.Theme)`. On Save:
+The Settings… button opens `editSettings` ([shell.go](shell.go)). The Theme
+row is a Select pre-populated via `themeName(s.Theme)`. On Save:
 
 1. `themeFromName(themeSelect.Selected)` maps the label back to a
    `model.Theme`.
 2. `sess.SetSettings(...)` persists the new value.
-3. `ApplyTheme(fyne.CurrentApp(), newTheme)` switches the live Fyne theme so
-   the change takes effect without restart.
+3. `ApplyTheme(fyne.CurrentApp(), newTheme)` installs `helenaTheme`
+   (see [helena_theme.go](helena_theme.go)) pinned to the chosen variant — the
+   change takes effect without restart. The custom theme embeds the stock
+   theme, so any name it doesn't override behaves as before.
+4. `m.pv.SetTheme(variantFor(newTheme), …)` rebuilds the response PrettyView at
+   the new variant — `SetTheme` swaps the theme object but does **not** flip the
+   app's light/dark variant, so the body would otherwise keep its old colours.
+5. `m.refreshThemedCanvas()` re-tints the raw `canvas.Text` / `canvas.Rectangle`
+   objects whose colours were set imperatively (the CORS banner; the active-tab
+   highlight via `rebuildTabBar`) and refreshes the tree. Theme-driven widgets
+   repaint themselves on `SetTheme`; bare canvas objects do not. Method chips
+   use fixed brand colours, so they need no re-tint.
 
 ## Keyboard shortcut dispatch
 

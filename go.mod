@@ -4,7 +4,11 @@ go 1.26.3
 
 require (
 	fyne.io/fyne/v2 v2.7.4
+	github.com/cucumber/godog v0.15.1
+	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
+	github.com/dweymouth/fyne-tooltip v0.4.0
 	github.com/getkin/kin-openapi v0.139.0
+	github.com/ideaconnect/go-fyne-pretty-view v0.1.0-alpha
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -12,11 +16,9 @@ require (
 	fyne.io/systray v1.12.1 // indirect
 	github.com/BurntSushi/toml v1.5.0 // indirect
 	github.com/cucumber/gherkin/go/v26 v26.2.0 // indirect
-	github.com/cucumber/godog v0.15.1 // indirect
 	github.com/cucumber/messages/go/v21 v21.0.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.4 // indirect
-	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c // indirect
 	github.com/fredbi/uri v1.1.1 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fyne-io/gl-js v0.2.0 // indirect
@@ -60,7 +62,7 @@ require (
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
 	golang.org/x/image v0.24.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
-	golang.org/x/sys v0.30.0 // indirect
-	golang.org/x/text v0.22.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
+	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/text v0.37.0 // indirect
 )

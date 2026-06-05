@@ -12,10 +12,12 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
+	prettyview "github.com/ideaconnect/go-fyne-pretty-view"
 
-	"github.com/idct/helena/assets"
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
@@ -96,7 +98,10 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		return chain.View{}, console, fmt.Errorf("pre-script: %w", preErr)
 	}
 
-	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay())
+	// The chain fallback lets this request's URL / params / headers / body /
+	// auth use {{chain.<alias>.response.json.token}}-style templates, scoped to
+	// this request's own chain aliases (same map the pre-script saw).
+	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay()).WithFallback(chain.VarLookup(chainMap))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {
 		return chain.View{}, console, err
@@ -164,9 +169,24 @@ type MainUI struct {
 	Save        *widget.Button
 	Send        *widget.Button
 	Tree        *widget.Tree
-	Request     *container.AppTabs
-	Response    *container.AppTabs
-	Status      *widget.Label
+	// Sidebar toolbar: node-action icon buttons operating on the selected tree
+	// node. rename / delete enable with any selection; clone with a folder or
+	// request; add request / folder fall back to the active collection.
+	sbAddReq    *ttwidget.Button
+	sbAddFolder *ttwidget.Button
+	sbRename    *ttwidget.Button
+	sbClone     *ttwidget.Button
+	sbDelete    *ttwidget.Button
+	// Drag-and-drop reordering of the collections tree (see treedrag.go).
+	treeRows      map[*treeRow]string // live row → bound node id, for drop hit-testing
+	dragActive    bool
+	dragSrcID     string
+	dragLastAbs   fyne.Position
+	dropIndicator *canvas.Rectangle // insert-between line
+	dropInto      *canvas.Rectangle // into-container outline
+	Request       *container.AppTabs
+	Response      *container.AppTabs
+	Status        *widget.Label
 
 	paramsRows       *fyne.Container
 	headersRows      *fyne.Container
@@ -195,12 +215,9 @@ type MainUI struct {
 	authBasicPanel, authBearerPanel, authAPIKeyPanel, authOAuth2Panel *widget.Form
 	authFormsStack                                                    *fyne.Container
 
-	responseRaw    *bodyView
-	structuredTree *widget.Tree
-	structRoot     *responsefmt.Node
-	structIndex    map[string]*responsefmt.Node
-	headersText    *widget.Entry
-	corsBanner     *canvas.Text
+	pv          *prettyview.PrettyView // response body viewer (structured + raw + search)
+	headersText *widget.Entry
+	corsBanner  *canvas.Text
 
 	currentRequest     *model.Request
 	currentRequestID   string
@@ -219,6 +236,7 @@ type MainUI struct {
 	tabWidgets     map[*openTab]*requestTab
 	newTabBtn      *widget.Button
 	tabOverflowBtn *widget.Button
+	tabStripBg     *canvas.Rectangle // header-coloured band behind the tab strip
 
 	// sendCancel is non-nil while a Send goroutine is in flight; the
 	// Send button doubles as Abort in that state. Set + cleared on the
@@ -267,9 +285,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 
 	m.Save = widget.NewButton("Save", m.saveRequest)
 	m.Save.Disable()
-	// Send shows just the send-diagonal-solid icon by default;
+	// Send shows just the paper-plane icon by default;
 	// abort mode swaps to text "Abort" with warning importance.
-	m.Send = widget.NewButtonWithIcon("", assets.Icon("send-diagonal-solid"), nil)
+	m.Send = widget.NewButtonWithIcon("", themedIcon("paper-plane"), nil)
 	m.Send.Importance = widget.HighImportance
 
 	m.Tree = m.buildTree()
@@ -315,25 +333,26 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewTabItem("Docs", m.buildDocsTab()),
 	)
 
-	// Response tabs. Raw uses bodyView (a viewport-virtualized, soft-wrapping
-	// text viewer) instead of widget.Entry, which materializes a render object
-	// per character for the whole body and so blows memory up on large
-	// responses. Formatted JSON/XML lives in the Structured tree — there is no
-	// separate Pretty tab.
-	m.responseRaw = newBodyView("Raw response body appears here after you press Send.")
-	m.structuredTree = m.buildStructuredTree()
-	// Drop the dividers between tree rows so the Structured view reads as one
-	// continuous structure rather than a ruled table.
-	m.structuredTree.HideSeparators = true
+	// Response body: one go-fyne-pretty-view widget renders JSON/XML/HTML/raw
+	// with auto-detection, per-node fold, syntax highlighting, search and
+	// soft-wrap, all viewport-virtualized so huge bodies stay cheap. It
+	// subsumes the old Structured tree + Raw text viewer. Its built-in toolbar
+	// (format selector, expand/collapse, wrap toggle, find box) sits above it;
+	// Open is disabled — this is a response viewer, not a file editor.
+	m.pv = prettyview.New()
+	m.pv.SetTheme(variantFor(sess.Settings().Theme), prettyview.Theme{})
+	pvToolbar := prettyview.NewToolbar(m.pv, prettyview.ToolbarConfig{
+		ShowFormat: true, ShowExpandCollapse: true, ShowWrap: true, ShowSearch: true,
+	})
+	respBody := container.NewBorder(pvToolbar, nil, nil, nil, m.pv)
 	m.headersText = widget.NewMultiLineEntry()
 	m.headersText.Wrapping = fyne.TextWrapOff
 	m.headersText.SetPlaceHolder("Response headers appear here after you press Send.")
 	m.Response = container.NewAppTabs(
-		container.NewTabItem("Structured", m.structuredTree),
-		container.NewTabItem("Raw", m.responseRaw),
+		container.NewTabItem("Body", respBody),
 		container.NewTabItem("Headers", container.NewScroll(m.headersText)),
 	)
-	m.corsBanner = canvas.NewText("", color.NRGBA{R: 0xEE, G: 0x90, B: 0x10, A: 0xFF})
+	m.corsBanner = canvas.NewText("", theme.Color(theme.ColorNameWarning))
 	m.corsBanner.TextStyle.Bold = true
 	m.corsBanner.Hide()
 	m.Status = widget.NewLabel("Ready")
@@ -365,37 +384,109 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.tabOverflowBtn = widget.NewButtonWithIcon("", theme.MoreVerticalIcon(), m.showTabMenu)
 	m.tabOverflowBtn.Importance = widget.LowImportance
 	m.rebuildTabBar() // hides the overflow button while no tabs are open
-	tabRow := container.NewBorder(nil, nil, nil, m.tabOverflowBtn, container.NewHScroll(m.tabBar))
+	// The strip sits on a header-coloured band with a separator line along its
+	// bottom. The tabs stack on top: the active tab's content-coloured
+	// background covers the line beneath it (so it connects to the editor),
+	// while inactive tabs are transparent and let the band + line show — the
+	// "tab merges into the content" look from Bruno.
+	m.tabStripBg = canvas.NewRectangle(theme.Color(theme.ColorNameHeaderBackground))
+	// A little leading space so the first tab isn't flush against the strip's
+	// left edge (the tabs themselves are spaced by the HBox padding between them).
+	tabScroll := container.New(layout.NewCustomPaddedLayout(0, 0, theme.Padding(), 0), container.NewHScroll(m.tabBar))
+	stripContent := container.NewBorder(nil, nil, nil, m.tabOverflowBtn, tabScroll)
+	tabRow := container.NewStack(
+		m.tabStripBg,
+		container.NewBorder(nil, widget.NewSeparator(), nil, nil, nil),
+		stripContent,
+	)
 
 	// The tab strip + address bar + URL preview live in the editor column (not
 	// the global top bar) so the sidebar runs floor-to-ceiling on the left and
 	// the URL bar starts exactly where the request editor starts.
 	editorTop := container.NewVBox(tabRow, addressBar, m.urlPreview)
 
-	newColBtn := widget.NewButton("+ New", m.actionNewCollection)
-	openBtn := widget.NewButton("Open…", m.openCollection)
-	importBtn := widget.NewButton("Import…", m.actionImport)
-	sidebarHeader := container.NewBorder(nil, nil,
-		widget.NewLabelWithStyle("Collections", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
-		container.NewHBox(newColBtn, openBtn, importBtn))
-	// + Req / + Folder live on each branch row (collection + folder)
-	// via the per-row tree icons — no global affordance any more.
-	// Rename / Duplicate / Delete are likewise per-row.
-	sidebar := container.NewBorder(sidebarHeader, nil, nil, nil, m.Tree)
+	// Compact Font Awesome icon buttons with hover tooltips (fyne-tooltip), since
+	// they are icon-only. Collection-level ops:
+	newColBtn := tipButton("square-plus", "New collection", m.actionNewCollection)
+	openBtn := tipButton("folder-open", "Open collection", m.openCollection)
+	importBtn := tipButton("download", "Import", m.actionImport)
 
-	copyBtn := widget.NewButtonWithIcon("Copy", theme.ContentCopyIcon(), m.copyActiveResponse)
-	copyBtn.Importance = widget.LowImportance
-	responseHeader := container.NewBorder(nil, nil, nil, copyBtn, m.corsBanner)
-	responsePanel := container.NewBorder(responseHeader, nil, nil, nil, m.Response)
-	editor := container.NewVSplit(m.Request, responsePanel)
-	editor.SetOffset(0.5)
+	// Node-action buttons operating on the selected tree node. Enable state is
+	// reconciled by refreshSidebarActions (rename/delete need any selection;
+	// clone needs a folder or request; add request/folder always on).
+	m.sbAddReq = tipButton("file-circle-plus", "New request", m.actionNewRequest)
+	m.sbAddFolder = tipButton("folder-plus", "New folder", m.actionNewFolder)
+	m.sbRename = tipButton("pen-to-square", "Rename", m.actionRename)
+	m.sbClone = tipButton("copy", "Duplicate", m.actionDuplicate)
+	m.sbDelete = tipButton("trash-can", "Delete", m.actionDelete)
+	m.refreshSidebarActions()
+
+	// Toolbar line. Left-aligned: delete, a gap, then a cube group-indicator and
+	// the collection ops (new / open / import). Right-aligned: a file
+	// group-indicator and the request/folder ops (new request, clone, new
+	// folder, rename). Wrapped in toolbarTheme so the icons are a chunky 24px.
+	// The cube/file group indicators are bare icons (with their own tooltips);
+	// pad them by the same InnerPadding a button insets its icon by, so they
+	// share the buttons' footprint and line up with them (no button background).
+	pad := theme.InnerPadding()
+	cubeIcon := ttwidget.NewIcon(themedIcon("cube"))
+	cubeIcon.SetToolTip("Collections")
+	fileIcon := ttwidget.NewIcon(themedIcon("file"))
+	fileIcon.SetToolTip("Requests")
+	cubeIndicator := container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), cubeIcon)
+	fileIndicator := container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), fileIcon)
+	gap := canvas.NewRectangle(color.Transparent)
+	gap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
+	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn)
+	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename)
+	actionToolbar := container.NewThemeOverride(
+		container.NewBorder(nil, nil, leftGroup, rightGroup),
+		toolbarTheme{})
+
+	// Drop-indicator overlays: a thin line for insert-between and an outline for
+	// drop-into-container. Positioned imperatively during a drag (see
+	// treedrag.go), hidden otherwise.
+	m.dropIndicator = canvas.NewRectangle(theme.Color(theme.ColorNamePrimary))
+	m.dropIndicator.Hide()
+	m.dropInto = canvas.NewRectangle(color.Transparent)
+	m.dropInto.StrokeColor = theme.Color(theme.ColorNamePrimary)
+	m.dropInto.StrokeWidth = 2
+	m.dropInto.CornerRadius = theme.Size(theme.SizeNameSelectionRadius)
+	m.dropInto.Hide()
+	dropLayer := container.NewWithoutLayout(m.dropIndicator, m.dropInto)
+	// The header is padded for breathing room. The tree is wrapped in a
+	// ThemeOverride (sidebarTheme) that shrinks the inline-icon + padding sizes
+	// so its per-level indentation is shallower and its icons denser — scoped
+	// to the sidebar so the rest of the app keeps full-size icons. The drop
+	// layer stacks on top to draw the drag indicators.
+	treeArea := container.NewStack(
+		container.NewThemeOverride(m.Tree, sidebarTheme{}),
+		dropLayer,
+	)
+	sidebar := container.NewBorder(container.NewPadded(actionToolbar), nil, nil, nil, treeArea)
+
+	// The CORS banner sits above the response tabs (hidden until a warning
+	// fires). Copy is handled in-widget: PrettyView has Ctrl+C / right-click
+	// copy, and the Headers entry copies natively.
+	responsePanel := container.NewBorder(m.corsBanner, nil, nil, nil, m.Response)
+	// Request / response split with a thin-line divider.
+	editor := thinVSplit(m.Request, responsePanel, 0.5)
 	// Editor column carries its own address bar so the sidebar runs
 	// full-height to the left of it (9.1).
 	editorColumn := container.NewBorder(editorTop, nil, nil, nil, editor)
-	body := container.NewHSplit(sidebar, editorColumn)
-	body.SetOffset(0.25)
+	// Sidebar / editor split, also a thin-line divider.
+	body := thinHSplit(sidebar, editorColumn, 0.25)
 
-	m.root = container.NewBorder(toolbar, m.Status, nil, nil, body)
+	// Thin separator lines under the top bar and above the status bar, so the
+	// whole window grid is divided by hairlines (VS Code / Bruno style). The root
+	// is wrapped in rootTheme (padding 0) so the body sits flush against those
+	// lines and the vertical split divider meets them with no gap; the status
+	// label restores its own padding.
+	header := container.NewVBox(toolbar, widget.NewSeparator())
+	footer := container.NewVBox(widget.NewSeparator(), container.NewThemeOverride(m.Status, paneTheme{}))
+	m.root = container.NewThemeOverride(
+		container.NewBorder(header, footer, nil, nil, body),
+		rootTheme{})
 
 	m.refreshEnvironments()
 	m.restoreTabs()
@@ -413,17 +504,12 @@ func (m *MainUI) SetWindow(w fyne.Window) {
 }
 
 func (m *MainUI) buildTree() *widget.Tree {
-	actions := rowActions{
-		onRename:     m.renameNode,
-		onDelete:     m.deleteNode,
-		onDuplicate:  m.duplicateNode,
-		onAddRequest: m.addRequestUnder,
-		onAddFolder:  m.addFolderUnder,
-	}
 	t := widget.NewTree(
 		func(id widget.TreeNodeID) []widget.TreeNodeID { return m.sess.Tree().ChildIDs(id) },
 		func(id widget.TreeNodeID) bool { return m.sess.Tree().IsBranch(id) },
-		func(bool) fyne.CanvasObject { return newTreeRow(actions) },
+		func(bool) fyne.CanvasObject {
+			return newTreeRow(m.dragTreeNode, m.dropTreeNode, func() bool { return m.dragActive })
+		},
 		func(id widget.TreeNodeID, _ bool, o fyne.CanvasObject) {
 			row := o.(*treeRow)
 			if r, ok := m.sess.Tree().Request(id); ok {
@@ -431,10 +517,15 @@ func (m *MainUI) buildTree() *widget.Tree {
 			} else {
 				row.setBranch(id, m.sess.Tree().Label(id))
 			}
+			if m.treeRows == nil {
+				m.treeRows = map[*treeRow]string{}
+			}
+			m.treeRows[row] = id // registry for drag-drop hit-testing
 		},
 	)
 	t.OnSelected = func(id widget.TreeNodeID) {
 		m.lastSelectedNodeID = id
+		m.refreshSidebarActions() // enable/disable the toolbar's node actions
 		if _, ok := m.sess.Tree().Request(id); ok {
 			// Request node — open or focus its tab. activateTab makes the
 			// owning collection active and refreshes environments, so the
@@ -448,6 +539,61 @@ func (m *MainUI) buildTree() *widget.Tree {
 		}
 	}
 	return t
+}
+
+// refreshSidebarActions reconciles the node-action toolbar's enable state with
+// the current selection: rename / clone / delete need a selected node (clone
+// only a request), while add request / folder stay enabled (they fall back to
+// the active collection). Called from the tree's OnSelected and after deletions
+// that clear the selection.
+func (m *MainUI) refreshSidebarActions() {
+	sel := m.lastSelectedNodeID
+	enableButton(m.sbRename, sel != "")
+	enableButton(m.sbDelete, sel != "")
+	// Clone duplicates a request or a folder (a node id contains "/"); whole
+	// collections aren't duplicable, so a collection selection leaves it off.
+	enableButton(m.sbClone, strings.Contains(sel, "/"))
+}
+
+func enableButton(b *ttwidget.Button, on bool) {
+	if b == nil {
+		return
+	}
+	if on {
+		b.Enable()
+	} else {
+		b.Disable()
+	}
+}
+
+// tipButton builds a compact icon-only sidebar button (themed Font Awesome
+// icon) with a hover tooltip, since icon-only buttons need a label affordance
+// (Fyne core has no tooltips — this uses the fyne-tooltip add-on).
+func tipButton(icon, tip string, tapped func()) *ttwidget.Button {
+	b := ttwidget.NewButtonWithIcon("", themedIcon(icon), tapped)
+	b.SetToolTip(tip)
+	return b
+}
+
+// thinHSplit / thinVSplit build a resizable split whose divider renders as a
+// thin subtle line (splitTheme) instead of Fyne's thick shadow bar, while the
+// panes keep normal sizing (paneTheme restores it inside the split's override).
+func thinHSplit(leading, trailing fyne.CanvasObject, offset float64) fyne.CanvasObject {
+	s := container.NewHSplit(
+		container.NewThemeOverride(leading, paneTheme{}),
+		container.NewThemeOverride(trailing, paneTheme{}),
+	)
+	s.SetOffset(offset)
+	return container.NewThemeOverride(s, splitTheme{})
+}
+
+func thinVSplit(top, bottom fyne.CanvasObject, offset float64) fyne.CanvasObject {
+	s := container.NewVSplit(
+		container.NewThemeOverride(top, paneTheme{}),
+		container.NewThemeOverride(bottom, paneTheme{}),
+	)
+	s.SetOffset(offset)
+	return container.NewThemeOverride(s, splitTheme{})
 }
 
 // loadRequest populates every editor widget from req, with the loading flag set
@@ -554,6 +700,11 @@ func (m *MainUI) updateURLPreview() {
 		return
 	}
 	resolved, missing := m.sess.Resolver().Resolve(m.URL.Text)
+	// {{chain.<alias>...}} vars only resolve at Send time (from chained-request
+	// results), so don't flag them as unresolved in the live preview.
+	missing = slices.DeleteFunc(missing, func(n string) bool {
+		return strings.HasPrefix(n, "chain.")
+	})
 	if resolved == m.URL.Text {
 		m.urlPreview.Hide()
 		return
@@ -769,7 +920,7 @@ func (m *MainUI) sendOrAbort() {
 // fyne.Do block.
 func (m *MainUI) resetSendButton() {
 	m.sendCancel = nil
-	m.Send.SetIcon(assets.Icon("send-diagonal-solid"))
+	m.Send.SetIcon(themedIcon("paper-plane"))
 	m.Send.SetText("")
 	m.Send.Importance = widget.HighImportance
 	m.Send.Refresh()
@@ -933,7 +1084,6 @@ func (m *MainUI) send() {
 			resp = &tabResponse{
 				rawBody:     string(view.Response.Body),
 				headersText: responsefmt.FormatHeaders(view.Response.Headers),
-				contentType: view.Response.Headers.Get("Content-Type"),
 				status:      status,
 				cors:        cors,
 				console:     consoleLines,
@@ -1084,10 +1234,37 @@ func (m *MainUI) editSettings() {
 			Theme:              newTheme,
 		})
 		ApplyTheme(fyne.CurrentApp(), newTheme)
+		// PrettyView memoizes its palette on the Fyne theme variant, which
+		// ApplyTheme's SetTheme(Light/Dark) does not flip — so force a rebuild
+		// at the new variant, or the body keeps the old light/dark colors.
+		m.pv.SetTheme(variantFor(newTheme), prettyview.Theme{})
+		m.refreshThemedCanvas()
 		m.Status.SetText("Settings saved")
 	}, m.win)
 	dlg.Resize(fyne.NewSize(520, 320))
 	dlg.Show()
+}
+
+// refreshThemedCanvas re-tints the raw canvas objects whose colours are set
+// imperatively rather than read from the theme on every paint. Fyne's
+// SetTheme repaints theme-driven widgets but not bare canvas.Text /
+// canvas.Rectangle, so without this a Light↔Dark switch leaves the CORS
+// banner (and the active-tab highlight) showing the old variant's colour.
+// Method chips use fixed brand colours (see method.go) so they need no
+// re-tint. Called from editSettings after the theme swap.
+func (m *MainUI) refreshThemedCanvas() {
+	if m.corsBanner != nil {
+		m.corsBanner.Color = theme.Color(theme.ColorNameWarning)
+		m.corsBanner.Refresh()
+	}
+	if m.tabStripBg != nil {
+		m.tabStripBg.FillColor = theme.Color(theme.ColorNameHeaderBackground)
+		m.tabStripBg.Refresh()
+	}
+	m.rebuildTabBar() // repaints each tab's selection-coloured highlight
+	if m.Tree != nil {
+		m.Tree.Refresh()
+	}
 }
 
 func methodNames() []string {

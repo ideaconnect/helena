@@ -6,6 +6,7 @@ package session
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -746,6 +747,68 @@ func (s *Session) SaveActiveCollection() error {
 		return nil
 	}
 	return storage.Save(s.cols[s.activeCol], s.dirs[s.activeCol])
+}
+
+// saveCollection writes the collection at index ci to its source dir. Used by
+// in-collection mutations (e.g. drag-reorder) that may target a collection
+// other than the active one.
+func (s *Session) saveCollection(ci int) error {
+	if ci < 0 || ci >= len(s.cols) {
+		return nil
+	}
+	return storage.Save(s.cols[ci], s.dirs[ci])
+}
+
+// MoveCollection reorders the top-level collection list so the collection at
+// index from ends up at index to (final-index semantics: removed from from,
+// re-inserted at to clamped to the list length), then persists the new
+// workspace order. The cols/dirs/workspace lists stay in lockstep and the
+// active-collection pointer follows its collection. No-op when indices are
+// equal or out of range.
+func (s *Session) MoveCollection(from, to int) error {
+	n := len(s.cols)
+	if s.cfg.Active < 0 || s.cfg.Active >= len(s.cfg.Workspaces) {
+		return fmt.Errorf("no active workspace")
+	}
+	w := &s.cfg.Workspaces[s.cfg.Active]
+	if from < 0 || from >= n || to < 0 || to >= n || from == to {
+		return nil
+	}
+	if len(w.Collections) != n {
+		// Misaligned (some collections failed to load); refuse rather than
+		// scramble the persisted dir list.
+		return fmt.Errorf("collection list out of sync; reopen the workspace")
+	}
+
+	// Remember the active collection by dir so we can restore its index after
+	// the reorder shuffles positions.
+	activeDir := ""
+	if s.activeCol >= 0 && s.activeCol < len(s.dirs) {
+		activeDir = s.dirs[s.activeCol]
+	}
+
+	col, dir, wc := s.cols[from], s.dirs[from], w.Collections[from]
+	s.cols = slices.Delete(s.cols, from, from+1)
+	s.dirs = slices.Delete(s.dirs, from, from+1)
+	w.Collections = slices.Delete(w.Collections, from, from+1)
+
+	ins := to
+	if ins > len(s.cols) {
+		ins = len(s.cols)
+	}
+	s.cols = slices.Insert(s.cols, ins, col)
+	s.dirs = slices.Insert(s.dirs, ins, dir)
+	w.Collections = slices.Insert(w.Collections, ins, wc)
+
+	if activeDir != "" {
+		for i, d := range s.dirs {
+			if d == activeDir {
+				s.activeCol = i
+				break
+			}
+		}
+	}
+	return s.persist()
 }
 
 // Settings returns the current application settings.

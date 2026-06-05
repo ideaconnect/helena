@@ -33,7 +33,7 @@ Top-level orientation:
 | [internal/auth/](internal/auth/) | Auth inheritance resolution + Apply on outgoing requests. |
 | [internal/scripting/](internal/scripting/) | goja JS runtime for per-request pre/post hooks. Mutable `request` in pre, read-only `request` + parsed `response` in post, `helena.env.*` overlay writes, `chain.<alias>` predecessor views. |
 | [internal/chain/](internal/chain/) | Per-request before-hooks runner. Recursive resolution with per-request alias scope, cycle detection, and an Executor/RequestFinder seam so the package stays free of httpclient/scripting/session deps. |
-| [internal/responsefmt/](internal/responsefmt/) | Pretty-printing + content-type sniffing. |
+| [internal/responsefmt/](internal/responsefmt/) | JSON/XML pretty-print (request-body validate/format) + header / size / duration formatting. |
 | [internal/importer/](internal/importer/) | OpenAPI / Swagger / WSDL + URL fetch. |
 | [internal/exporter/](internal/exporter/) | cURL / wget rendering. |
 | [internal/config/](internal/config/) | Persisted settings + UI state. |
@@ -268,7 +268,13 @@ Before declaring a task done: `gofmt -l .` (must be empty), `go vet ./...`,
 
 - **Adding heavyweight dependencies** without checking binary size. Helena
   ships ~46 MB after task 7.3 added goja; goja, kin-openapi, and gopher-yaml
-  are the only large external deps. Justify any addition.
+  are the only large external deps. Justify any addition. The response Body
+  viewer uses `github.com/ideaconnect/go-fyne-pretty-view` (pinned at
+  `v0.1.0-alpha`, same author/org); it adds no new heavy module — its only
+  non-Fyne need is `golang.org/x/net/html`, already in the tree — but it
+  bumped `golang.org/x/{net,sys,text}` minor versions. It bundles the Iconoir
+  icon set (MIT) for its toolbar; carry that notice if it links. Any version
+  bump of it is a deliberate, tested change.
 - **Bypassing the storage Save pattern** (see invariant 1).
 - **Touching widgets from non-UI goroutines** without `fyne.Do` (see
   invariant 4).

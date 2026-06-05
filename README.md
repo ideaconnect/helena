@@ -12,6 +12,9 @@ self-contained binary, no Electron.
   Collection YAML on disk — version-control them like any other source code.
 - **Environments per collection** with `{{variable}}` resolution everywhere
   (URL, query params, headers, body) plus a live preview of the resolved URL.
+- **Scripting & request chaining** — per-request pre/post JavaScript hooks, and
+  before-hooks that run other requests first and feed their results into the
+  next one. See [Request chaining](#request-chaining).
 - **Request builder** — method, URL, query params, headers, body
   (JSON / XML / text / form-urlencoded / multipart). Validate + Format
   buttons for JSON and XML.
@@ -50,6 +53,68 @@ The sample has two requests hitting [httpbin.org](https://httpbin.org) — a
 plus a `default` environment that provides `{{base_url}}`. Select either
 request in the tree, press **Mod+Enter**, and you should see a structured
 response.
+
+## Request chaining
+
+A request can declare **before-hooks** — other requests that Helena runs first,
+in order, every time you Send it. Each hook gets an **alias**, and the
+predecessor's result is then available to the dependent request. This is how you
+feed a value produced by one request (a login token, the id of a record you just
+created) into another.
+
+**Declare the step.** On the dependent request, open the **Chain** tab and add a
+row: an alias (say `login`) and the path to another request in the same
+collection (say `Auth/Login`). On Send, `Auth/Login` executes first; then your
+request runs with `chain.login` populated. Chaining is recursive (a hook's own
+hooks run first) and cycle-checked; a request only ever sees its own aliases.
+
+### Use a chained result as a `{{variable}}`
+
+`{{chain.<alias>.…}}` resolves anywhere a normal `{{variable}}` does — URL, query
+params, headers, **body, and auth fields**. To send a login token as the Bearer
+credential, set the request's **Auth → Bearer Token** to:
+
+    {{chain.login.response.json.token}}
+
+The available paths:
+
+| Template | Resolves to |
+| --- | --- |
+| `{{chain.<alias>.response.json.<path>}}` | a field of the parsed JSON body — dotted (`data.user.name`), array elements by index (`items.0.id`) |
+| `{{chain.<alias>.response.headers.<Name>}}` | a response header (case-insensitive) |
+| `{{chain.<alias>.response.status}}` / `.statusText` | status code / status line |
+| `{{chain.<alias>.response.body}}` / `.text` | the raw response body |
+| `{{chain.<alias>.request.url}}` / `.method` / `.body` | what the predecessor was sent |
+
+Only **scalar** leaves resolve (string / number / bool; `null` → empty). They
+resolve at Send time, *after* the chain runs — so the URL-bar preview leaves them
+untouched, and an unresolvable chain path (wrong alias or missing field) fails
+the Send with an `unresolved variables` error. XML response bodies aren't
+navigable from templates — use a script for those.
+
+### Use a chained result in a script
+
+For anything beyond substitution (conditionals, reshaping, combining values),
+read `chain.<alias>` in the dependent request's **Scripts → Pre-request** hook —
+the same shape as the template paths, plus lazily parsed `json` / `xml`:
+
+```js
+// Mutate this request directly:
+request.headers["Authorization"] = "Bearer " + chain.login.response.json.token;
+
+// …or stash a value as a session variable, then use {{token}} anywhere:
+helena.env.set("token", chain.login.response.json.token);
+```
+
+`helena.env.set` writes an in-memory **session overlay** (never saved to your env
+file) that layers over the active environment for the rest of the process. You
+can also push from the other end: give the chained request a **Post-response**
+hook that runs `helena.env.set("token", response.json.token)`, and the dependent
+request just uses `{{token}}`.
+
+The full scripting surface — the `helena.*` API and the `request` / `response`
+object shapes — is documented in
+[internal/scripting/README.md](internal/scripting/README.md).
 
 ## Build from source
 

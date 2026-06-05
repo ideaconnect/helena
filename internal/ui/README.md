@@ -9,7 +9,10 @@ The module is intentionally GUI-only: it never touches disk, the network, or
 collection parsing directly. It calls into `internal/session` for state and
 persistence, `internal/httpclient` to actually send requests, `internal/exporter`
 and `internal/importer` for cURL/wget output and OpenAPI/WSDL ingestion, and
-`internal/responsefmt` to pretty-print responses. All of that lets shell.go
+`internal/responsefmt` for request-body pretty-print/validate and the status-line
+size/duration/header formatting. The response **Body** is rendered by the
+external [go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view)
+widget (JSON/XML/HTML/raw, auto-detected, virtualized). All of that lets shell.go
 focus on widget wiring while the rest of the codebase stays headless and
 testable.
 
@@ -93,6 +96,9 @@ toolbar button, sidebar button, or keyboard shortcut.
 
 - `fyne.io/fyne/v2` (and `container`, `canvas`, `dialog`, `widget`, `theme`,
   `driver/desktop`, `storage`, `test`) — widget toolkit.
+- `github.com/ideaconnect/go-fyne-pretty-view` — the response Body viewer
+  (virtualized JSON/XML/HTML/raw with fold, syntax highlighting, search,
+  soft-wrap). Pinned at `v0.1.0-alpha`; same author / org as Helena.
 - `github.com/idct/helena/internal/session` — workspace/collection/env state
   and persistence.
 - `github.com/idct/helena/internal/model` — request/response types, Theme,
@@ -100,7 +106,7 @@ toolbar button, sidebar button, or keyboard shortcut.
 - `github.com/idct/helena/internal/httpclient` — actually sending requests.
 - `github.com/idct/helena/internal/importer` — OpenAPI / Swagger / WSDL parse.
 - `github.com/idct/helena/internal/exporter` — cURL/wget rendering.
-- `github.com/idct/helena/internal/responsefmt` — pretty-printers, size /
-  duration formatting, content-type sniffing.
+- `github.com/idct/helena/internal/responsefmt` — request-body JSON/XML
+  pretty-print + size / duration / header formatting.
 - `github.com/idct/helena/internal/storage` — used from collections.go and
   import.go to write fresh collections to disk.

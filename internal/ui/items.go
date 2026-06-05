@@ -38,20 +38,28 @@ func (m *MainUI) parentForNew() string {
 	return ""
 }
 
-// actionNewRequest is the keyboard-shortcut entry point — adds a
-// request to the row inferred by parentForNew. Quietly no-ops when
-// there's no collection to add into (no UI thrash from a stray N
-// keystroke before a workspace is opened).
+// actionNewRequest is the keyboard-shortcut + sidebar-toolbar entry point —
+// adds a request to the container inferred by parentForNew (the selected
+// folder/collection, a selected request's parent, or the active collection
+// root). Quietly no-ops when there's no collection to add into (no UI thrash
+// from a stray N keystroke before a workspace is opened).
 func (m *MainUI) actionNewRequest() {
 	if parent := m.parentForNew(); parent != "" {
 		m.addRequestUnder(parent)
 	}
 }
 
-// addRequestUnder prompts for a name and adds a request as a child
-// of the given parent (collection or folder). Shared by the per-row
-// add-request icon — there is no global add-request affordance any
-// more; every container row carries its own.
+// actionNewFolder is the folder analogue of actionNewRequest, used by the
+// sidebar toolbar's add-folder button.
+func (m *MainUI) actionNewFolder() {
+	if parent := m.parentForNew(); parent != "" {
+		m.addFolderUnder(parent)
+	}
+}
+
+// addRequestUnder prompts for a name and adds a request as a child of the given
+// parent (collection or folder). Shared by the sidebar toolbar's add-request
+// button (via actionNewRequest + parentForNew).
 func (m *MainUI) addRequestUnder(parent string) {
 	if m.win == nil || parent == "" {
 		return
@@ -118,7 +126,8 @@ func (m *MainUI) actionDuplicate() {
 }
 
 // renameNode prompts for a new name and applies it to the node at id.
-// Shared by the global Rename button + per-row rename icons.
+// Shared by the sidebar toolbar's rename button (via actionRename) and the
+// Rename keyboard shortcut.
 func (m *MainUI) renameNode(id string) {
 	if m.win == nil || id == "" {
 		return
@@ -136,9 +145,9 @@ func (m *MainUI) renameNode(id string) {
 }
 
 // deleteNode asks for confirmation, then deletes the node at id.
-// Centralised so the global Delete button and the per-row delete
-// icons share the same confirmation dialog (invariant from 9.13:
-// every deletion must confirm).
+// Centralised so the sidebar toolbar's delete button and the Delete
+// keyboard shortcut share the same confirmation dialog (invariant from
+// 9.13: every deletion must confirm).
 //
 // Collection-level IDs (no "/") route to Session.RemoveCollection
 // so the on-disk dir is left intact — Postman/Bruno convention is
@@ -182,6 +191,7 @@ func (m *MainUI) deleteNode(id string) {
 		}
 		if m.lastSelectedNodeID == id {
 			m.lastSelectedNodeID = ""
+			m.refreshSidebarActions() // selection gone → disable node actions
 		}
 		m.Tree.Refresh()
 		// Drop tabs for the deleted request (or every request in a removed
@@ -196,9 +206,9 @@ func (m *MainUI) deleteNode(id string) {
 	}, m.win)
 }
 
-// duplicateNode clones the node at id and selects the new copy. Shared
-// by the global Duplicate button (now removed in favour of row icons)
-// and the per-row copy icon on request rows.
+// duplicateNode clones the node at id and selects the new copy. Shared by the
+// sidebar toolbar's clone button (via actionDuplicate) and the Duplicate
+// keyboard shortcut.
 func (m *MainUI) duplicateNode(id string) {
 	if m.win == nil || id == "" {
 		return

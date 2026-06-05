@@ -212,7 +212,7 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	if preErr != nil {
 		return chain.View{}, console, preErr
 	}
-	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay())
+	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay()).WithFallback(chain.VarLookup(chainMap))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {
 		return chain.View{}, console, err

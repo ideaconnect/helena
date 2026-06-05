@@ -6,12 +6,12 @@ import "testing"
 // returns a non-nil Fyne resource named after the icon. Covers the
 // happy path of the lookup.
 func TestIconReturnsResource(t *testing.T) {
-	r := Icon("send-diagonal-solid")
+	r := Icon("paper-plane")
 	if r == nil {
-		t.Fatal("Icon returned nil for send-diagonal-solid")
+		t.Fatal("Icon returned nil for paper-plane")
 	}
-	if r.Name() != "send-diagonal-solid.svg" {
-		t.Errorf("name = %q, want send-diagonal-solid.svg", r.Name())
+	if r.Name() != "paper-plane.svg" {
+		t.Errorf("name = %q, want paper-plane.svg", r.Name())
 	}
 	if len(r.Content()) == 0 {
 		t.Error("Icon returned empty content")

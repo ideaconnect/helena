@@ -53,16 +53,6 @@ func PrettyXML(body []byte) (string, error) {
 	return out.String(), nil
 }
 
-// IsJSON reports whether contentType denotes a JSON payload.
-func IsJSON(contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "json")
-}
-
-// IsXML reports whether contentType denotes an XML payload (including SOAP).
-func IsXML(contentType string) bool {
-	return strings.Contains(strings.ToLower(contentType), "xml")
-}
-
 // FormatHeaders renders headers as sorted "Key: value" lines, one per value.
 func FormatHeaders(h http.Header) string {
 	keys := make([]string, 0, len(h))

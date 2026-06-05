@@ -11,7 +11,8 @@ A `Resolver` is built from one or more named scopes ordered lowest precedence fi
 
 ### Functions / methods
 - `New(scopes ...map[string]string) *Resolver` — builds a resolver; scopes are low-to-high precedence.
-- `(*Resolver).Lookup(name string) (string, bool)` — returns the highest-precedence value for `name`.
+- `(*Resolver).WithFallback(fn func(name string) (string, bool)) *Resolver` — attaches a dynamic lookup consulted for any name no scope resolves, so callers can inject namespaced values (e.g. `{{chain.<alias>.response.json.token}}` backed by `chain.VarLookup`) without the resolver knowing their source. Returns the resolver for chaining; `nil` clears it.
+- `(*Resolver).Lookup(name string) (string, bool)` — returns the highest-precedence value for `name` (scopes first, then the fallback).
 - `(*Resolver).Resolve(s string) (string, []string)` — substitutes every `{{name}}` to a fixed point and returns the result plus the names that remain unresolved (deduped, first-seen order).
 
 ## Dependencies

@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	prettyview "github.com/ideaconnect/go-fyne-pretty-view"
 
 	"github.com/idct/helena/internal/config"
 	"github.com/idct/helena/internal/model"
@@ -31,14 +32,12 @@ type openTab struct {
 }
 
 // tabResponse is the cached, re-renderable state of a tab's last response:
-// the raw bytes shown in Raw, the formatted header dump, the content type
-// (so Structured can re-parse), the status line, an optional CORS banner
-// string, and the console output. isError routes the apply path to the Raw
-// error display instead.
+// the raw body bytes (fed to the PrettyView with FormatAuto), the formatted
+// header dump, the status line, an optional CORS banner string, and the
+// console output. isError routes the apply path to a plain-text error display.
 type tabResponse struct {
 	rawBody     string
 	headersText string
-	contentType string
 	status      string
 	cors        string
 	console     []string
@@ -548,18 +547,18 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 		return
 	}
 	m.setScriptConsole(r.console)
+	m.Response.SelectIndex(0) // Body
 	if r.isError {
-		m.responseRaw.SetText(r.errText)
-		m.clearRichResponse()
+		// Force raw so an error string that resembles JSON/XML isn't rendered
+		// as structured data.
+		m.pv.SetData([]byte(r.errText), prettyview.FormatRaw)
 		m.headersText.SetText("")
-		m.Response.SelectIndex(1) // Raw
 		m.Status.SetText(r.status)
 		m.corsBanner.Hide()
 		return
 	}
-	m.responseRaw.SetText(r.rawBody)
+	m.pv.SetData([]byte(r.rawBody), prettyview.FormatAuto)
 	m.headersText.SetText(r.headersText)
-	m.renderResponseBody([]byte(r.rawBody), r.contentType)
 	m.Status.SetText(r.status)
 	if r.cors != "" {
 		m.corsBanner.Text = r.cors
@@ -570,11 +569,10 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 	}
 }
 
-// clearResponsePanel blanks every response widget back to its placeholder.
+// clearResponsePanel blanks every response widget.
 func (m *MainUI) clearResponsePanel() {
-	m.responseRaw.SetText("")
+	m.pv.SetData(nil, prettyview.FormatRaw)
 	m.headersText.SetText("")
-	m.clearRichResponse()
 	m.corsBanner.Hide()
 	m.setScriptConsole(nil)
 }
