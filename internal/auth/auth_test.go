@@ -138,6 +138,21 @@ func TestApplyAPIKeyQuery(t *testing.T) {
 	}
 }
 
+// TestApplyAPIKeyQueryPreservesOrder verifies the query API-key is appended
+// without re-sorting (or collapsing) the existing query string.
+func TestApplyAPIKeyQueryPreservesOrder(t *testing.T) {
+	req := newRequest(t, "https://example.com/?z=1&a=2")
+	a := model.Auth{Type: model.AuthAPIKey, APIKey: &model.APIKeyAuth{
+		Name: "key", Value: "v", Placement: model.APIKeyQuery,
+	}}
+	if err := Apply(context.Background(), req, a, nil); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if req.URL.RawQuery != "z=1&a=2&key=v" {
+		t.Errorf("RawQuery = %q, want z=1&a=2&key=v (order preserved, key appended)", req.URL.RawQuery)
+	}
+}
+
 // TestApplyNoneAndInheritAreNoops verifies that None and Inherit don't
 // touch the request — useful so a caller can pass the unresolved Auth
 // straight to Apply without special-casing the empty paths.

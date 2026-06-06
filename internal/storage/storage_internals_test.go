@@ -13,6 +13,25 @@ import (
 
 // TestSlugFallbackForUnnameable verifies slug returns the provided
 // fallback when the input has no usable characters (whitespace,
+// TestMergeParamExtrasCarriesPathType verifies the path/query discriminator
+// from a prior file survives a save (the model can't express it).
+func TestMergeParamExtrasCarriesPathType(t *testing.T) {
+	out := mergeParamExtras(
+		[]ocParam{{Name: "id", Value: "1", Type: "query"}},
+		[]ocParam{{Name: "id", Value: "1", Type: "path"}},
+	)
+	if out[0].Type != "path" {
+		t.Errorf("Type = %q, want path carried from prior file", out[0].Type)
+	}
+	out2 := mergeParamExtras(
+		[]ocParam{{Name: "q", Type: "query"}},
+		[]ocParam{{Name: "q", Type: "query"}},
+	)
+	if out2[0].Type != "query" {
+		t.Errorf("Type = %q, want query unchanged", out2[0].Type)
+	}
+}
+
 // punctuation only, or empty string). This is the path that keeps a
 // request like "{{{}}}" from rendering as an empty filename.
 func TestSlugFallbackForUnnameable(t *testing.T) {

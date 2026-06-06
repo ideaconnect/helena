@@ -120,7 +120,7 @@ Each behaviour-changing task must ship with a paired test and pass
 - [x] **cURL/wget export drops a custom `Host` header.**
   `internal/exporter/exporter.go:54-58,82-86` — emit `-H 'Host: …'` when
   `req.Host` differs from the URL host. **Test.** _(S, MED)_
-- [ ] **Path-param `type` lost on round-trip.** `internal/storage/opencollection.go:169`
+- [x] **Path-param `type` preserved on round-trip** (mergeParamExtras carries a prior file's non-query type). `internal/storage/opencollection.go:169`
   → `store.go:230` `mergeParamExtras` doesn't carry `Type`, so Bruno path params
   become query params on first save. Carry `Type` in the merge. _(M, MED)_
 - [x] **Folder drop onto a collection-root's top half fails.**

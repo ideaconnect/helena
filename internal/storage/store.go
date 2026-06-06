@@ -231,15 +231,28 @@ func mergeParamExtras(next, prev []ocParam) []ocParam {
 	if len(prev) == 0 || len(next) == 0 {
 		return next
 	}
-	byName := make(map[string]map[string]yaml.Node, len(prev))
+	type prevParam struct {
+		extra map[string]yaml.Node
+		typ   string
+	}
+	byName := make(map[string]prevParam, len(prev))
 	for _, p := range prev {
-		if len(p.Extra) > 0 {
-			byName[p.Name] = p.Extra
-		}
+		byName[p.Name] = prevParam{extra: p.Extra, typ: p.Type}
 	}
 	for i := range next {
-		if e, ok := byName[next[i].Name]; ok {
-			next[i].Extra = e
+		p, ok := byName[next[i].Name]
+		if !ok {
+			continue
+		}
+		if len(p.extra) > 0 {
+			next[i].Extra = p.extra
+		}
+		// The model has no per-param type, so the writer always emits
+		// "query". Restore a non-query discriminator (e.g. "path") the prior
+		// file carried, so a Bruno-authored path param isn't silently
+		// reclassified as a query param on the first Helena save.
+		if p.typ != "" && p.typ != "query" {
+			next[i].Type = p.typ
 		}
 	}
 	return next

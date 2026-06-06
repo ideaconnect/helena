@@ -18,6 +18,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/idct/helena/internal/model"
 )
@@ -129,9 +130,16 @@ func Apply(ctx context.Context, req *http.Request, a model.Auth, resolver OAuth2
 		}
 		switch a.APIKey.Placement {
 		case model.APIKeyQuery:
-			q := req.URL.Query()
-			q.Set(a.APIKey.Name, a.APIKey.Value)
-			req.URL.RawQuery = q.Encode()
+			// Append rather than round-trip through url.Values{}.Encode(), which
+			// would re-sort the whole query and collapse any params that don't
+			// round-trip (e.g. repeated keys). This preserves the existing query
+			// verbatim and just tacks the key on the end.
+			pair := url.QueryEscape(a.APIKey.Name) + "=" + url.QueryEscape(a.APIKey.Value)
+			if req.URL.RawQuery == "" {
+				req.URL.RawQuery = pair
+			} else {
+				req.URL.RawQuery += "&" + pair
+			}
 		case model.APIKeyHeader, "":
 			if req.Header.Get(a.APIKey.Name) == "" {
 				req.Header.Set(a.APIKey.Name, a.APIKey.Value)
