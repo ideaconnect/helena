@@ -6,6 +6,7 @@
 | ---- | ------- |
 | [doc.go](doc.go) | Package doc comment. |
 | [shell.go](shell.go) | `MainUI` struct, `NewMainUI`, the main layout, send/save/loadRequest, params/headers row machinery, environment + settings dialogs, body validate/format. Also defines `sessionEnvBridge` (the `scripting.EnvBridge` adapter), `sessionRequestFinder` (the `chain.RequestFinder` adapter), and `chainExecutor` — the single execution path that runs pre-script → `client.Do` → post-script for both chain steps and the leaf. |
+| [query.go](query.go) | Pure helpers for the two-way **Query**↔URL sync: `splitURLQuery`, `parseQueryParams`, `buildQueryString`, `displayURL`, `mergeQueryFromURL` (keeps disabled rows), and `encodeQueryComponent` (percent-encodes but leaves `{{vars}}` intact). The UI glue (`applyURLEdit`, `syncURLFieldFromParams`) lives in [shell.go](shell.go). `currentRequest.Params` stays the send-path source of truth, so the backend is unchanged. |
 | [items.go](items.go) | Tree CRUD actions (new request, new folder, rename, duplicate, delete) plus `parentForNew`, `promptName`, `nameOfNode`, `isAncestor` helpers. |
 | [workspaces.go](workspaces.go) | `editWorkspaces` dialog and `refreshWorkspaceDropdown`. |
 | [collections.go](collections.go) | `actionNewCollection` — prompt + folder picker + empty YAML write. |
@@ -24,6 +25,7 @@
 | [tabstrip.go](tabstrip.go) | `requestTab` — the per-tab custom widget (BaseWidget + `Tapped` + `Draggable` + a custom `requestTabRenderer`): a **fixed-width** colored method column (`methodColWidth` = widest method name + margin, so names line up), the name, and a close `×`, all vertically centred, over a rounded-top background. Active tabs fill with `ColorNameBackground` so they connect to the editor content and cover the under-strip separator line (Bruno-style); inactive tabs are transparent over the strip band. The band + line live in the strip `Stack` in [shell.go](shell.go) (`tabStripBg` + a bottom `widget.Separator`). |
 | [shortcuts.go](shortcuts.go) | `shortcutSpec`, `registerShortcuts`, `showShortcuts`, `shortcutModifierName`, and `shortcutRowLayout`. |
 | [shell_test.go](shell_test.go) | `NewMainUI` construction + headless layout smoke test. |
+| [query_test.go](query_test.go) | Query↔URL helpers (split/parse/build/encode round-trips, `{{var}}` preservation, disabled-row preservation) and the live two-way sync + load-time fold. |
 | [response_test.go](response_test.go) | Response viewer: `applyResponse` feeds the PrettyView (JSON auto-detects to structured, plain text / malformed / binary / error → raw, nil clears), Body tab selected, status set; `variantFor` theme mapping. |
 | [tabs_test.go](tabs_test.go) | Tab open/activate dedup, per-tab response capture + restore (incl. inactive-tab delivery), scratch `+` + Save-As conversion, reconcile-after-delete drop+remap, close-tab neighbor/clear, launch restore, drag-reorder (`dropIndex` / `moveTabModel` / `applyDragTarget` keeps active + persists), and the overflow menu items. |
 | [treerow_test.go](treerow_test.go) | `treeRow`: requests show a brand-colored method chip, branches hide it, the name uses ellipsis truncation, drag callbacks forward the row id, and the cursor switches to grab only while dragging. |
@@ -56,17 +58,17 @@ without infinite write-back loops.
 | `Method` | `*methodPicker` | HTTP method picker on the address bar (custom widget — brand-colored bold text + pop-up chooser; see [method.go](method.go)). |
 | `URL` | `*widget.Entry` | URL entry; Enter triggers `send`. |
 | `urlPreview` | `*widget.Label` | Italic label under the URL showing the resolved form (or unresolved-vars warning). Hidden when nothing to show. |
-| `Save` | `*widget.Button` | Disabled until a request is loaded. |
-| `Send` | `*widget.Button` | "Send" by default (high importance) / "Abort" while a Send is in flight (warning importance). Tap routes through `sendOrAbort` which dispatches based on `sendCancel`. |
+| `Save` | `*ttwidget.Button` | Icon-only (`floppy-disk`) with a hover tooltip; disabled until a request is loaded. Export sits beside it as a local `file-export` `tipButton`. |
+| `Send` | `*widget.Button` | Icon-only (`location-arrow`) high-importance by default / text "Abort" while a Send is in flight (warning importance). Tap routes through `sendOrAbort` which dispatches based on `sendCancel`. |
 | `Tree` | `*widget.Tree` | Collections sidebar tree. Rows are clean display widgets; the tree node paints full-width hover/selection. |
 | `sbAddReq` / `sbAddFolder` / `sbRename` / `sbClone` / `sbDelete` | `*ttwidget.Button` | Sidebar node-action toolbar (icon-only buttons with hover tooltips — `fyne-tooltip`, built via the `tipButton` helper) operating on the selected node. `refreshSidebarActions` enables/disables them by selection (clone for a folder/request; rename/delete need any selection; add request/folder fall back to the active collection). The window content is wrapped in `fynetooltip.AddWindowToolTipLayer` in `cmd/helena/main.go` for the tooltips to render. |
 | `treeRows` | `map[*treeRow]string` | Live row → bound node id, rebuilt on each tree bind; used by `rowAt` to hit-test the drop target during a drag. |
 | `dragActive` / `dragSrcID` / `dragLastAbs` | `bool` / `string` / `fyne.Position` | In-flight tree drag state (the dragged node and last pointer position), consumed on `DragEnd`. |
 | `dropIndicator` / `dropInto` | `*canvas.Rectangle` | Drag overlays in a `WithoutLayout` layer over the tree: a thin primary line for insert-between, an outlined box for drop-into-container. Hidden at rest. |
-| `Request` | `*container.AppTabs` | Request editor tabs: Params, Auth, Headers, Body, Docs. |
+| `Request` | `*container.AppTabs` | Request editor tabs, in order: Body, Auth, Headers, Query, Scripts, Chain, Docs. ("Query" = the query-string params, two-way synced with the URL field — see `query.go`.) |
 | `Response` | `*container.AppTabs` | Response tabs: **Body** (the `pv` PrettyView + its toolbar) and **Headers**. `applyResponse` selects Body on each new response. |
 | `Status` | `*widget.Label` | Footer status line. |
-| `paramsRows` | `*fyne.Container` | VBox of KV rows for query params. |
+| `paramsRows` | `*fyne.Container` | VBox of KV rows for the **Query** tab (query-string params), two-way synced with the URL field via `applyURLEdit` / `syncURLFieldFromParams` (guarded by `syncing`). |
 | `headersRows` | `*fyne.Container` | VBox of KV rows for headers. |
 | `BodyType` | `*widget.Select` | Body type select (none / json / xml / text / form / multipart). |
 | `BodyContent` | `*widget.Entry` | Body text area. |

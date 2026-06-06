@@ -61,6 +61,11 @@ func TestPlanNodeDrop(t *testing.T) {
 	if p := m.planNodeDrop("0/f1", "0/f0", true, 0, 0); !p.valid || p.into || p.dstParent != "0" || p.index != 0 {
 		t.Errorf("folder-before-folder = %+v", p)
 	}
+	// Folder onto a collection root's top half → the root's first folder
+	// (dstParent is the root id, not splitNode's empty parent).
+	if p := m.planNodeDrop("0/f1", "0", true, 0, 0); !p.valid || p.dstParent != "0" || p.index != 0 {
+		t.Errorf("folder-onto-collection-root-top = %+v", p)
+	}
 	// Reject dropping a folder onto itself / into a descendant.
 	if p := m.planNodeDrop("0/f0", "0/f0", true, 0, 0); p.valid {
 		t.Error("folder onto itself should be invalid")

@@ -27,7 +27,7 @@ func (s *Session) AddRequest(parentID, name string) (string, error) {
 		Body:   model.Body{Type: model.BodyNone},
 	})
 	newID := fmt.Sprintf("%s/r%d", parentID, len(*requestsP)-1)
-	if err := s.SaveActiveCollection(); err != nil {
+	if err := s.saveCollection(nodeCollectionIndex(parentID)); err != nil {
 		return "", err
 	}
 	return newID, nil
@@ -39,10 +39,9 @@ func (s *Session) AddRequest(parentID, name string) (string, error) {
 // scratch tab into a collection, where the request already carries the
 // user's edited method/URL/headers/body/scripts/etc. A fresh Request.ID
 // is always minted (r.ID is overwritten) so the on-disk request gets a
-// stable identity independent of the scratch tab's synthetic one. The
-// caller is responsible for making parentID's collection the active one
-// first, since persistence writes the active collection. Returns the new
-// request's tree node ID.
+// stable identity independent of the scratch tab's synthetic one.
+// Persistence writes parentID's own collection (resolved from the node id),
+// not whichever collection is active. Returns the new request's tree node ID.
 func (s *Session) AddRequestValue(parentID string, r model.Request) (string, error) {
 	_, _, requestsP := s.containerAtPtr(parentID)
 	if requestsP == nil {
@@ -57,7 +56,7 @@ func (s *Session) AddRequestValue(parentID string, r model.Request) (string, err
 	}
 	*requestsP = append(*requestsP, r)
 	newID := fmt.Sprintf("%s/r%d", parentID, len(*requestsP)-1)
-	if err := s.SaveActiveCollection(); err != nil {
+	if err := s.saveCollection(nodeCollectionIndex(parentID)); err != nil {
 		return "", err
 	}
 	return newID, nil
@@ -78,7 +77,7 @@ func (s *Session) AddFolder(parentID, name string) (string, error) {
 		Name: name,
 	})
 	newID := fmt.Sprintf("%s/f%d", parentID, len(*foldersP)-1)
-	if err := s.SaveActiveCollection(); err != nil {
+	if err := s.saveCollection(nodeCollectionIndex(parentID)); err != nil {
 		return "", err
 	}
 	return newID, nil
@@ -131,7 +130,7 @@ func (s *Session) RenameItem(nodeID, name string) error {
 		}
 	}
 
-	return s.SaveActiveCollection()
+	return s.saveCollection(nodeCollectionIndex(nodeID))
 }
 
 // nodeNamePath returns the chain-ref-style slash-separated display
@@ -256,7 +255,7 @@ func (s *Session) DeleteItem(nodeID string) error {
 		}
 		*requestsP = slices.Delete(*requestsP, idx, idx+1)
 	}
-	return s.SaveActiveCollection()
+	return s.saveCollection(nodeCollectionIndex(nodeID))
 }
 
 // DuplicateItem copies the folder or request at nodeID and inserts the copy
@@ -277,7 +276,7 @@ func (s *Session) DuplicateItem(nodeID string) (string, error) {
 		cp := deepCopyFolder(orig)
 		cp.Name = orig.Name + " (copy)"
 		*foldersP = slices.Insert(*foldersP, idx+1, cp)
-		if err := s.SaveActiveCollection(); err != nil {
+		if err := s.saveCollection(nodeCollectionIndex(nodeID)); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("%s/f%d", parent, idx+1), nil
@@ -290,7 +289,7 @@ func (s *Session) DuplicateItem(nodeID string) (string, error) {
 		cp := deepCopyRequest(orig)
 		cp.Name = orig.Name + " (copy)"
 		*requestsP = slices.Insert(*requestsP, idx+1, cp)
-		if err := s.SaveActiveCollection(); err != nil {
+		if err := s.saveCollection(nodeCollectionIndex(nodeID)); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("%s/r%d", parent, idx+1), nil
@@ -554,6 +553,11 @@ func deepCopyRequest(r model.Request) model.Request {
 	}
 	if r.Body.Form != nil {
 		r.Body.Form = slices.Clone(r.Body.Form)
+	}
+	if r.Chain != nil {
+		// Detach the Chain slice too, or the copy aliases the original's
+		// backing array and a later rename/move cascade corrupts both.
+		r.Chain = slices.Clone(r.Chain)
 	}
 	return r
 }

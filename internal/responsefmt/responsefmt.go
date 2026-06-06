@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,12 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrNamespacedXML signals that a well-formed XML body uses namespaces, which
+// encoding/xml's re-encoder cannot round-trip without mangling xmlns prefixes.
+// PrettyXML returns the body unchanged with this error so callers can treat it
+// as valid (it parsed) while declining to reformat it (which would corrupt it).
+var ErrNamespacedXML = errors.New("namespaced XML left unchanged to avoid corrupting xmlns prefixes")
 
 // PrettyJSON returns body re-indented with two spaces, or an error if body is
 // not valid JSON.
@@ -27,11 +34,17 @@ func PrettyJSON(body []byte) (string, error) {
 
 // PrettyXML returns body re-indented with two spaces. Whitespace-only text
 // nodes from the input are stripped so the encoder can re-format cleanly.
+//
+// Namespaced XML (SOAP envelopes, any xmlns) cannot survive encoding/xml's
+// re-encoder — it rewrites prefixes into invalid forms — so when a well-formed
+// document uses namespaces PrettyXML returns it unchanged with ErrNamespacedXML
+// rather than handing back corrupted markup. Malformed input still errors.
 func PrettyXML(body []byte) (string, error) {
 	dec := xml.NewDecoder(bytes.NewReader(body))
 	var out bytes.Buffer
 	enc := xml.NewEncoder(&out)
 	enc.Indent("", "  ")
+	namespaced := false
 	for {
 		tok, err := dec.Token()
 		if err == io.EOF {
@@ -39,6 +52,9 @@ func PrettyXML(body []byte) (string, error) {
 		}
 		if err != nil {
 			return "", err
+		}
+		if se, ok := tok.(xml.StartElement); ok && se.Name.Space != "" {
+			namespaced = true
 		}
 		if cd, ok := tok.(xml.CharData); ok && len(bytes.TrimSpace(cd)) == 0 {
 			continue
@@ -49,6 +65,9 @@ func PrettyXML(body []byte) (string, error) {
 	}
 	if err := enc.Flush(); err != nil {
 		return "", err
+	}
+	if namespaced {
+		return string(body), ErrNamespacedXML
 	}
 	return out.String(), nil
 }

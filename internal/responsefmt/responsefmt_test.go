@@ -1,11 +1,38 @@
 package responsefmt
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 )
+
+// TestPrettyXMLNamespacedLeftUnchanged verifies that namespaced XML (SOAP etc.)
+// is returned byte-for-byte with ErrNamespacedXML rather than corrupted, while
+// plain XML still formats.
+func TestPrettyXMLNamespacedLeftUnchanged(t *testing.T) {
+	soap := `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><x>1</x></soap:Body></soap:Envelope>`
+	out, err := PrettyXML([]byte(soap))
+	if !errors.Is(err, ErrNamespacedXML) {
+		t.Fatalf("err = %v, want ErrNamespacedXML", err)
+	}
+	if out != soap {
+		t.Errorf("namespaced XML modified:\n got %q\nwant %q", out, soap)
+	}
+	// A default-namespace doc is also left unchanged.
+	if _, err := PrettyXML([]byte(`<a xmlns="urn:x"><b/></a>`)); !errors.Is(err, ErrNamespacedXML) {
+		t.Errorf("default-ns err = %v, want ErrNamespacedXML", err)
+	}
+	// Plain (namespace-free) XML still reformats.
+	if got, err := PrettyXML([]byte(`<a><b>1</b></a>`)); err != nil || !strings.Contains(got, "\n  <b>1</b>") {
+		t.Errorf("plain XML format = %q err=%v", got, err)
+	}
+	// Malformed input still errors (and not as ErrNamespacedXML).
+	if _, err := PrettyXML([]byte(`<a><b></a>`)); err == nil || errors.Is(err, ErrNamespacedXML) {
+		t.Errorf("malformed err = %v, want a parse error", err)
+	}
+}
 
 // TestPrettyJSON verifies that PrettyJSON indents valid JSON with two spaces and errors on invalid input.
 func TestPrettyJSON(t *testing.T) {

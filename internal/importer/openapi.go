@@ -92,9 +92,16 @@ func normalizeYAML(v any) any {
 }
 
 func convertOAS3(doc *openapi3.T) model.Collection {
+	// doc.Info is optional in practice — a spec can parse with no `info` block,
+	// so guard the deref (a nil Info would otherwise panic and crash the app,
+	// since the import callbacks have no recover()).
+	name := "Imported API"
+	if doc.Info != nil {
+		name = stringOr(doc.Info.Title, name)
+	}
 	c := model.Collection{
 		ID:   model.NewID(),
-		Name: stringOr(doc.Info.Title, "Imported API"),
+		Name: name,
 	}
 
 	baseURL := ""

@@ -1,6 +1,7 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -78,6 +79,57 @@ func TestActiveIndexReflectsWorkspaceSwitch(t *testing.T) {
 	s.SetActive(1)
 	if got := s.ActiveIndex(); got != 1 {
 		t.Errorf("ActiveIndex after no-op SetActive = %d, want 1", got)
+	}
+}
+
+// TestDeepCopyRequestDetachesChain guards the duplicate-aliasing bug: a copied
+// request's Chain must not share its backing array with the original.
+func TestDeepCopyRequestDetachesChain(t *testing.T) {
+	orig := model.Request{Chain: []model.ChainStep{{Alias: "a", Request: "Auth/Login"}}}
+	cp := deepCopyRequest(orig)
+	orig.Chain[0].Request = "MUT"
+	if cp.Chain[0].Request != "Auth/Login" {
+		t.Errorf("copy aliases original Chain: got %q", cp.Chain[0].Request)
+	}
+}
+
+// TestRemoveCollectionResolvesByDirWhenMisaligned guards the data-loss bug: when
+// an earlier collection failed to load, the loaded list (s.cols/s.dirs the tree
+// shows) is misaligned with the persisted workspace list, so RemoveCollection(i)
+// must drop the dir the UI actually targeted — not w.Collections[i].
+func TestRemoveCollectionResolvesByDirWhenMisaligned(t *testing.T) {
+	tmp := t.TempDir()
+	a := makeColl(t, tmp, "A")
+	makeColl(t, tmp, "B")
+	cfg := filepath.Join(tmp, "cfg.yml")
+	s, _ := New(cfg)
+	if err := s.OpenCollection(a); err != nil {
+		t.Fatalf("Open A: %v", err)
+	}
+	if err := s.OpenCollection(filepath.Join(tmp, "B")); err != nil {
+		t.Fatalf("Open B: %v", err)
+	}
+	// Make A unloadable so a fresh session loads only B (index 0), while the
+	// persisted workspace list is still [A, B] — i.e. misaligned.
+	if err := os.RemoveAll(a); err != nil {
+		t.Fatalf("remove A dir: %v", err)
+	}
+	s2, _ := New(cfg)
+	if cols := s2.Collections(); len(cols) != 1 || cols[0].Name != "B" {
+		t.Fatalf("setup: loaded cols = %+v, want only B", cols)
+	}
+	// Removing the only visible collection (index 0 = B) must drop B's dir from
+	// the workspace. The old code removed w.Collections[0] = A's dir instead.
+	if err := s2.RemoveCollection(0); err != nil {
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	// Restore A on disk and reload: if B was correctly removed, the workspace now
+	// lists only A; the buggy behaviour would have left B.
+	makeColl(t, tmp, "A")
+	s3, _ := New(cfg)
+	got := s3.Collections()
+	if len(got) != 1 || got[0].Name != "A" {
+		t.Errorf("after misaligned remove, cols = %+v; want only A (B should be removed, not A)", got)
 	}
 }
 

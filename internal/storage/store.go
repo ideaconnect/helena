@@ -481,13 +481,32 @@ func loadItems(dir string) ([]model.Folder, []model.Request, error) {
 	return folders, requests, nil
 }
 
-// writeYAML marshals v and writes it to path with 0644 permissions.
+// writeYAML marshals v and writes it to path with 0644 permissions. The write
+// is atomic: data goes to a temp file in the same directory which is then
+// renamed over path, so a crash mid-write can't leave a truncated/corrupt file
+// (fatal for opencollection.yml, which Load needs intact).
 func writeYAML(path string, v any) error {
 	data, err := yaml.Marshal(v)
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".helena-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName) // no-op once the rename succeeds
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)

@@ -60,11 +60,23 @@ func TestSendOrAbortDispatch(t *testing.T) {
 		t.Error("initial sendCancel is non-nil")
 	}
 
-	// Simulate an in-flight Send by stashing a fake cancel func.
+	// The abort look must not change the button's size, or the address bar
+	// reflows and flickers when a quick Send toggles it on and off.
+	defaultSize := m.Send.MinSize()
+
+	// Simulate an in-flight Send by stashing a fake cancel func + abort look.
 	cancelled := false
 	m.sendCancel = func() { cancelled = true }
-	m.Send.SetIcon(nil)
-	m.Send.SetText("Abort")
+	m.setAbortButton()
+	if m.Send.Text != "" {
+		t.Errorf("abort button text = %q, want empty (icon-only, no reflow)", m.Send.Text)
+	}
+	if m.Send.Icon == nil {
+		t.Error("abort button has no icon (expected a stop icon)")
+	}
+	if got := m.Send.MinSize(); got != defaultSize {
+		t.Errorf("abort button MinSize = %v, want %v (size must be stable to avoid flicker)", got, defaultSize)
+	}
 
 	m.sendOrAbort()
 	if !cancelled {
@@ -73,8 +85,8 @@ func TestSendOrAbortDispatch(t *testing.T) {
 	if m.sendCancel == nil {
 		t.Error("sendOrAbort cleared sendCancel; goroutine teardown should own that")
 	}
-	if m.Send.Text != "Abort" {
-		t.Errorf("sendOrAbort changed button text to %q; goroutine teardown owns that too", m.Send.Text)
+	if m.Send.Icon == nil {
+		t.Error("sendOrAbort cleared the abort icon; goroutine teardown owns that")
 	}
 
 	// resetSendButton is the canonical teardown helper.

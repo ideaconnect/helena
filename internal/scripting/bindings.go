@@ -101,13 +101,24 @@ func stringify(v goja.Value) string {
 	return string(b)
 }
 
+// interruptGrace is how long runWithTimeout waits for the VM to unwind to an
+// interrupt checkpoint after signalling a timeout/cancel. goja's Interrupt only
+// fires at interpreter checkpoints, so a script stuck inside a native built-in
+// (a Go binding, a huge JSON.parse, etc.) never observes it — past this grace
+// we abandon the goroutine and return rather than freezing the caller.
+var interruptGrace = 250 * time.Millisecond
+
 // runWithTimeout executes src on vm with a hard ScriptTimeout cap, also
-// interrupting if ctx is cancelled. Interruptions surface as the
-// captured reason ("script execution timed out", "script execution
-// cancelled: …") rather than the raw goja.InterruptedError so the UI
-// gets a clean message.
+// interrupting if ctx is cancelled. RunString runs on its own goroutine: on a
+// normal finish we return its result; on timeout/cancel we signal Interrupt and
+// wait only interruptGrace before returning regardless, so a runaway script
+// that ignores Interrupt (stuck in native code) can't hold the Send worker —
+// the orphaned goroutine drains into the buffered channel and exits on its own.
+// Each Run* uses a fresh goja.Runtime, so an abandoned VM never affects a later
+// run. Interruptions surface as the captured reason ("script execution timed
+// out" / "… cancelled: …") rather than the raw goja.InterruptedError.
 func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
-	done := make(chan struct{})
+	resultCh := make(chan error, 1) // buffered: a late finish never blocks the goroutine
 	var (
 		mu     sync.Mutex
 		reason string
@@ -120,20 +131,10 @@ func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
 		mu.Unlock()
 		vm.Interrupt(s)
 	}
-	timer := time.NewTimer(ScriptTimeout)
-	go func() {
-		defer timer.Stop()
-		select {
-		case <-timer.C:
-			setReason("script execution timed out")
-		case <-ctx.Done():
-			setReason("script execution cancelled: " + ctx.Err().Error())
-		case <-done:
+	finalize := func(err error) error {
+		if err == nil {
+			return nil
 		}
-	}()
-	_, err := vm.RunString(src)
-	close(done)
-	if err != nil {
 		var ie *goja.InterruptedError
 		if errors.As(err, &ie) {
 			mu.Lock()
@@ -146,7 +147,33 @@ func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
 		}
 		return err
 	}
-	return nil
+
+	timer := time.NewTimer(ScriptTimeout)
+	defer timer.Stop()
+	go func() { _, err := vm.RunString(src); resultCh <- err }()
+
+	select {
+	case err := <-resultCh:
+		return finalize(err)
+	case <-timer.C:
+		setReason("script execution timed out")
+	case <-ctx.Done():
+		setReason("script execution cancelled: " + ctx.Err().Error())
+	}
+
+	// Interrupt signalled; give the VM a brief grace to unwind, then abandon.
+	select {
+	case err := <-resultCh:
+		return finalize(err)
+	case <-time.After(interruptGrace):
+		mu.Lock()
+		r := reason
+		mu.Unlock()
+		if r == "" {
+			r = "script execution timed out"
+		}
+		return errors.New(r)
+	}
 }
 
 // requestToObject mirrors the model.Request into a goja object the

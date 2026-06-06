@@ -119,6 +119,14 @@ func (m *MainUI) planNodeDrop(srcID, tgtID string, topHalf bool, rowTop, rowH fl
 		return dropPlan{valid: true, srcID: srcID, dstParent: tgtID, index: indexAppend,
 			rowTop: rowTop, rowH: rowH, into: true}
 	case tgtBranch && topHalf && srcKind == "f":
+		if isCollectionID(tgtID) {
+			// Top half of a collection root → make the folder its first child.
+			// splitNode(rootID) yields an empty parent, so target the root
+			// itself at index 0 instead of producing dstParent="" (which the
+			// move would reject as cross-collection).
+			return dropPlan{valid: true, srcID: srcID, dstParent: tgtID, index: 0,
+				rowTop: rowTop, rowH: rowH, into: true}
+		}
 		// A folder before another folder — same (folder) slice, so align indices.
 		return dropPlan{valid: true, srcID: srcID, dstParent: tgtParent, index: tgtIdx,
 			rowTop: rowTop, rowH: rowH, lineAtBottom: false}

@@ -21,6 +21,43 @@ func TestLoadMissingReturnsDefault(t *testing.T) {
 	}
 }
 
+// TestLoadMissingSettingsKeepsDefaults verifies that a config file with no
+// `settings:` block keeps the safe DefaultSettings (timeout 30s, follow
+// redirects, CORS advisory on) instead of dropping to unsafe zero values.
+func TestLoadMissingSettingsKeepsDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := os.WriteFile(path, []byte("workspaces:\n  - name: Default\nactive: 0\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !reflect.DeepEqual(got.Settings, model.DefaultSettings()) {
+		t.Errorf("Settings = %#v, want DefaultSettings %#v", got.Settings, model.DefaultSettings())
+	}
+}
+
+// TestLoadPartialSettingsOverlaysDefaults verifies that a file setting only some
+// settings keys overwrites just those, leaving the rest at their defaults.
+func TestLoadPartialSettingsOverlaysDefaults(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	// Only theme is specified; timeout/redirects/CORS must stay default.
+	if err := os.WriteFile(path, []byte("workspaces:\n  - name: Default\nsettings:\n  theme: dark\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Settings.Theme != model.ThemeDark {
+		t.Errorf("Theme = %q, want dark", got.Settings.Theme)
+	}
+	if got.Settings.TimeoutSeconds != 30 || !got.Settings.FollowRedirects || !got.Settings.CORSWarning {
+		t.Errorf("non-specified settings not defaulted: %#v", got.Settings)
+	}
+}
+
 // TestLoadEmptyPathReturnsDefault verifies that Load("") short-circuits to the default config.
 func TestLoadEmptyPathReturnsDefault(t *testing.T) {
 	got, err := Load("")

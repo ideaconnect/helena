@@ -23,6 +23,23 @@ func TestToCurlSimpleGET(t *testing.T) {
 	}
 }
 
+// TestToCurlEmitsHostHeader verifies a custom Host header (which Go keeps on
+// req.Host, out of req.Header) is still rendered, preserving vhost fidelity.
+func TestToCurlEmitsHostHeader(t *testing.T) {
+	r := model.Request{
+		Method:  model.GET,
+		URL:     "https://1.2.3.4/api",
+		Headers: []model.KeyValue{{Enabled: true, Key: "Host", Value: "api.example.com"}},
+	}
+	got, err := ToCurl(r, nil, model.Settings{})
+	if err != nil {
+		t.Fatalf("ToCurl: %v", err)
+	}
+	if !strings.Contains(got, "Host: api.example.com") {
+		t.Errorf("curl dropped the Host header:\n%s", got)
+	}
+}
+
 // TestToCurlPOSTWithHeadersAndBody verifies that a JSON POST emits -H lines (including auto Content-Type) and --data-raw with quoted body.
 func TestToCurlPOSTWithHeadersAndBody(t *testing.T) {
 	r := model.Request{

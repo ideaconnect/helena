@@ -27,7 +27,7 @@ import (
 // "script execution timed out" error — the in-flight request still
 // completes for the pre-request case, since the interrupt fires only
 // inside RunWithContext.
-const ScriptTimeout = 5 * time.Second
+var ScriptTimeout = 5 * time.Second
 
 // EnvBridge mediates a script's helena.env.* calls. Get returns the
 // currently resolved value (overlay over underlying environment); Set

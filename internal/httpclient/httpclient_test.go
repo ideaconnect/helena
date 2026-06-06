@@ -13,6 +13,20 @@ import (
 	"github.com/idct/helena/internal/vars"
 )
 
+// TestReadCapped verifies the response-body cap: bodies within the limit read
+// fully and unflagged; bodies past it are cut to exactly the cap and flagged.
+func TestReadCapped(t *testing.T) {
+	if d, tr, err := readCapped(strings.NewReader("abc"), 8); err != nil || tr || string(d) != "abc" {
+		t.Errorf("within cap: data=%q trunc=%v err=%v", d, tr, err)
+	}
+	if d, tr, err := readCapped(strings.NewReader("01234567"), 8); err != nil || tr || string(d) != "01234567" {
+		t.Errorf("at cap: data=%q trunc=%v err=%v", d, tr, err)
+	}
+	if d, tr, err := readCapped(strings.NewReader("0123456789"), 8); err != nil || !tr || string(d) != "01234567" {
+		t.Errorf("over cap: data=%q trunc=%v err=%v", d, tr, err)
+	}
+}
+
 // TestDoGETWithParams verifies that enabled query params merge with URL params and disabled ones are dropped.
 func TestDoGETWithParams(t *testing.T) {
 	var gotPath, gotQuery string

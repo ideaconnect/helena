@@ -56,6 +56,11 @@ func renderCurl(req *http.Request, s model.Settings) (string, error) {
 			lines = append(lines, fmt.Sprintf("-H %s", shellQuote(k+": "+v)))
 		}
 	}
+	// Go keeps a custom Host header out of req.Header (it lives on req.Host), so
+	// emit it explicitly or the snippet would hit the wrong virtual host.
+	if req.Host != "" && req.Host != req.URL.Host {
+		lines = append(lines, fmt.Sprintf("-H %s", shellQuote("Host: "+req.Host)))
+	}
 
 	body, err := readBodyBytes(req)
 	if err != nil {
@@ -83,6 +88,10 @@ func renderWget(req *http.Request, s model.Settings) (string, error) {
 		for _, v := range req.Header[k] {
 			lines = append(lines, fmt.Sprintf("--header=%s", shellQuote(k+": "+v)))
 		}
+	}
+	// Custom Host header lives on req.Host, not req.Header — emit it explicitly.
+	if req.Host != "" && req.Host != req.URL.Host {
+		lines = append(lines, fmt.Sprintf("--header=%s", shellQuote("Host: "+req.Host)))
 	}
 
 	body, err := readBodyBytes(req)

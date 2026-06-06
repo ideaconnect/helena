@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image/color"
 	"slices"
@@ -166,7 +167,7 @@ type MainUI struct {
 	Method      *methodPicker
 	URL         *widget.Entry
 	urlPreview  *widget.Label
-	Save        *widget.Button
+	Save        *ttwidget.Button
 	Send        *widget.Button
 	Tree        *widget.Tree
 	// Sidebar toolbar: node-action icon buttons operating on the selected tree
@@ -223,6 +224,7 @@ type MainUI struct {
 	currentRequestID   string
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
+	syncing            bool // suppress re-entrant URL<->Query sync (see query.go)
 
 	// Editor tab strip. tabs is the ordered set of open requests;
 	// activeTabIdx indexes the active one (-1 when none). tabBar holds the
@@ -272,8 +274,8 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.URL = widget.NewEntry()
 	m.URL.SetPlaceHolder("https://{{base_url}}/path")
 	m.URL.OnChanged = func(s string) {
-		if !m.loading && m.currentRequest != nil {
-			m.currentRequest.URL = s
+		if !m.loading && !m.syncing && m.currentRequest != nil {
+			m.applyURLEdit(s)
 		}
 		m.updateURLPreview()
 	}
@@ -283,11 +285,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.urlPreview.TextStyle = fyne.TextStyle{Italic: true}
 	m.urlPreview.Hide()
 
-	m.Save = widget.NewButton("Save", m.saveRequest)
+	m.Save = tipButton("floppy-disk", "Save", m.saveRequest)
 	m.Save.Disable()
-	// Send shows just the paper-plane icon by default;
+	// Send shows just the send-arrow icon by default;
 	// abort mode swaps to text "Abort" with warning importance.
-	m.Send = widget.NewButtonWithIcon("", themedIcon("paper-plane"), nil)
+	m.Send = widget.NewButtonWithIcon("", themedIcon("location-arrow"), nil)
 	m.Send.Importance = widget.HighImportance
 
 	m.Tree = m.buildTree()
@@ -304,8 +306,15 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewVScroll(m.headersRows))
 
 	m.BodyType = widget.NewSelect(bodyTypeNames(), func(s string) {
-		if !m.loading && m.currentRequest != nil {
-			m.currentRequest.Body.Type = model.BodyType(s)
+		if m.loading || m.currentRequest == nil {
+			return
+		}
+		oldType := m.currentRequest.Body.Type
+		newType := model.BodyType(s)
+		m.currentRequest.Body.Type = newType
+		if h, changed := applyImpliedContentType(m.currentRequest.Headers, oldType, newType); changed {
+			m.currentRequest.Headers = h
+			m.rebuildHeadersRows()
 		}
 	})
 	m.BodyType.SetSelected(string(model.BodyNone))
@@ -324,10 +333,10 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewVScroll(m.BodyContent))
 
 	m.Request = container.NewAppTabs(
-		container.NewTabItem("Params", paramsTab),
+		container.NewTabItem("Body", bodyTab),
 		container.NewTabItem("Auth", m.buildAuthTab()),
 		container.NewTabItem("Headers", headersTab),
-		container.NewTabItem("Body", bodyTab),
+		container.NewTabItem("Query", paramsTab),
 		container.NewTabItem("Scripts", m.buildScriptsTab()),
 		container.NewTabItem("Chain", m.buildChainTab()),
 		container.NewTabItem("Docs", m.buildDocsTab()),
@@ -368,7 +377,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		widget.NewLabel("Environment:"), m.Environment, envBtn,
 		settingsBtn, helpBtn,
 	)
-	exportBtn := widget.NewButton("Export…", m.actionExport)
+	exportBtn := tipButton("file-export", "Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)
 	addressBar := container.NewBorder(nil, nil, m.Method, saveSendBox, m.URL)
 
@@ -379,7 +388,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// when the strip overflows. rebuildTabBar renders it.
 	m.activeTabIdx = -1
 	m.tabBar = container.NewHBox()
-	m.newTabBtn = widget.NewButton("+", m.newScratchTab)
+	m.newTabBtn = widget.NewButtonWithIcon("", themedIcon("plus"), m.newScratchTab)
 	m.newTabBtn.Importance = widget.LowImportance
 	m.tabOverflowBtn = widget.NewButtonWithIcon("", theme.MoreVerticalIcon(), m.showTabMenu)
 	m.tabOverflowBtn.Importance = widget.LowImportance
@@ -397,7 +406,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 	tabRow := container.NewStack(
 		m.tabStripBg,
 		container.NewBorder(nil, widget.NewSeparator(), nil, nil, nil),
-		stripContent,
+		// Top padding so the tabs don't touch the upper boundary — the band
+		// still fills to the top, the tabs sit a few px below it.
+		container.New(layout.NewCustomPaddedLayout(theme.Padding(), 0, 0, 0), stripContent),
 	)
 
 	// The tab strip + address bar + URL preview live in the editor column (not
@@ -629,7 +640,15 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		method = model.GET
 	}
 	m.Method.SetSelected(string(method))
-	m.URL.SetText(req.URL)
+	// Two-way Query sync: fold any query already in the stored URL into Params so
+	// it shows in the table, keep currentRequest.URL as the bare base, and render
+	// base + the params query in the field. (SetText here is under m.loading, so
+	// its OnChanged won't re-run applyURLEdit.)
+	if base, urlQuery := splitURLQuery(req.URL); urlQuery != "" {
+		req.URL = base
+		req.Params = append(parseQueryParams(urlQuery), req.Params...)
+	}
+	m.URL.SetText(displayURL(req.URL, req.Params))
 	m.rebuildParamsRows()
 	m.rebuildHeadersRows()
 
@@ -730,7 +749,9 @@ func (m *MainUI) validateBody() {
 			m.Status.SetText("JSON is valid")
 		}
 	case model.BodyXML:
-		if _, err := responsefmt.PrettyXML(body); err != nil {
+		// ErrNamespacedXML means the doc parsed fine (it's valid); we just won't
+		// reformat it — so it must not read as "invalid".
+		if _, err := responsefmt.PrettyXML(body); err != nil && !errors.Is(err, responsefmt.ErrNamespacedXML) {
 			m.Status.SetText("XML invalid: " + err.Error())
 		} else {
 			m.Status.SetText("XML is valid")
@@ -754,6 +775,10 @@ func (m *MainUI) formatBody() {
 		formatted, err = responsefmt.PrettyXML(body)
 	default:
 		m.Status.SetText("Format only applies to JSON or XML bodies")
+		return
+	}
+	if errors.Is(err, responsefmt.ErrNamespacedXML) {
+		m.Status.SetText("XML has namespaces — left unchanged (can't reformat without corrupting xmlns prefixes)")
 		return
 	}
 	if err != nil {
@@ -788,7 +813,7 @@ func (m *MainUI) rebuildParamsRows() {
 	m.paramsRows.RemoveAll()
 	if m.currentRequest != nil {
 		for i := range m.currentRequest.Params {
-			m.paramsRows.Add(m.buildKVRow(&m.currentRequest.Params, i, m.rebuildParamsRows))
+			m.paramsRows.Add(m.buildKVRow(&m.currentRequest.Params, i, m.rebuildParamsRows, m.syncURLFieldFromParams))
 		}
 	}
 	m.paramsRows.Refresh()
@@ -799,29 +824,98 @@ func (m *MainUI) rebuildHeadersRows() {
 	m.headersRows.RemoveAll()
 	if m.currentRequest != nil {
 		for i := range m.currentRequest.Headers {
-			m.headersRows.Add(m.buildKVRow(&m.currentRequest.Headers, i, m.rebuildHeadersRows))
+			m.headersRows.Add(m.buildKVRow(&m.currentRequest.Headers, i, m.rebuildHeadersRows, nil))
 		}
 	}
 	m.headersRows.Refresh()
 }
 
+// applyImpliedContentType keeps the Content-Type header in step with the body
+// Type selector, but never clobbers a value the user set explicitly. It returns
+// the (possibly new) header slice and whether anything changed.
+//
+//   - No Content-Type header: one is added (enabled) when the new type implies a
+//     value (json/xml/text/form). none/multipart imply none, so nothing is added
+//     — multipart's Content-Type, with its boundary, is set when the request is sent.
+//   - A Content-Type header exists: it's only updated/removed when its current
+//     value still equals the *previous* type's implied value — i.e. it was
+//     auto-managed by this helper, not typed by the user. A custom value is left
+//     untouched ("set explicitly").
+func applyImpliedContentType(headers []model.KeyValue, oldType, newType model.BodyType) ([]model.KeyValue, bool) {
+	oldCT := oldType.ContentType()
+	newCT := newType.ContentType()
+	for i := range headers {
+		if !strings.EqualFold(strings.TrimSpace(headers[i].Key), "Content-Type") {
+			continue
+		}
+		if strings.TrimSpace(headers[i].Value) != oldCT {
+			return headers, false // explicit value — leave it alone
+		}
+		if newCT == "" {
+			return append(headers[:i], headers[i+1:]...), true
+		}
+		headers[i].Value = newCT
+		return headers, true
+	}
+	if newCT == "" {
+		return headers, false
+	}
+	return append(headers, model.KeyValue{Enabled: true, Key: "Content-Type", Value: newCT}), true
+}
+
+// applyURLEdit handles a user edit of the URL field under two-way Query sync:
+// it peels the query off into the bare base (kept in currentRequest.URL) and
+// reparses it into the Query table, preserving any disabled rows. The URL field
+// itself is left untouched so the caret/typing isn't disturbed; the send path
+// still merges currentRequest.Params, so the base-only URL stays correct.
+func (m *MainUI) applyURLEdit(s string) {
+	base, query := splitURLQuery(s)
+	m.currentRequest.URL = base
+	m.currentRequest.Params = mergeQueryFromURL(m.currentRequest.Params, parseQueryParams(query))
+	m.rebuildParamsRows()
+}
+
+// syncURLFieldFromParams rewrites the URL field to base + the query rebuilt from
+// the Query table after a table edit. The syncing flag stops the field's
+// OnChanged from reparsing the value straight back into the table.
+func (m *MainUI) syncURLFieldFromParams() {
+	if m.currentRequest == nil || m.syncing {
+		return
+	}
+	m.syncing = true
+	m.URL.SetText(displayURL(m.currentRequest.URL, m.currentRequest.Params))
+	m.syncing = false
+}
+
 // buildKVRow renders one editable row of a KeyValue list. The row's widgets
 // write back into list by index; the delete button removes that index and calls
 // refresh to rebuild the row container.
-func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func()) fyne.CanvasObject {
+// onChange (may be nil) fires after any edit that alters the list's contents —
+// the Query tab passes syncURLFieldFromParams so edits flow back into the URL.
+func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onChange func()) fyne.CanvasObject {
+	fire := func() {
+		if onChange != nil {
+			onChange()
+		}
+	}
 	kv := &(*list)[idx]
-	check := widget.NewCheck("", func(b bool) {
+	// OnChanged assigned after SetChecked (like the entries below SetText) so a
+	// rebuild doesn't fire callbacks while wiring rows.
+	check := widget.NewCheck("", nil)
+	check.SetChecked(kv.Enabled)
+	check.OnChanged = func(b bool) {
 		if idx < len(*list) {
 			(*list)[idx].Enabled = b
 		}
-	})
-	check.SetChecked(kv.Enabled)
+		fire()
+	}
 	keyEntry := widget.NewEntry()
 	keyEntry.SetText(kv.Key)
 	keyEntry.OnChanged = func(s string) {
 		if idx < len(*list) {
 			(*list)[idx].Key = s
 		}
+		fire()
 	}
 	valEntry := widget.NewEntry()
 	valEntry.SetText(kv.Value)
@@ -829,13 +923,17 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func()) fyn
 		if idx < len(*list) {
 			(*list)[idx].Value = s
 		}
+		fire()
 	}
-	delBtn := widget.NewButton("×", func() {
+	// Same affordance as the tab close button: a low-importance circle-xmark icon.
+	delBtn := widget.NewButtonWithIcon("", themedIcon("circle-xmark"), func() {
 		if idx < len(*list) {
 			*list = slices.Delete(*list, idx, idx+1)
 		}
 		refresh()
+		fire()
 	})
+	delBtn.Importance = widget.LowImportance
 	return container.NewBorder(nil, nil, check, delBtn,
 		container.NewGridWithColumns(2, keyEntry, valEntry))
 }
@@ -920,10 +1018,35 @@ func (m *MainUI) sendOrAbort() {
 // fyne.Do block.
 func (m *MainUI) resetSendButton() {
 	m.sendCancel = nil
-	m.Send.SetIcon(themedIcon("paper-plane"))
+	m.Send.SetIcon(themedIcon("location-arrow"))
 	m.Send.SetText("")
 	m.Send.Importance = widget.HighImportance
 	m.Send.Refresh()
+}
+
+// setAbortButton switches the Send button into its in-flight "abort" look: a
+// stop icon in warning importance. It stays icon-only (no "Abort" text) so the
+// button keeps the same size as the default Send state — otherwise the wider
+// text button reflows the address bar, which flickers when a quick Send toggles
+// the button on and straight back off.
+func (m *MainUI) setAbortButton() {
+	m.Send.SetIcon(themedIcon("circle-stop"))
+	m.Send.SetText("")
+	m.Send.Importance = widget.WarningImportance
+	m.Send.Refresh()
+}
+
+// snapshotRequest returns a copy of req with every slice-backed field detached
+// from the original's backing arrays, so the off-UI send/chain worker never
+// shares mutable state with the live m.currentRequest the user keeps editing.
+// (ChainStep / KeyValue are all-value structs, so a shallow element copy fully
+// detaches them.)
+func snapshotRequest(req model.Request) model.Request {
+	req.Params = append([]model.KeyValue(nil), req.Params...)
+	req.Headers = append([]model.KeyValue(nil), req.Headers...)
+	req.Body.Form = append([]model.KeyValue(nil), req.Body.Form...)
+	req.Chain = append([]model.ChainStep(nil), req.Chain...)
+	return req
 }
 
 func (m *MainUI) send() {
@@ -941,7 +1064,12 @@ func (m *MainUI) send() {
 	}
 	var req model.Request
 	if m.currentRequest != nil {
-		req = *m.currentRequest
+		// Snapshot the live request on the UI goroutine, detaching its
+		// slice-backed fields (Params/Headers/Body.Form/Chain) from
+		// m.currentRequest's backing arrays — the user can keep editing those
+		// tabs while the send/chain runs for ~ScriptTimeout on the worker, and
+		// a shared backing array would be an unsynchronized read/write (race).
+		req = snapshotRequest(*m.currentRequest)
 		// Flatten any Inherit on the in-memory request copy via the session's
 		// ancestor walk so httpclient sees the concrete auth.
 		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
@@ -950,9 +1078,9 @@ func (m *MainUI) send() {
 	}
 	// Snapshot env vars + auth state on the UI goroutine so the worker
 	// goroutine can run for ~ScriptTimeout without racing against UI
-	// mutations of s.cols / s.activeCol / Environment.Variables. The
-	// per-Send deep-copy of slice fields happens inside ExecuteOnce so
-	// chain steps get the same insulation.
+	// mutations of s.cols / s.activeCol / Environment.Variables. The leaf's
+	// slice fields are detached above; chain step targets come from the
+	// SnapshotChainFinder copy below, so nothing the worker touches is shared.
 	envSnap := m.sess.SnapshotActiveEnvVars()
 
 	client := httpclient.New(m.sess.Settings())
@@ -981,13 +1109,9 @@ func (m *MainUI) send() {
 	// Send. The button text swap signals the toggled mode to the user.
 	ctx, cancel := context.WithCancel(context.Background())
 	m.sendCancel = cancel
-	// In abort mode the icon goes away and the button shows "Abort"
-	// in warning-importance text — visually distinct from the default
-	// icon-only Send state.
-	m.Send.SetIcon(nil)
-	m.Send.SetText("Abort")
-	m.Send.Importance = widget.WarningImportance
-	m.Send.Refresh()
+	// Abort mode: a warning-importance stop icon, icon-only so the button
+	// stays the same size as the default Send state (see setAbortButton).
+	m.setAbortButton()
 
 	// Capture the pre-script's view of method+URL so we can flag any
 	// mutation in the status line later.

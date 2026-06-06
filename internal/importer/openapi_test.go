@@ -7,6 +7,18 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestFromOpenAPINoInfoBlock guards against the nil-Info panic: a spec that
+// parses but omits the `info` block must yield the fallback name, not crash.
+func TestFromOpenAPINoInfoBlock(t *testing.T) {
+	c, err := FromOpenAPI([]byte(`{"openapi":"3.0.0","paths":{}}`))
+	if err != nil {
+		t.Fatalf("FromOpenAPI on info-less spec: %v", err)
+	}
+	if c.Name != "Imported API" {
+		t.Errorf("name = %q, want fallback %q", c.Name, "Imported API")
+	}
+}
+
 const oas3Sample = `openapi: 3.0.0
 info:
   title: Sample API

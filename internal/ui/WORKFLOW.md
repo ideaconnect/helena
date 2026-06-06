@@ -142,6 +142,48 @@ programmatic updates (KV rows, body type changes that reset content) the
 write-back loop can clobber freshly loaded data with stale values. The flag
 makes `loadRequest` a single atomic UI write.
 
+### Body Type → Content-Type sync
+
+The body **Type** select (`BodyType`) keeps the request's `Content-Type` header
+in step with the chosen encoding, but only while the user hasn't set that header
+explicitly. On a user-driven change (the `!m.loading` guard again — the bulk
+`SetSelected` in `loadRequest` is skipped), the callback records the previous
+type, applies the new one, then calls the pure helper
+`applyImpliedContentType(headers, oldType, newType)`:
+
+- No `Content-Type` header → one is added when the new type implies a value
+  (json/xml/text/form). `none`/`multipart` imply none — multipart's header,
+  with its boundary, is written when the request is sent.
+- A `Content-Type` header exists → it is updated (or removed, for none/multipart)
+  **only** when its current value still equals the *previous* type's implied
+  value, i.e. it was auto-managed. A custom value (anything else) is left alone.
+
+When the helper reports a change the new slice is stored and `rebuildHeadersRows`
+re-renders the Headers tab so the edit is visible there.
+
+### Query ↔ URL two-way sync
+
+The **Query** tab and the URL field are two views of one thing. `currentRequest`
+holds the bare base in `URL` and the structured pairs (including disabled ones)
+in `Params`; `Params` stays the source of truth the send path merges, so the
+backend is untouched. The field just shows base + query. Pure helpers live in
+[query.go](query.go).
+
+- **Editing the URL field** → `OnChanged` (guarded by `!m.loading && !m.syncing`)
+  calls `applyURLEdit`: split off the query, store the base in
+  `currentRequest.URL`, reparse the query into `Params` via `mergeQueryFromURL`
+  (which keeps disabled rows the URL can't express), and `rebuildParamsRows`. The
+  field text is left alone so typing isn't disturbed.
+- **Editing a Query row** (key/value/enable/delete) → the row's `onChange`
+  (`buildKVRow`'s new last arg; nil for the Headers tab) calls
+  `syncURLFieldFromParams`, which rewrites the field to `displayURL(base, params)`.
+  It sets `m.syncing` around the `SetText` so the field's own `OnChanged` doesn't
+  reparse the value straight back.
+- **On load**, `loadRequest` folds any query already in the stored URL into
+  `Params`, keeps `URL` as the bare base, and sets the field to the merged
+  display. (Row callbacks are wired after `SetText`/`SetChecked`, so rebuilds
+  don't fire sync.)
+
 ## Editor tabs
 
 The editor keeps many requests open at once as a tab strip above the address

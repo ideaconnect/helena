@@ -59,6 +59,12 @@ func (m *MainUI) addChainStep() {
 // per ChainStep. Needed after add / delete and after loadRequest swaps
 // the backing slice.
 func (m *MainUI) rebuildChainRows() {
+	// Seed rows under the loading guard so re-creating them (after add/delete)
+	// never re-runs the ref OnChanged's RequestID derivation against a possibly
+	// stale path — which would silently drop an ID pin on an unrelated row.
+	prev := m.loading
+	m.loading = true
+	defer func() { m.loading = prev }()
 	m.chainRows.RemoveAll()
 	if m.currentRequest != nil {
 		for i := range m.currentRequest.Chain {

@@ -12,6 +12,35 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestSaveLeavesNoTempFiles verifies the atomic-write path cleans up after
+// itself: a successful Save renames its temp file over the target, leaving no
+// stray .helena-*.tmp behind.
+func TestSaveLeavesNoTempFiles(t *testing.T) {
+	dir := t.TempDir()
+	if err := Save(sampleCollection(), dir); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	walkNoTemp := func(d string) {
+		entries, err := os.ReadDir(d)
+		if err != nil {
+			return
+		}
+		for _, e := range entries {
+			if strings.HasPrefix(e.Name(), ".helena-") {
+				t.Errorf("leftover temp file in %s: %s", d, e.Name())
+			}
+		}
+	}
+	walkNoTemp(dir)
+	// Folders are written into subdirectories too.
+	subs, _ := os.ReadDir(dir)
+	for _, s := range subs {
+		if s.IsDir() {
+			walkNoTemp(filepath.Join(dir, s.Name()))
+		}
+	}
+}
+
 // sampleCollection returns a small in-memory collection used as the fixture
 // for the round-trip tests. Auth fields use the same defaults that fileToAuth
 // applies on load (Inherit for requests/folders, None for the collection

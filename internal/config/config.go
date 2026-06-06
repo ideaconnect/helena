@@ -86,7 +86,13 @@ func Load(path string) (Config, error) {
 		}
 		return Config{}, err
 	}
-	var c Config
+	// Seed defaults before unmarshalling so a file that omits a key — most
+	// importantly the whole `settings:` block — keeps the safe defaults instead
+	// of silently dropping to zero values (TimeoutSeconds=0 = no timeout,
+	// FollowRedirects/CORSWarning=false). YAML only overwrites the keys it
+	// actually contains. Workspaces is cleared so the file fully owns the list.
+	c := Default()
+	c.Workspaces = nil
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return Config{}, err
 	}

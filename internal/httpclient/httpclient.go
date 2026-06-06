@@ -16,6 +16,25 @@ import (
 	"github.com/idct/helena/internal/vars"
 )
 
+// MaxResponseBytes caps how much of a response body is buffered into memory, so
+// a huge or hostile response can't OOM the client (a desktop app, not a stream
+// processor). Bodies past the cap are truncated and Response.Truncated is set.
+const MaxResponseBytes = 100 << 20 // 100 MiB
+
+// readCapped reads up to max bytes from r, reporting whether the source had
+// more (in which case the returned data is exactly max bytes). Reading one byte
+// past the cap is how truncation is detected without buffering the whole body.
+func readCapped(r io.Reader, max int64) (data []byte, truncated bool, err error) {
+	data, err = io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if int64(len(data)) > max {
+		return data[:max], true, nil
+	}
+	return data, false, nil
+}
+
 // Response captures the outcome of executing a request.
 //
 // RequestURL and RequestBody record what actually went on the wire —
@@ -36,6 +55,7 @@ type Response struct {
 	Size        int64
 	Duration    time.Duration
 	CORSWarning string // advisory only; non-empty when a browser would likely block
+	Truncated   bool   // body exceeded MaxResponseBytes and was cut off
 	RequestURL  string
 	RequestBody []byte
 }
@@ -191,7 +211,8 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	data, err := io.ReadAll(resp.Body)
+	// Bound the read so an oversized/hostile body can't OOM the app.
+	data, truncated, err := readCapped(resp.Body, MaxResponseBytes)
 	dur := time.Since(start)
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)
@@ -204,6 +225,7 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 		Headers:     resp.Header,
 		Body:        data,
 		Size:        int64(len(data)),
+		Truncated:   truncated,
 		Duration:    dur,
 		RequestURL:  req.URL.String(),
 		RequestBody: body,

@@ -166,17 +166,24 @@ func (s *Session) OpenCollection(dir string) error {
 // matching the Postman/Bruno convention. Out-of-range i is a no-op
 // returning a clear error.
 func (s *Session) RemoveCollection(i int) error {
-	if s.activeCol < 0 {
+	if s.cfg.Active < 0 || s.cfg.Active >= len(s.cfg.Workspaces) {
 		return fmt.Errorf("no active workspace")
 	}
-	w := &s.cfg.Workspaces[s.cfg.Active]
-	if i < 0 || i >= len(w.Collections) {
+	// i indexes the loaded collections (s.cols/s.dirs) the tree renders, which
+	// can be a subset/reordering of the persisted dir list when some failed to
+	// load. Resolve the target by dir and delete *that* entry — never
+	// w.Collections[i], which drops the wrong collection when misaligned.
+	if i < 0 || i >= len(s.dirs) {
 		return fmt.Errorf("collection index %d out of range", i)
 	}
-	w.Collections = append(w.Collections[:i], w.Collections[i+1:]...)
-	// If the active collection was the one removed, clear the UI
-	// state pointer so reload doesn't try to re-select a missing dir.
-	if i < len(s.dirs) && s.cfg.UI.ActiveCollection == s.dirs[i] {
+	w := &s.cfg.Workspaces[s.cfg.Active]
+	dir := s.dirs[i]
+	if j := slices.Index(w.Collections, dir); j >= 0 {
+		w.Collections = slices.Delete(w.Collections, j, j+1)
+	}
+	// If the active collection was the one removed, clear the UI state pointer
+	// so reload doesn't try to re-select a missing dir.
+	if s.cfg.UI.ActiveCollection == dir {
 		s.cfg.UI.ActiveCollection = ""
 	}
 	s.reload()
