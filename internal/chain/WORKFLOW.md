@@ -2,9 +2,11 @@
 
 ## Lifecycle of a chained Send
 
-`MainUI.send` builds the per-Send `chainExecutor` + `sessionRequestFinder`,
-launches the worker goroutine, and the first thing the goroutine does
-is call `chain.Resolve(ctx, leaf, finder, exec)`. The story from
+`MainUI.send` builds the per-Send `chainExecutor` and snapshots the active
+collection as a `*session.ChainFinderSnapshot` (via `Session.SnapshotChainFinder`,
+which satisfies `chain.RequestFinder`; a `nilFinder` is used when no collection
+is loaded), launches the worker goroutine, and the first thing the goroutine
+does is call `chain.Resolve(ctx, leaf, finder, exec, progress)`. The story from
 there:
 
 1. **Initialise the visiting set.** `Resolve` puts the leaf's

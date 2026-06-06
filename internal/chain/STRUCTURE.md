@@ -130,7 +130,7 @@ via `fyne.Do`.
 - No storage. The on-disk schema lives in
   [internal/storage/opencollection.go](../storage/opencollection.go)
   under the `chain:` block; ChainStep round-trips through `ocChainStep`.
-- No UI. The Chain tab editor and the `chainExecutor` /
-  `sessionRequestFinder` adapters live in
-  [internal/ui/chain.go](../ui/chain.go) and
-  [internal/ui/shell.go](../ui/shell.go).
+- No UI. The Chain tab editor lives in [internal/ui/chain.go](../ui/chain.go);
+  the `chainExecutor` (Executor) is in [internal/ui/shell.go](../ui/shell.go),
+  and the `RequestFinder` is `session.ChainFinderSnapshot` (built by
+  `session.SnapshotChainFinder`, with `nilFinder` as the no-collection fallback).

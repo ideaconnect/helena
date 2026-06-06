@@ -39,8 +39,9 @@ func (m *MainUI) dragTreeNode(srcID string, e *fyne.DragEvent) {
 	m.showDropIndicator(m.computeDrop(srcID, e.AbsolutePosition))
 }
 
-// dropTreeNode is the per-row DragEnd callback: it applies the cached plan and
-// clears the drag state + indicators.
+// dropTreeNode is the per-row DragEnd callback: it recomputes the drop plan
+// from the last pointer position, applies it, and clears the drag state +
+// indicators.
 func (m *MainUI) dropTreeNode(srcID string) {
 	defer m.endDrag()
 	if !m.dragActive {

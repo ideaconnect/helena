@@ -18,7 +18,7 @@ main()
   -> w.CenterOnScreen()
   -> mainUI := ui.NewMainUI(sess)             (builds widgets, m.win is nil)
   -> mainUI.SetWindow(w)                      (records m.win, installs shortcuts)
-  -> w.SetContent(mainUI.Root())
+  -> w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))  (tooltip layer for icon-only buttons)
   -> a.Lifecycle().SetOnStopped(...)          (persist window size on quit)
   -> w.ShowAndRun()                           (blocks until quit)
 ```

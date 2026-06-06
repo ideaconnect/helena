@@ -126,7 +126,9 @@ return it as the error message even when goja returns the bare
 - Read or write the underlying environment file. `helena.env.set` only
   touches the in-memory overlay (invariant 9 in [AGENTS.md](../../AGENTS.md)).
 - Send additional HTTP requests. There is no `helena.http` or `fetch`
-  binding. Chained requests are coming in task 7.4.
+  binding. (Chained requests ship as a separate feature — their results are
+  exposed read-only via the `chain.<alias>` global, not by scripts issuing
+  their own HTTP.)
 - Persist arbitrary state across Helena restarts. The overlay dies with
   the process.
 - Modify the request in the post-response phase — those mutations are

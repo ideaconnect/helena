@@ -16,14 +16,14 @@ Wraps a configured `*http.Client` and the `model.Settings` it was built from. Th
 
 ### `Response` ([httpclient.go:19](httpclient.go#L19))
 
-Plain result struct returned by `Do`. The body is fully read into memory (no streaming) so callers can inspect it repeatedly. `Size` is the byte length of `Body`; `Duration` measures the wall-clock time of the `http.Do` call plus the body read. `CORSWarning` is `""` when no advisory applies — including when `Settings.CORSWarning` is disabled.
+Plain result struct returned by `Do`. The body is read into memory (no streaming) so callers can inspect it repeatedly, but bounded by `MaxResponseBytes` (100 MiB) via `readCapped`, so a huge/hostile response can't OOM the app; `Truncated` is set when the cap clipped the body. `Size` is the byte length of `Body`; `Duration` measures the wall-clock time of the `http.Do` call plus the body read. `CORSWarning` is `""` when no advisory applies — including when `Settings.CORSWarning` is disabled.
 
 ### `Settings` interactions
 
 `model.Settings` is read in exactly two places:
 
-1. **`New`** ([httpclient.go:38](httpclient.go#L38)) — `InsecureSkipVerify` flips `tls.Config.InsecureSkipVerify`; `TimeoutSeconds > 0` sets `http.Client.Timeout`; `FollowRedirects=false` installs a `CheckRedirect` that returns `http.ErrUseLastResponse`.
-2. **`(*Client).Do`** ([httpclient.go:166](httpclient.go#L166)) — `CORSWarning` gates the call to `corsAdvisory`.
+1. **`New`** — `InsecureSkipVerify` flips `tls.Config.InsecureSkipVerify`; `TimeoutSeconds > 0` sets `http.Client.Timeout`. `New` always installs a `CheckRedirect`: it returns `http.ErrUseLastResponse` when `FollowRedirects=false`, otherwise follows (capped at 10 hops) and, once the chain leaves the originally-targeted host, drops the caller-flagged credential headers set via `SetCrossHostStripHeaders` (e.g. an API key in a header — Go already strips `Authorization`/`Cookie` cross-domain).
+2. **`(*Client).Do`** — `CORSWarning` gates the call to `corsAdvisory`, which also flags credentialed (cookie-bearing) requests against a wildcard / un-credentialed `Access-Control-Allow-Origin`. Query params are appended to the URL in table order (not `url.Values.Encode`'s sorted order).
 
 `Build` is settings-free by design: it produces the same wire request regardless of TLS/timeout/redirect choices, which is what makes it safely shareable with the exporter package.
 

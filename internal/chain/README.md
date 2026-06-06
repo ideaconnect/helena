@@ -208,8 +208,9 @@ That's it. The package is deliberately free of `internal/scripting`,
 `internal/httpclient`, and `internal/session`; the `Executor` and
 `RequestFinder` interfaces are the only seams. UI tests can drive
 the runner with map-backed fakes, and the production wiring sits in
-[internal/ui/shell.go](../ui/shell.go) (`chainExecutor`,
-`sessionRequestFinder`).
+[internal/ui/shell.go](../ui/shell.go) (`chainExecutor`) plus
+`session.SnapshotChainFinder` / `session.ChainFinderSnapshot` (the
+`RequestFinder` implementation), with `nilFinder` when no collection is loaded.
 
 ## Keep the docs in sync
 

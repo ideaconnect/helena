@@ -41,7 +41,9 @@ step matters because some of them must happen before others can succeed.
    `NewMainUI` runs first because shortcut registration needs the window's
    canvas (and the dialog actions need `m.win`).
 8. **Install content** —
-   `w.SetContent(mainUI.Root())` ([main.go:45](main.go#L45)).
+   `w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))`
+   ([main.go:48](main.go#L48)). The root is wrapped in fyne-tooltip's window
+   layer so the icon-only toolbar/sidebar buttons can show hover tooltips.
 9. **Wire shutdown** —
    `a.Lifecycle().SetOnStopped(...)` ([main.go:47-50](main.go#L47-L50))
    records the final window size into the session so the next launch

@@ -4,7 +4,7 @@
 
 `ToCurl` ([exporter.go:23](exporter.go#L23)) follows the same ordering whether the input has variables, params, or a body:
 
-1. Call `httpclient.Build(context.Background(), r, res)`. This is the same Build that `(*httpclient.Client).Do` uses.
+1. Call `httpclient.Build(context.Background(), r, res, nil)` (the `nil` OAuth2 resolver makes a configured OAuth2 auth surface `ErrOAuth2NotImplemented` at render time rather than fetching a token). This is the same Build that `(*httpclient.Client).Do` uses.
 2. On error (unresolved `{{var}}`, invalid URL), return immediately — the caller surfaces the message.
 3. Call `renderCurl(req, s)` ([exporter.go:41](exporter.go#L41)).
 

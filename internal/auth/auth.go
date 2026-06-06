@@ -7,9 +7,9 @@
 // mutates the outgoing *http.Request — adding an Authorization header for
 // Basic / Bearer, or a header / query parameter for API keys.
 //
-// OAuth2 is recognised (the package returns an error indicating it is not
-// yet wired) but the token-fetch flow itself lives in a sibling file that
-// will land with task 7.1c.
+// OAuth2 is fully wired (client_credentials + authorization_code, with PKCE
+// and a token cache) in oauth2.go / oauth2_authcode.go; an unsupported grant
+// (or a nil resolver) surfaces as ErrOAuth2NotImplemented.
 package auth
 
 import (
@@ -23,9 +23,11 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
-// ErrOAuth2NotImplemented is returned by Apply when an OAuth2 auth is
-// configured. Removal of this error follows the OAuth2 grant work in 7.1c.
-var ErrOAuth2NotImplemented = errors.New("oauth2 auth is not yet implemented")
+// ErrOAuth2NotImplemented is returned when an OAuth2 auth can't be honoured:
+// no resolver was supplied, or the configured grant isn't supported (only
+// client_credentials and authorization_code are). The name is kept for callers
+// that match it with errors.Is.
+var ErrOAuth2NotImplemented = errors.New("oauth2 grant not supported")
 
 // Resolve picks the effective auth for a request. If reqAuth is anything
 // other than Inherit it wins outright. Otherwise the ancestor chain is
