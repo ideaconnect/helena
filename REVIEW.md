@@ -103,7 +103,7 @@ Each behaviour-changing task must ship with a paired test and pass
 
 ## P1 — Fidelity bugs & performance
 
-**Status: 6/13 done — PrettyXML, atomic writeYAML, Duplicate-Chain, Host export, folder-drop-onto-root, chain RequestID guard (each tested, `-race` green). Remaining: HTTP-client reuse, per-keystroke Query rebuild, the OAuth cluster, cross-host header strip, vars, path-param type, and the minor-correctness batch.**
+**Status: 7/13 done — P1-A (PrettyXML, atomic writeYAML, Duplicate-Chain, Host export, folder-drop-onto-root, chain RequestID) + the OAuth security cluster, each tested, `-race` green. Remaining: HTTP-client reuse, per-keystroke Query rebuild, cross-host header strip, vars, path-param type, and the minor-correctness batch.**
 
 - [x] **`PrettyXML` corrupts namespaced/SOAP XML on Format.**
   `internal/responsefmt/responsefmt.go:30-54` round-trips through `encoding/xml`,
@@ -135,7 +135,7 @@ Each behaviour-changing task must ship with a paired test and pass
   a per-session client. _(M, LOW-perf, high value)_
 - [ ] **`applyURLEdit` rebuilds the whole Query container per keystroke.**
   `internal/ui/shell.go:864-869` — update rows in place / debounce. _(M, LOW-perf, user-visible)_
-- [ ] **OAuth correctness & security cluster** (`internal/auth/oauth2*.go`):
+- [x] **OAuth correctness & security cluster** (done: refresh-token reuse, per-key serialization, complete CacheKey, default token-endpoint timeout, expires_in honoured) (`internal/auth/oauth2*.go`):
   use `refresh_token` before re-running the grant (today an expired auth-code
   token re-opens the browser); make `Token()` check-then-fetch atomic per key
   (avoids duplicate browser tabs / listeners); include `ClientSecret`/`RedirectURI`/

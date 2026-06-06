@@ -16,6 +16,47 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// failStarter fails the test if the browser flow is ever started — used to
+// assert the refresh path skips the interactive grant.
+type failStarter struct{ t *testing.T }
+
+func (s *failStarter) OpenAuthURL(string) error {
+	s.t.Error("browser flow started despite a valid refresh token")
+	return nil
+}
+
+// TestAuthorizationCodeUsesRefreshTokenBeforeBrowser verifies that an expired
+// cached token carrying a refresh_token is renewed via the refresh_token grant
+// (no new browser tab).
+func TestAuthorizationCodeUsesRefreshTokenBeforeBrowser(t *testing.T) {
+	tokenSrv, captured := newTokenServerCapturing(t, "refreshed-token")
+	defer tokenSrv.Close()
+	cache := NewTokenCache()
+	cfg := model.OAuth2Auth{
+		Grant: model.OAuth2AuthorizationCode, AuthURL: "https://auth/x",
+		TokenURL: tokenSrv.URL, ClientID: "id",
+	}
+	cache.Set(CacheKey("ns", cfg), TokenEntry{
+		AccessToken: "old", RefreshToken: "rt", ExpiresAt: time.Now().Add(-time.Hour),
+	})
+	r := NewOAuth2Resolver(cache, tokenSrv.Client(), "ns", &failStarter{t: t})
+	// Short deadline: if refresh wrongly falls through to the browser flow, fail
+	// fast instead of hanging on the 5-minute callback wait.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	tok, err := r.Token(ctx, cfg)
+	if err != nil {
+		t.Fatalf("Token: %v", err)
+	}
+	if tok != "refreshed-token" {
+		t.Errorf("token = %q, want refreshed-token", tok)
+	}
+	form := captured.Load()
+	if form == nil || form.Get("grant_type") != "refresh_token" || form.Get("refresh_token") != "rt" {
+		t.Errorf("token endpoint form = %v, want grant_type=refresh_token refresh_token=rt", form)
+	}
+}
+
 // fakeStarter parses the auth URL, then GETs the redirect URI to drive
 // the authorization_code flow without a real browser.
 type fakeStarter struct {

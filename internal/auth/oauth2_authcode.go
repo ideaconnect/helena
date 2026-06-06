@@ -57,6 +57,26 @@ func (r *cachingResolver) authorizationCodeToken(ctx context.Context, a model.OA
 	if t, ok := r.cache.Get(key); ok && time.Until(t.ExpiresAt) > r.skew {
 		return t.AccessToken, nil
 	}
+	// Serialize per key so concurrent sends don't each open a browser tab.
+	unlock := r.cache.LockKey(key)
+	defer unlock()
+	if t, ok := r.cache.Get(key); ok {
+		if time.Until(t.ExpiresAt) > r.skew {
+			return t.AccessToken, nil // filled while we waited for the lock
+		}
+		// Expired but refreshable: trade the refresh_token for a new access
+		// token instead of re-running the interactive flow (no new browser tab).
+		if t.RefreshToken != "" {
+			if entry, err := r.refreshToken(ctx, a, t.RefreshToken); err == nil && entry.AccessToken != "" {
+				if entry.RefreshToken == "" {
+					entry.RefreshToken = t.RefreshToken
+				}
+				r.cache.Set(key, entry)
+				return entry.AccessToken, nil
+			}
+			// Refresh failed (revoked / rotated) — fall through to the full flow.
+		}
+	}
 
 	state, err := randomURLToken(24)
 	if err != nil {

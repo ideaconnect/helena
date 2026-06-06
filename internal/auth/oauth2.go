@@ -43,11 +43,40 @@ type TokenEntry struct {
 type TokenCache struct {
 	mu     sync.Mutex
 	tokens map[string]TokenEntry
+	// keyLocks serializes token acquisition per key across all resolvers that
+	// share this cache. The Send path mints a fresh resolver per request, so
+	// the serialization point has to live on the shared cache — otherwise two
+	// concurrent sends for the same OAuth2 config would each run the full
+	// (possibly interactive) grant and, for authorization_code, open two tabs.
+	keyMu    sync.Mutex
+	keyLocks map[string]*sync.Mutex
 }
 
 // NewTokenCache returns an empty cache ready for concurrent use.
 func NewTokenCache() *TokenCache {
-	return &TokenCache{tokens: map[string]TokenEntry{}}
+	return &TokenCache{tokens: map[string]TokenEntry{}, keyLocks: map[string]*sync.Mutex{}}
+}
+
+// LockKey acquires the per-key lock and returns its unlock func. Callers wrap
+// the cache-miss → fetch → store sequence in it (with a re-check after locking)
+// so the same key is fetched once even under concurrent Token calls. A nil
+// cache yields a no-op unlock.
+func (c *TokenCache) LockKey(key string) func() {
+	if c == nil {
+		return func() {}
+	}
+	c.keyMu.Lock()
+	if c.keyLocks == nil {
+		c.keyLocks = map[string]*sync.Mutex{}
+	}
+	mu := c.keyLocks[key]
+	if mu == nil {
+		mu = &sync.Mutex{}
+		c.keyLocks[key] = mu
+	}
+	c.keyMu.Unlock()
+	mu.Lock()
+	return mu.Unlock
 }
 
 // Get returns the entry stored under key, if any.
@@ -97,7 +126,17 @@ func (c *TokenCache) ClearAll() {
 // prevents two collections that happen to share the same token URL from
 // sharing tokens — a workspace-level concern.
 func CacheKey(namespace string, a model.OAuth2Auth) string {
-	return namespace + "|" + string(a.Grant) + "|" + a.TokenURL + "|" + a.ClientID + "|" + a.Scope + "|" + a.Audience
+	pkce := "0"
+	if a.UsePKCE {
+		pkce = "1"
+	}
+	// Every input that changes which token you'd receive must be in the key,
+	// or a rotated secret / changed redirect / toggled PKCE would silently
+	// reuse a stale token.
+	return strings.Join([]string{
+		namespace, string(a.Grant), a.TokenURL, a.AuthURL,
+		a.ClientID, a.ClientSecret, a.RedirectURI, a.Scope, a.Audience, pkce,
+	}, "|")
 }
 
 // cachingResolver is the default OAuth2Resolver implementation: looks up
@@ -122,7 +161,9 @@ type cachingResolver struct {
 // tokens.
 func NewOAuth2Resolver(cache *TokenCache, httpClient *http.Client, namespace string, starter AuthCodeStarter) OAuth2Resolver {
 	if httpClient == nil {
-		httpClient = http.DefaultClient
+		// A sane default timeout (not the per-request setting) so a hung token
+		// endpoint can't wedge a Send forever.
+		httpClient = &http.Client{Timeout: 30 * time.Second}
 	}
 	return &cachingResolver{
 		cache:      cache,
@@ -162,12 +203,56 @@ func (r *cachingResolver) clientCredentialsToken(ctx context.Context, a model.OA
 	if t, ok := r.cache.Get(key); ok && time.Until(t.ExpiresAt) > r.skew {
 		return t.AccessToken, nil
 	}
+	unlock := r.cache.LockKey(key)
+	defer unlock()
+	// Re-check: a concurrent caller may have populated the cache while we waited
+	// for the per-key lock, so we don't fetch a second time.
+	if t, ok := r.cache.Get(key); ok && time.Until(t.ExpiresAt) > r.skew {
+		return t.AccessToken, nil
+	}
 	entry, err := FetchClientCredentialsToken(ctx, r.httpClient, a)
 	if err != nil {
 		return "", err
 	}
 	r.cache.Set(key, entry)
 	return entry.AccessToken, nil
+}
+
+// refreshToken exchanges a stored refresh_token for a fresh access token at
+// a.TokenURL (RFC 6749 §6), avoiding a re-run of the interactive grant. The
+// response may omit a new refresh_token, in which case the caller keeps the old.
+func (r *cachingResolver) refreshToken(ctx context.Context, a model.OAuth2Auth, refresh string) (TokenEntry, error) {
+	form := url.Values{}
+	form.Set("grant_type", "refresh_token")
+	form.Set("refresh_token", refresh)
+	if a.ClientID != "" {
+		form.Set("client_id", a.ClientID)
+	}
+	if a.ClientSecret != "" {
+		form.Set("client_secret", a.ClientSecret)
+	}
+	if a.Scope != "" {
+		form.Set("scope", a.Scope)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.TokenURL, strings.NewReader(form.Encode()))
+	if err != nil {
+		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: build request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: read response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	return parseTokenResponse(body)
 }
 
 // FetchClientCredentialsToken POSTs to a.TokenURL with
@@ -240,7 +325,10 @@ func parseTokenResponse(body []byte) (TokenEntry, error) {
 	}
 	expiresIn := int64(3600)
 	if tr.ExpiresIn != "" {
-		if n, err := strconv.ParseInt(tr.ExpiresIn.String(), 10, 64); err == nil && n > 0 {
+		// A present value wins even when non-positive: a provider returning 0 /
+		// negative means the token is already dead, so honour that (it'll be
+		// treated as expired and re-fetched) rather than pretending it lasts 1h.
+		if n, err := strconv.ParseInt(tr.ExpiresIn.String(), 10, 64); err == nil {
 			expiresIn = n
 		}
 	}

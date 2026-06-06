@@ -6,12 +6,54 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/idct/helena/internal/model"
 )
+
+// TestCacheKeyDistinguishesSensitiveInputs verifies the cache key changes when
+// any token-determining input changes, so a rotated secret / changed redirect /
+// toggled PKCE can't silently reuse a stale token.
+func TestCacheKeyDistinguishesSensitiveInputs(t *testing.T) {
+	base := model.OAuth2Auth{Grant: model.OAuth2ClientCredentials, TokenURL: "https://t", ClientID: "id", ClientSecret: "s1"}
+	k := CacheKey("ns", base)
+	if CacheKey("ns", base) != k {
+		t.Error("CacheKey not stable for identical config")
+	}
+	for name, mut := range map[string]func(*model.OAuth2Auth){
+		"ClientSecret": func(a *model.OAuth2Auth) { a.ClientSecret = "s2" },
+		"UsePKCE":      func(a *model.OAuth2Auth) { a.UsePKCE = true },
+		"RedirectURI":  func(a *model.OAuth2Auth) { a.RedirectURI = "http://localhost:9999/cb" },
+		"AuthURL":      func(a *model.OAuth2Auth) { a.AuthURL = "https://auth/other" },
+	} {
+		c := base
+		mut(&c)
+		if CacheKey("ns", c) == k {
+			t.Errorf("CacheKey ignores %s — change would reuse a stale token", name)
+		}
+	}
+}
+
+// TestResolverConcurrentTokenFetchesOnce verifies the per-key lock: many
+// concurrent Token calls for the same config trigger exactly one token fetch.
+func TestResolverConcurrentTokenFetchesOnce(t *testing.T) {
+	srv, hits := newTokenServer(t, `{"access_token":"abc","expires_in":3600}`, http.StatusOK)
+	defer srv.Close()
+	r := NewClientCredentialsResolver(NewTokenCache(), srv.Client(), "ns")
+	cfg := model.OAuth2Auth{Grant: model.OAuth2ClientCredentials, TokenURL: srv.URL, ClientID: "id"}
+	var wg sync.WaitGroup
+	for i := 0; i < 16; i++ {
+		wg.Add(1)
+		go func() { defer wg.Done(); _, _ = r.Token(context.Background(), cfg) }()
+	}
+	wg.Wait()
+	if got := atomic.LoadInt32(hits); got != 1 {
+		t.Errorf("token endpoint hits = %d, want 1 (concurrent fetches must serialize)", got)
+	}
+}
 
 // newTokenServer returns a fake OAuth2 token endpoint that responds with
 // the supplied JSON body and HTTP status. The returned *int32 counts how
