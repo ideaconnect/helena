@@ -194,27 +194,60 @@ func TestBuildReportsUnresolvedAuthVars(t *testing.T) {
 	}
 }
 
+// TestDoPreservesParamOrder verifies params go on the wire in table order, not
+// sorted alphabetically (url.Values.Encode would have sorted them).
+func TestDoPreservesParamOrder(t *testing.T) {
+	var gotRawQuery string
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotRawQuery = r.URL.RawQuery
+	}))
+	defer ts.Close()
+	c := New(model.DefaultSettings())
+	req := model.Request{
+		Method: model.GET, URL: ts.URL,
+		Params: []model.KeyValue{
+			{Enabled: true, Key: "z", Value: "1"},
+			{Enabled: true, Key: "a", Value: "2"},
+			{Enabled: true, Key: "m", Value: "3"},
+		},
+	}
+	if _, err := c.Do(context.Background(), req, vars.New()); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	if gotRawQuery != "z=1&a=2&m=3" {
+		t.Errorf("RawQuery = %q, want z=1&a=2&m=3 (table order, not sorted)", gotRawQuery)
+	}
+}
+
 // TestCORSAdvisory verifies that corsAdvisory warns on missing or mismatched Access-Control-Allow-Origin and stays silent on match or wildcard.
 func TestCORSAdvisory(t *testing.T) {
-	header := func(allow string) http.Header {
+	headerCred := func(allow, allowCreds string) http.Header {
 		h := http.Header{}
 		if allow != "" {
 			h.Set("Access-Control-Allow-Origin", allow)
 		}
+		if allowCreds != "" {
+			h.Set("Access-Control-Allow-Credentials", allowCreds)
+		}
 		return h
 	}
 	cases := []struct {
-		name, origin, allow string
-		wantWarn            bool
+		name, origin, allow, allowCreds string
+		credentialed                    bool
+		wantWarn                        bool
 	}{
-		{"no origin", "", "", false},
-		{"missing acao", "https://app.example", "", true},
-		{"wildcard", "https://app.example", "*", false},
-		{"exact match", "https://app.example", "https://app.example", false},
-		{"mismatch", "https://app.example", "https://other", true},
+		{name: "no origin", origin: "", allow: "", wantWarn: false},
+		{name: "missing acao", origin: "https://app.example", allow: "", wantWarn: true},
+		{name: "wildcard", origin: "https://app.example", allow: "*", wantWarn: false},
+		{name: "exact match", origin: "https://app.example", allow: "https://app.example", wantWarn: false},
+		{name: "mismatch", origin: "https://app.example", allow: "https://other", wantWarn: true},
+		// Credentialed (cookies): wildcard is rejected; echoed origin needs ACAC.
+		{name: "credentialed wildcard", origin: "https://app.example", allow: "*", credentialed: true, wantWarn: true},
+		{name: "credentialed exact without acac", origin: "https://app.example", allow: "https://app.example", credentialed: true, wantWarn: true},
+		{name: "credentialed exact with acac", origin: "https://app.example", allow: "https://app.example", allowCreds: "true", credentialed: true, wantWarn: false},
 	}
 	for _, tc := range cases {
-		got := corsAdvisory(tc.origin, header(tc.allow))
+		got := corsAdvisory(tc.origin, tc.credentialed, headerCred(tc.allow, tc.allowCreds))
 		if (got != "") != tc.wantWarn {
 			t.Errorf("%s: corsAdvisory=%q, wantWarn=%v", tc.name, got, tc.wantWarn)
 		}

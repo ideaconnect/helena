@@ -144,11 +144,20 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 		return nil, nil, fmt.Errorf("invalid URL %q: %w", rawURL, err)
 	}
 	if len(params) > 0 {
-		q := u.Query()
+		// Append params preserving table order (and any query already on the
+		// URL). url.Values.Encode() would sort keys alphabetically, silently
+		// reordering the user's params on the wire.
+		var b strings.Builder
+		b.WriteString(u.RawQuery)
 		for _, p := range params {
-			q.Add(p.k, p.v)
+			if b.Len() > 0 {
+				b.WriteByte('&')
+			}
+			b.WriteString(url.QueryEscape(p.k))
+			b.WriteByte('=')
+			b.WriteString(url.QueryEscape(p.v))
 		}
-		u.RawQuery = q.Encode()
+		u.RawQuery = b.String()
 	}
 
 	method := string(r.Method)
@@ -231,7 +240,7 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 		RequestBody: body,
 	}
 	if c.settings.CORSWarning {
-		out.CORSWarning = corsAdvisory(req.Header.Get("Origin"), resp.Header)
+		out.CORSWarning = corsAdvisory(req.Header.Get("Origin"), req.Header.Get("Cookie") != "", resp.Header)
 	}
 	return out, nil
 }
@@ -266,7 +275,10 @@ func buildBody(r model.Request, resolve func(string) string) (body []byte, conte
 // corsAdvisory returns a non-empty message when a browser would block a request
 // from origin given the response's CORS headers. A native client ignores CORS;
 // this is purely advisory.
-func corsAdvisory(origin string, h http.Header) string {
+// credentialed is true when the request carries cookies — CORS "credentials
+// mode", where a wildcard Access-Control-Allow-Origin is rejected and an
+// echoed origin additionally needs Access-Control-Allow-Credentials: true.
+func corsAdvisory(origin string, credentialed bool, h http.Header) string {
 	if origin == "" {
 		return ""
 	}
@@ -274,7 +286,15 @@ func corsAdvisory(origin string, h http.Header) string {
 	switch {
 	case allow == "":
 		return fmt.Sprintf("a browser would block this: Origin %q sent, but the response has no Access-Control-Allow-Origin", origin)
-	case allow == "*" || strings.EqualFold(allow, origin):
+	case allow == "*":
+		if credentialed {
+			return fmt.Sprintf("a browser would block this: a credentialed request from Origin %q can't use the wildcard Access-Control-Allow-Origin: *", origin)
+		}
+		return ""
+	case strings.EqualFold(allow, origin):
+		if credentialed && !strings.EqualFold(h.Get("Access-Control-Allow-Credentials"), "true") {
+			return fmt.Sprintf("a browser would block this: a credentialed request from Origin %q needs Access-Control-Allow-Credentials: true", origin)
+		}
 		return ""
 	default:
 		return fmt.Sprintf("a browser would block this: Origin %q is not allowed by Access-Control-Allow-Origin %q", origin, allow)
