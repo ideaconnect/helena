@@ -65,6 +65,17 @@ type Client struct {
 	settings       model.Settings
 	http           *http.Client
 	oauth2Resolver auth.OAuth2Resolver
+	// crossHostStrip names request headers (e.g. a custom API key) to drop when
+	// a redirect crosses to a different host, so credentials don't leak. Go
+	// already strips Authorization/Cookie on cross-domain hops; this covers the
+	// custom headers it forwards. Set per request by the caller.
+	crossHostStrip []string
+}
+
+// SetCrossHostStripHeaders sets request headers to remove if a redirect leaves
+// the original host (see Client.crossHostStrip).
+func (c *Client) SetCrossHostStripHeaders(names []string) {
+	c.crossHostStrip = names
 }
 
 // SetOAuth2Resolver installs the resolver consulted when a request's
@@ -86,10 +97,24 @@ func New(s model.Settings) *Client {
 	if s.TimeoutSeconds > 0 {
 		hc.Timeout = time.Duration(s.TimeoutSeconds) * time.Second
 	}
-	if !s.FollowRedirects {
-		hc.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	c := &Client{settings: s, http: hc}
+	hc.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if !s.FollowRedirects {
+			return http.ErrUseLastResponse
+		}
+		if len(via) >= 10 { // match net/http's default redirect cap
+			return fmt.Errorf("stopped after %d redirects", len(via))
+		}
+		// Once the chain leaves the originally-targeted host, drop the
+		// caller-flagged credential headers so they aren't sent to it.
+		if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+			for _, h := range c.crossHostStrip {
+				req.Header.Del(h)
+			}
+		}
+		return nil
 	}
-	return &Client{settings: s, http: hc}
+	return c
 }
 
 // Build resolves variables and assembles an *http.Request. It returns

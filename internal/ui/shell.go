@@ -1084,6 +1084,13 @@ func (m *MainUI) send() {
 	envSnap := m.sess.SnapshotActiveEnvVars()
 
 	client := httpclient.New(m.sess.Settings())
+	// If auth puts a key in a custom header, strip it on a host-changing
+	// redirect so the credential doesn't leak to the new host (Go already
+	// handles Authorization/Cookie).
+	if k := req.Auth.APIKey; req.Auth.Type == model.AuthAPIKey && k != nil && k.Name != "" &&
+		(k.Placement == model.APIKeyHeader || k.Placement == "") {
+		client.SetCrossHostStripHeaders([]string{k.Name})
+	}
 	client.SetOAuth2Resolver(auth.NewOAuth2Resolver(
 		m.sess.TokenCache(),
 		nil, // default http.Client; settings-derived TLS/timeout intentionally not applied to the token endpoint

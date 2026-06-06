@@ -141,9 +141,9 @@ Each behaviour-changing task must ship with a paired test and pass
   (avoids duplicate browser tabs / listeners); include `ClientSecret`/`RedirectURI`/
   `UsePKCE` in `CacheKey`; give the client-credentials token POST a timeout (not
   `http.DefaultClient`). _(M, several LOW security/concurrency)_
-- [ ] **Strip auth headers on cross-host redirect.**
-  `internal/httpclient/httpclient.go:126-138` — API-key-in-header survives a
-  redirect to another host (credential leak). _(S, LOW security)_
+- [x] **Strip custom auth headers on cross-host redirect** — a header API key
+  is dropped once a redirect leaves the originally-targeted host (`httpclient.go`
+  redirect policy + `send()` wiring; Go already handles Authorization/Cookie).
 - [ ] **Vars: stop re-expanding substituted values** (injection) and fix the
   deeper-than-`maxPasses` mis-report (`internal/vars/vars.go:53-76`). _(M, LOW)_
 - [ ] Minor correctness: `corsAdvisory` credentials case (`httpclient.go:251`);

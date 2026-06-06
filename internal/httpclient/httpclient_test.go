@@ -219,6 +219,45 @@ func TestDoPreservesParamOrder(t *testing.T) {
 	}
 }
 
+// TestRedirectStripsCustomHeaderCrossHostKeepsSameHost verifies a
+// caller-flagged credential header is dropped on a host-changing redirect but
+// kept on a same-host one.
+func TestRedirectStripsCustomHeaderCrossHostKeepsSameHost(t *testing.T) {
+	var gotOnB string
+	srvB := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotOnB = r.Header.Get("X-API-Key")
+	}))
+	defer srvB.Close()
+
+	var gotSame string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/start", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, srvB.URL+"/x", http.StatusFound) })
+	mux.HandleFunc("/local", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "/landing", http.StatusFound) })
+	mux.HandleFunc("/landing", func(w http.ResponseWriter, r *http.Request) { gotSame = r.Header.Get("X-API-Key") })
+	srvA := httptest.NewServer(mux)
+	defer srvA.Close()
+
+	withKey := func(path string) model.Request {
+		return model.Request{Method: model.GET, URL: srvA.URL + path,
+			Headers: []model.KeyValue{{Enabled: true, Key: "X-API-Key", Value: "secret"}}}
+	}
+
+	c := New(model.Settings{FollowRedirects: true})
+	c.SetCrossHostStripHeaders([]string{"X-API-Key"})
+	if _, err := c.Do(context.Background(), withKey("/start"), vars.New()); err != nil {
+		t.Fatalf("cross-host Do: %v", err)
+	}
+	if gotOnB != "" {
+		t.Errorf("X-API-Key leaked to a cross-host redirect target: %q", gotOnB)
+	}
+	if _, err := c.Do(context.Background(), withKey("/local"), vars.New()); err != nil {
+		t.Fatalf("same-host Do: %v", err)
+	}
+	if gotSame != "secret" {
+		t.Errorf("X-API-Key was dropped on a same-host redirect: %q", gotSame)
+	}
+}
+
 // TestCORSAdvisory verifies that corsAdvisory warns on missing or mismatched Access-Control-Allow-Origin and stays silent on match or wildcard.
 func TestCORSAdvisory(t *testing.T) {
 	headerCred := func(allow, allowCreds string) http.Header {
