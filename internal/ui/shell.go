@@ -748,6 +748,23 @@ func (m *MainUI) updateURLPreview() {
 	m.urlPreview.Show()
 }
 
+// sanitizeTimeoutSeconds parses a user-entered request-timeout field. A blank,
+// non-numeric, or non-positive entry is rejected (valid=false) and the supplied
+// fallback is returned instead of silently becoming 0 — which means an
+// UNLIMITED timeout and is the same unsafe zero-value the config defaults guard
+// against. Helena exposes no explicit "unlimited" control, so a parse failure
+// must never produce one. The fallback (the user's current timeout) is itself
+// floored to the default when non-positive, so the result is always > 0.
+func sanitizeTimeoutSeconds(text string, fallback int) (seconds int, valid bool) {
+	if n, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && n > 0 {
+		return n, true
+	}
+	if fallback > 0 {
+		return fallback, false
+	}
+	return model.DefaultSettings().TimeoutSeconds, false
+}
+
 // formatForBodyType maps a request body type to the prettyview syntax format for
 // the editable body widget: JSON/XML get structured highlighting + Reformat;
 // everything else (text, form, multipart, none) renders as raw, uncoloured text.
@@ -1393,10 +1410,7 @@ func (m *MainUI) editSettings() {
 		if !ok {
 			return
 		}
-		t, err := strconv.Atoi(strings.TrimSpace(timeoutEntry.Text))
-		if err != nil || t < 0 {
-			t = 0
-		}
+		t, validTimeout := sanitizeTimeoutSeconds(timeoutEntry.Text, m.sess.Settings().TimeoutSeconds)
 		newTheme := themeFromName(themeSelect.Selected)
 		m.sess.SetSettings(model.Settings{
 			InsecureSkipVerify: insecure.Checked,
@@ -1412,7 +1426,11 @@ func (m *MainUI) editSettings() {
 		m.pv.SetTheme(variantFor(newTheme), prettyview.Theme{})
 		m.BodyContent.SetTheme(variantFor(newTheme), prettyview.Theme{})
 		m.refreshThemedCanvas()
-		m.Status.SetText("Settings saved")
+		if validTimeout {
+			m.Status.SetText("Settings saved")
+		} else {
+			m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout ignored, kept %ds)", t))
+		}
 	}, m.win)
 	dlg.Resize(fyne.NewSize(520, 320))
 	dlg.Show()
