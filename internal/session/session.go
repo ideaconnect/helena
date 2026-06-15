@@ -260,6 +260,9 @@ func (s *Session) ActiveEnvName() string {
 // SetActiveEnv sets the active environment (by name) for the active collection,
 // syncs the path-keyed persistence map, and saves.
 func (s *Session) SetActiveEnv(name string) {
+	if s.activeCol < 0 || s.activeCol >= len(s.dirs) {
+		return // no valid active collection — don't pollute the env map with a -1 key
+	}
 	if s.activeEnv == nil {
 		s.activeEnv = map[int]string{}
 	}

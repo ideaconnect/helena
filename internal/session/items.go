@@ -536,6 +536,11 @@ func parseLeaf(nodeID string) (parent, kind string, idx int, ok bool) {
 	if len(last) < 2 {
 		return "", "", 0, false
 	}
+	switch last[0] {
+	case 'c', 'f', 'r':
+	default:
+		return "", "", 0, false // reject ids whose leaf kind isn't a collection/folder/request
+	}
 	n, err := strconv.Atoi(last[1:])
 	if err != nil {
 		return "", "", 0, false
