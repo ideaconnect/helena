@@ -324,10 +324,17 @@ func mergeKVFromObject(existing []model.KeyValue, obj *goja.Object) []model.KeyV
 		consumed[lk] = true
 		out = append(out, kv)
 	}
-	for lk, e := range dedup {
-		if consumed[lk] {
+	// Append script-added entries in the JS object's insertion order (preserved
+	// by obj.Keys()), NOT Go map-iteration order — otherwise the on-the-wire
+	// order of script-added fields is non-deterministic run to run, which breaks
+	// signed requests and golden-output tests.
+	for _, k := range obj.Keys() {
+		lk := strings.ToLower(k)
+		e, ok := dedup[lk]
+		if !ok || consumed[lk] {
 			continue
 		}
+		consumed[lk] = true // dedup duplicate-casing keys to one append
 		out = append(out, model.KeyValue{Enabled: true, Key: e.key, Value: e.val})
 	}
 	return out
