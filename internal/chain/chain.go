@@ -47,6 +47,22 @@ const MaxChainConsoleLines = 1024
 // supports without quoting.
 var aliasRe = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
 
+// reservedAliases are JavaScript reserved words. An alias is exposed as
+// `chain.<alias>` and is also a natural binding name in scripts; rejecting
+// reserved words keeps `chain.<alias>` from colliding with language keywords
+// and surfaces a clear error at resolve time instead of a confusing script
+// evaluation later.
+var reservedAliases = map[string]bool{
+	"break": true, "case": true, "catch": true, "class": true, "const": true,
+	"continue": true, "debugger": true, "default": true, "delete": true, "do": true,
+	"else": true, "enum": true, "export": true, "extends": true, "false": true,
+	"finally": true, "for": true, "function": true, "if": true, "import": true,
+	"in": true, "instanceof": true, "new": true, "null": true, "return": true,
+	"super": true, "switch": true, "this": true, "throw": true, "true": true,
+	"try": true, "typeof": true, "var": true, "void": true, "while": true,
+	"with": true, "yield": true, "let": true, "static": true, "await": true,
+}
+
 // View is the snapshot of one executed request — what its sibling
 // chain steps and the leaf will see via `chain.<alias>.{request,response}`.
 // Body and Headers are copies; mutating them in a script doesn't
@@ -183,6 +199,9 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		}
 		if !aliasRe.MatchString(step.Alias) {
 			return nil, fmt.Errorf("chain: alias %q is not a valid JS identifier (use letters, digits, _, $; must not start with a digit)", step.Alias)
+		}
+		if reservedAliases[step.Alias] {
+			return nil, fmt.Errorf("chain: alias %q is a reserved JavaScript word; pick another name", step.Alias)
 		}
 		if _, dup := out[step.Alias]; dup {
 			return nil, fmt.Errorf("chain: duplicate alias %q in the same request's chain", step.Alias)

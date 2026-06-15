@@ -306,9 +306,11 @@ func TestResolveStepCountCap(t *testing.T) {
 	}
 }
 
-// TestResolveAliasMustBeJSIdentifier verifies an alias like "foo-bar"
-// or "1login" or "class" is rejected so users get a clear error rather
-// than silently producing a broken `chain['foo-bar']` shape.
+// TestResolveAliasMustBeJSIdentifier verifies an alias that isn't shaped like a
+// JS identifier ("foo-bar", "1login", whitespace, dots) is rejected so users
+// get a clear error rather than silently producing a broken `chain['foo-bar']`
+// shape. Reserved words (which DO match the identifier pattern) are covered
+// separately in TestResolveAliasRejectsReservedWord.
 func TestResolveAliasMustBeJSIdentifier(t *testing.T) {
 	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
 	exec := newRecordingExec()
@@ -319,6 +321,23 @@ func TestResolveAliasMustBeJSIdentifier(t *testing.T) {
 		_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
 		if err == nil || !strings.Contains(err.Error(), "not a valid JS identifier") {
 			t.Errorf("alias %q: err = %v, want JS-identifier error", bad, err)
+		}
+	}
+}
+
+// TestResolveAliasRejectsReservedWord verifies an alias that is a JS reserved
+// word (matches the identifier pattern but collides with a keyword) is rejected
+// with a distinct "reserved" error (#102).
+func TestResolveAliasRejectsReservedWord(t *testing.T) {
+	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
+	exec := newRecordingExec()
+	for _, bad := range []string{"delete", "return", "new", "class", "this", "yield"} {
+		leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+			{Alias: bad, Request: "X"},
+		}}
+		_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
+		if err == nil || !strings.Contains(err.Error(), "reserved JavaScript word") {
+			t.Errorf("alias %q: err = %v, want reserved-word error", bad, err)
 		}
 	}
 }
