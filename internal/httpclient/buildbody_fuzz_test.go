@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/idct/helena/internal/model"
@@ -8,7 +9,7 @@ import (
 
 // FuzzBuildBody hammers the body-construction switch with arbitrary
 // body type + content combinations. The contract: never panic, and
-// only the documented multipart case returns an error.
+// every branch (including multipart) succeeds for these text inputs.
 //
 // buildBody is unexported so this fuzz target lives in the same
 // package — it's the smallest surface that exercises every BodyType
@@ -38,12 +39,17 @@ func FuzzBuildBody(f *testing.F) {
 			Body: model.Body{Type: model.BodyType(kind), Content: content},
 		}
 		body, ct, err := buildBody(r, identity)
-		// Multipart is the only branch that errors. Everything else
-		// must succeed.
+		// Multipart now encodes Body.Form (empty here, so an empty multipart
+		// body) and must succeed with a multipart/form-data content type;
+		// Content is ignored for this type.
 		if model.BodyType(kind) == model.BodyMultipart {
-			if err == nil {
-				t.Errorf("multipart should return error, got body=%q ct=%q", body, ct)
+			if err != nil {
+				t.Errorf("multipart should encode without error, got %v", err)
 			}
+			if !strings.HasPrefix(ct, "multipart/form-data") {
+				t.Errorf("multipart ct = %q, want multipart/form-data prefix", ct)
+			}
+			_ = body
 			return
 		}
 		if err != nil {

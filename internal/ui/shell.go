@@ -192,7 +192,9 @@ type MainUI struct {
 	paramsRows       *fyne.Container
 	headersRows      *fyne.Container
 	BodyType         *widget.Select
-	BodyContent      *prettyview.PrettyView // editable request body (live highlight + reformat)
+	BodyContent      *prettyview.PrettyView // editable raw body (json/xml/text); hidden for form types
+	bodyFormRows     *fyne.Container        // KV rows bound to Body.Form (form-urlencoded / multipart)
+	bodyFormPanel    *fyne.Container        // wrapper shown in place of BodyContent for form types
 	docsEditor       *widget.Entry
 	docsPreview      *widget.RichText
 	preScriptEditor  *widget.Entry
@@ -317,6 +319,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 		if m.BodyContent != nil {
 			m.BodyContent.Reparse(formatForBodyType(newType))
 		}
+		// Form-urlencoded / multipart edit Body.Form via a KV table; everything
+		// else edits raw Content via the text editor. Swap which is shown.
+		m.refreshBodyEditorVisibility(newType)
 		if h, changed := applyImpliedContentType(m.currentRequest.Headers, oldType, newType); changed {
 			m.currentRequest.Headers = h
 			m.rebuildHeadersRows()
@@ -341,7 +346,15 @@ func NewMainUI(sess *session.Session) *MainUI {
 	validateBtn := widget.NewButton("Validate", m.validateBody)
 	formatBtn := widget.NewButton("Format", m.formatBody)
 	bodyTopRow := container.NewHBox(widget.NewLabel("Type:"), m.BodyType, validateBtn, formatBtn)
-	bodyTab := container.NewBorder(bodyTopRow, nil, nil, nil, m.BodyContent)
+	// Structured Body.Form editor for form-urlencoded / multipart: a KV table
+	// (reusing buildKVRow) shown in place of the raw text editor.
+	m.bodyFormRows = container.NewVBox()
+	addBodyFieldBtn := widget.NewButton("+ Add field", m.addBodyFormField)
+	m.bodyFormPanel = container.NewBorder(nil, addBodyFieldBtn, nil, nil,
+		container.NewVScroll(m.bodyFormRows))
+	m.bodyFormPanel.Hide() // BodyNone default shows the text editor
+	bodyStack := container.NewStack(m.BodyContent, m.bodyFormPanel)
+	bodyTab := container.NewBorder(bodyTopRow, nil, nil, nil, bodyStack)
 
 	m.Request = container.NewAppTabs(
 		container.NewTabItem("Body", bodyTab),
@@ -630,6 +643,8 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.Save.Disable()
 		m.URL.SetText("")
 		m.BodyContent.SetText("")
+		m.rebuildBodyFormRows()
+		m.refreshBodyEditorVisibility(model.BodyNone)
 		m.paramsRows.RemoveAll()
 		m.paramsRows.Refresh()
 		m.headersRows.RemoveAll()
@@ -669,6 +684,8 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	}
 	m.BodyType.SetSelected(string(bt))
 	m.BodyContent.SetData([]byte(req.Body.Content), formatForBodyType(bt))
+	m.rebuildBodyFormRows()
+	m.refreshBodyEditorVisibility(bt)
 	if m.docsEditor != nil {
 		m.docsEditor.SetText(req.Docs)
 	}
@@ -696,10 +713,12 @@ func (m *MainUI) saveRequest() {
 	// Drop incomplete (empty-key) rows on save so we don't write noise to YAML.
 	m.currentRequest.Params = pruneEmptyKV(m.currentRequest.Params)
 	m.currentRequest.Headers = pruneEmptyKV(m.currentRequest.Headers)
+	m.currentRequest.Body.Form = pruneEmptyKV(m.currentRequest.Body.Form)
 	cleanedChain, halfFilledChain := pruneEmptyChain(m.currentRequest.Chain)
 	m.currentRequest.Chain = cleanedChain
 	m.rebuildParamsRows()
 	m.rebuildHeadersRows()
+	m.rebuildBodyFormRows()
 	m.rebuildChainRows()
 
 	if err := m.sess.SaveActiveCollection(); err != nil {
@@ -859,6 +878,45 @@ func (m *MainUI) addHeader() {
 	}
 	m.currentRequest.Headers = append(m.currentRequest.Headers, model.KeyValue{Enabled: true})
 	m.rebuildHeadersRows()
+}
+
+func (m *MainUI) addBodyFormField() {
+	if m.currentRequest == nil {
+		return
+	}
+	m.currentRequest.Body.Form = append(m.currentRequest.Body.Form, model.KeyValue{Enabled: true})
+	m.rebuildBodyFormRows()
+}
+
+// rebuildBodyFormRows re-creates the Body.Form KV editor rows — the
+// form-urlencoded / multipart counterpart to rebuildParamsRows.
+func (m *MainUI) rebuildBodyFormRows() {
+	if m.bodyFormRows == nil {
+		return
+	}
+	m.bodyFormRows.RemoveAll()
+	if m.currentRequest != nil {
+		for i := range m.currentRequest.Body.Form {
+			m.bodyFormRows.Add(m.buildKVRow(&m.currentRequest.Body.Form, i, m.rebuildBodyFormRows, nil))
+		}
+	}
+	m.bodyFormRows.Refresh()
+}
+
+// refreshBodyEditorVisibility shows the structured Body.Form table for
+// form-urlencoded / multipart bodies and the raw text editor for everything
+// else, so the body tab always edits the field the send path actually uses.
+func (m *MainUI) refreshBodyEditorVisibility(bt model.BodyType) {
+	if m.bodyFormPanel == nil || m.BodyContent == nil {
+		return
+	}
+	if bt == model.BodyForm || bt == model.BodyMultipart {
+		m.BodyContent.Hide()
+		m.bodyFormPanel.Show()
+	} else {
+		m.bodyFormPanel.Hide()
+		m.BodyContent.Show()
+	}
 }
 
 // rebuildParamsRows discards the current Params editor rows and re-creates one

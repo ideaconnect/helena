@@ -310,15 +310,18 @@ func TestBuildNilResolverSubstitutesNothing(t *testing.T) {
 	}
 }
 
-// TestBuildMultipartReturnsError verifies that multipart body type is
-// rejected — the feature is documented as not-yet-supported and the
-// error surfaces cleanly from Build.
-func TestBuildMultipartReturnsError(t *testing.T) {
-	_, _, err := Build(context.Background(),
+// TestBuildMultipartEmptyForm verifies a multipart body with no fields now
+// encodes a valid (empty) multipart/form-data body rather than erroring — the
+// feature is supported as of #22 (see multipart_test.go for the full encoding).
+func TestBuildMultipartEmptyForm(t *testing.T) {
+	req, _, err := Build(context.Background(),
 		model.Request{Method: model.POST, URL: "http://x/",
 			Body: model.Body{Type: model.BodyMultipart}}, nil, nil)
-	if err == nil || !strings.Contains(err.Error(), "multipart") {
-		t.Errorf("expected multipart-not-supported error, got %v", err)
+	if err != nil {
+		t.Fatalf("multipart Build errored: %v", err)
+	}
+	if ct := req.Header.Get("Content-Type"); !strings.HasPrefix(ct, "multipart/form-data; boundary=") {
+		t.Errorf("Content-Type = %q, want multipart/form-data with boundary", ct)
 	}
 }
 

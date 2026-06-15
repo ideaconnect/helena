@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -291,7 +292,22 @@ func buildBody(r model.Request, resolve func(string) string) (body []byte, conte
 		// body-content editor works for form-urlencoded too.
 		return []byte(resolve(r.Body.Content)), model.BodyForm.ContentType(), nil
 	case model.BodyMultipart:
-		return nil, "", fmt.Errorf("multipart bodies are not supported yet")
+		// Encode the structured Body.Form pairs as multipart/form-data. The
+		// Content-Type carries the generated boundary, so it must be the writer's
+		// FormDataContentType (the model's static ContentType can't know it).
+		// File-part uploads are a separate follow-up (the model has no file kind
+		// yet); text fields are encoded here.
+		var buf bytes.Buffer
+		w := multipart.NewWriter(&buf)
+		for _, f := range model.EnabledPairs(r.Body.Form) {
+			if err := w.WriteField(resolve(f.Key), resolve(f.Value)); err != nil {
+				return nil, "", fmt.Errorf("multipart: %w", err)
+			}
+		}
+		if err := w.Close(); err != nil {
+			return nil, "", fmt.Errorf("multipart: %w", err)
+		}
+		return buf.Bytes(), w.FormDataContentType(), nil
 	default:
 		return []byte(resolve(r.Body.Content)), "", nil
 	}
