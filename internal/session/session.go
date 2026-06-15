@@ -147,6 +147,14 @@ func (s *Session) Collections() []model.Collection { return s.cols }
 // OpenCollection loads an OpenCollection directory, adds it to the active
 // workspace, makes it the active collection, and persists the change.
 func (s *Session) OpenCollection(dir string) error {
+	// Already open in this workspace? Re-activate the existing entry instead of
+	// loading a second in-memory copy that would race the same on-disk files
+	// (last-save-wins data loss).
+	if i := slices.Index(s.dirs, dir); i >= 0 {
+		s.activeCol = i
+		s.cfg.UI.ActiveCollection = dir
+		return s.persist()
+	}
 	c, err := storage.Load(dir)
 	if err != nil {
 		return err

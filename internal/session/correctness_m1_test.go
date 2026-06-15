@@ -1,6 +1,71 @@
 package session
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
+
+// TestOpenCollectionDeduplicates verifies opening an already-open directory
+// re-activates the existing entry instead of loading a second racing copy (#106).
+func TestOpenCollectionDeduplicates(t *testing.T) {
+	dir := writeSampleCollection(t)
+	s, err := New(filepath.Join(t.TempDir(), "config.yml"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatalf("OpenCollection 1: %v", err)
+	}
+	n := len(s.dirs)
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatalf("OpenCollection 2: %v", err)
+	}
+	if len(s.dirs) != n {
+		t.Errorf("re-open duplicated the collection: dirs = %v", s.dirs)
+	}
+	if s.activeCol < 0 || s.dirs[s.activeCol] != dir {
+		t.Errorf("re-open did not re-activate the existing entry (activeCol=%d, dirs=%v)", s.activeCol, s.dirs)
+	}
+}
+
+// TestWorkspaceNameUniqueness verifies duplicate workspace names are rejected
+// on add and rename (the dropdown selects by name), while renaming to the same
+// name is allowed (#98).
+func TestWorkspaceNameUniqueness(t *testing.T) {
+	s, err := New(filepath.Join(t.TempDir(), "config.yml"))
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.AddWorkspace("Prod"); err != nil {
+		t.Fatalf("AddWorkspace Prod: %v", err)
+	}
+	if err := s.AddWorkspace("Prod"); err == nil {
+		t.Error("AddWorkspace allowed a duplicate name")
+	}
+	if err := s.AddWorkspace("  Prod  "); err == nil {
+		t.Error("AddWorkspace allowed a whitespace-only-different duplicate")
+	}
+	if err := s.AddWorkspace("Dev"); err != nil {
+		t.Fatalf("AddWorkspace Dev: %v", err)
+	}
+	// Find Dev's index and try to rename it onto Prod (reject) and onto itself (allow).
+	names := s.WorkspaceNames()
+	devIdx := -1
+	for i, n := range names {
+		if n == "Dev" {
+			devIdx = i
+		}
+	}
+	if devIdx < 0 {
+		t.Fatalf("Dev not found in %v", names)
+	}
+	if err := s.RenameWorkspace(devIdx, "Prod"); err == nil {
+		t.Error("RenameWorkspace allowed colliding with an existing name")
+	}
+	if err := s.RenameWorkspace(devIdx, "Dev"); err != nil {
+		t.Errorf("RenameWorkspace to its own name was rejected: %v", err)
+	}
+}
 
 // TestSetActiveEnvNoActiveCollection verifies SetActiveEnv with no active
 // collection (activeCol == -1) does not insert a spurious -1 key into the
