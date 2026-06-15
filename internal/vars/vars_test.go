@@ -2,6 +2,7 @@ package vars
 
 import (
 	"reflect"
+	"strconv"
 	"testing"
 )
 
@@ -82,5 +83,54 @@ func TestResolveCycleTerminates(t *testing.T) {
 	}
 	if len(missing) == 0 {
 		t.Errorf("expected unresolved names for a cycle, got none")
+	}
+}
+
+// TestResolveFallbackValueIsFrozen is the injection regression: a dynamic
+// fallback value (e.g. response/chain data) that itself contains {{secret}}
+// must be substituted verbatim, never re-expanded against the user's scopes.
+func TestResolveFallbackValueIsFrozen(t *testing.T) {
+	r := New(map[string]string{"secret": "TOPSECRET"}).
+		WithFallback(func(name string) (string, bool) {
+			if name == "chain.login.response.body" {
+				return "leak={{secret}}", true // attacker-controlled payload
+			}
+			return "", false
+		})
+	got, missing := r.Resolve("x={{chain.login.response.body}}")
+	if got != "x=leak={{secret}}" {
+		t.Errorf("fallback value was re-expanded (injection): got %q, want %q", got, "x=leak={{secret}}")
+	}
+	if len(missing) != 0 {
+		// The frozen {{secret}} is not a top-level template, so it is not "missing".
+		t.Errorf("missing = %v, want none", missing)
+	}
+}
+
+// TestResolveScopeCompositionRecurses verifies user-authored scope variables
+// still compose recursively (the documented feature TestResolveChained pins),
+// including beyond the old 10-pass cap, resolving fully rather than being
+// mis-reported as missing.
+func TestResolveScopeCompositionRecurses(t *testing.T) {
+	const depth = 15
+	scope := map[string]string{"v" + strconv.Itoa(depth): "DONE"}
+	for i := 0; i < depth; i++ {
+		scope["v"+strconv.Itoa(i)] = "{{v" + strconv.Itoa(i+1) + "}}"
+	}
+	r := New(scope)
+	got, missing := r.Resolve("{{v0}}")
+	if got != "DONE" {
+		t.Errorf("deep chain not fully resolved: got %q, want DONE", got)
+	}
+	if len(missing) != 0 {
+		t.Errorf("resolvable deep chain mis-reported as missing: %v", missing)
+	}
+}
+
+// TestResolveEmptyTemplate verifies an empty {{}} is left untouched and not reported.
+func TestResolveEmptyTemplate(t *testing.T) {
+	got, missing := New(nil).Resolve("a {{}} b")
+	if got != "a {{}} b" || len(missing) != 0 {
+		t.Errorf("got %q missing %v", got, missing)
 	}
 }

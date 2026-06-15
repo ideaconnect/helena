@@ -2,7 +2,7 @@
 
 Substitutes `{{variable}}` templates in URLs, headers, query params, and request bodies. The package is intentionally tiny — it is the one place that knows the syntax and precedence rules for Helena's variable references.
 
-A `Resolver` is built from one or more named scopes ordered lowest precedence first; later scopes override earlier ones. Typical call site: `vars.New(collectionVars, envVars, dotEnvVars)`. Substitution iterates to a fixed point so that variables referring to other variables (e.g. `{{url}}` -> `{{proto}}://{{host}}` -> `https://api.example.com`) resolve in a single `Resolve` call, while a hard pass cap stops cyclic references from looping forever.
+A `Resolver` is built from one or more named scopes ordered lowest precedence first; later scopes override earlier ones. Typical call site: `vars.New(collectionVars, envVars, dotEnvVars)`. **Scope** (user-authored) variables expand **recursively**, so a variable may compose others (e.g. `{{url}}` -> `{{proto}}://{{host}}` -> `https://api.example.com`) in a single `Resolve` call; an acyclic chain resolves fully at any depth, and a cyclic reference (`a → b → a`) is detected and reported as unresolved rather than looping. **Fallback** (dynamic) values — e.g. `{{chain.<alias>.…}}` backed by a response body — are substituted **verbatim and never re-expanded**: this is a deliberate security boundary so server- or chain-controlled data cannot smuggle a `{{secret}}` reference that would expand against the user's scopes.
 
 ## Public API
 
@@ -13,7 +13,7 @@ A `Resolver` is built from one or more named scopes ordered lowest precedence fi
 - `New(scopes ...map[string]string) *Resolver` — builds a resolver; scopes are low-to-high precedence.
 - `(*Resolver).WithFallback(fn func(name string) (string, bool)) *Resolver` — attaches a dynamic lookup consulted for any name no scope resolves, so callers can inject namespaced values (e.g. `{{chain.<alias>.response.json.token}}` backed by `chain.VarLookup`) without the resolver knowing their source. Returns the resolver for chaining; `nil` clears it.
 - `(*Resolver).Lookup(name string) (string, bool)` — returns the highest-precedence value for `name` (scopes first, then the fallback).
-- `(*Resolver).Resolve(s string) (string, []string)` — substitutes every `{{name}}` to a fixed point and returns the result plus the names that remain unresolved (deduped, first-seen order).
+- `(*Resolver).Resolve(s string) (string, []string)` — substitutes every `{{name}}`, expanding scope values recursively and freezing fallback values, and returns the result plus the names that are unresolvable or cyclic (deduped, first-seen order).
 
 ## Dependencies
 
