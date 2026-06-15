@@ -570,6 +570,7 @@ sub-struct matching the active Type. The next load will see a clean
 file and rebuild the form accordingly.
 
 The OAuth 2.0 panel includes a **Clear cached tokens** button. It calls
-`m.sess.TokenCache().ClearAll()` and sets a status message. Use it when
-rotating a client secret or recovering from a stale token without
-restarting the app; the next Send re-fetches.
+`m.sess.TokenCache().ClearNamespace(m.sess.ActiveCollectionDir())` and sets
+a status message — scoped to the active collection so other collections'
+cached tokens survive. Use it when rotating a client secret or recovering
+from a stale token without restarting the app; the next Send re-fetches.

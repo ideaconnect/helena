@@ -110,8 +110,11 @@ with the default `cachingResolver`:
    outgoing request.
 
 The "Clear cached tokens" button on the OAuth2 panel of the UI Auth
-tab calls `Session.TokenCache().ClearAll()` so a user who rotated a
-client secret can force the next Send to refetch.
+tab calls `Session.TokenCache().ClearNamespace(ActiveCollectionDir())`
+so a user who rotated a client secret can force the next Send to refetch
+— scoped to the active collection's namespace so other collections'
+cached tokens are untouched. `ClearAll` remains for a deliberate global
+logout but is not wired to the per-request button.
 
 ## OAuth2 authorization_code lifecycle (+ optional PKCE)
 

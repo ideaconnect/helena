@@ -68,7 +68,7 @@ One-method contract — `Token(ctx context.Context, a model.OAuth2Auth) (string,
 - `ExpiresAt` — wall-clock instant after which the entry is stale; the resolver re-fetches once we're within ~30s of it.
 
 ### `TokenCache`
-- Backed by a `sync.Mutex` + `map[string]TokenEntry`. Safe for concurrent `Get` / `Set` / `Clear` / `ClearAll`.
+- Backed by a `sync.Mutex` + `map[string]TokenEntry`. Safe for concurrent `Get` / `Set` / `Clear` / `ClearNamespace` / `ClearAll`. `ClearNamespace(ns)` drops only keys with the `ns|` prefix (one collection); `ClearAll` is the global reset.
 - Nil-safe: every method is a no-op (or zero-value) on a nil receiver, so callers can pass a single optional cache without nil guards.
 
 ### `cachingResolver` (unexported)

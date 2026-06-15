@@ -39,7 +39,7 @@ wins over the auth-derived value, so manual escape hatches keep working.
 | `ResolveValues(a, resolve) model.Auth` | Return a deep copy with every credential string substituted through `resolve`. |
 | `Apply(ctx, req, a, resolver) error` | Mutate the outgoing request based on the resolved auth. `resolver` is consulted only for OAuth2 grants; nil keeps the legacy `ErrOAuth2NotImplemented` behaviour. |
 | `OAuth2Resolver` (interface) | One-method interface: `Token(ctx, model.OAuth2Auth) (string, error)`. |
-| `TokenCache` | Goroutine-safe in-memory cache with `Get` / `Set` / `Clear` / `ClearAll`. |
+| `TokenCache` | Goroutine-safe in-memory cache with `Get` / `Set` / `Clear` / `ClearNamespace` (scoped to a CacheKey namespace, e.g. one collection) / `ClearAll` (global). |
 | `NewTokenCache() *TokenCache` | Empty cache constructor. |
 | `CacheKey(namespace, a) string` | Stable cache key combining namespace (typically collection dir) with the OAuth2 config. |
 | `NewOAuth2Resolver(cache, httpClient, namespace, starter) OAuth2Resolver` | Default resolver implementing both client_credentials and (when `starter != nil`) authorization_code on top of a `TokenCache`. |

@@ -83,7 +83,7 @@ without infinite write-back loops.
 | `authInheritLabel` | `*widget.Label` | Live preview text showing what `session.EffectiveAuth(currentRequestID)` would resolve to, refreshed on load and type change. |
 | `authNonePanel` / `authInheritPanel` / `authBasicPanel` / `authBearerPanel` / `authAPIKeyPanel` / `authOAuth2Panel` | containers / `*widget.Form` | The six stacked form panels; only the one matching the selected Type is shown. |
 | `authFormsStack` | `*fyne.Container` (Stack) | Stack container holding all six panels — `refreshAuthVisibility` hides every panel then shows the active one. |
-| `authOAuth2ClearTokens` | `*widget.Button` | "Clear cached tokens" button on the OAuth2 panel — calls `Session.TokenCache().ClearAll()` so a rotated client secret forces the next Send to refetch. |
+| `authOAuth2ClearTokens` | `*widget.Button` | "Clear cached tokens" button on the OAuth2 panel — calls `Session.TokenCache().ClearNamespace(ActiveCollectionDir())` so a rotated client secret forces the next Send to refetch, scoped to the active collection (other collections' tokens survive). |
 | `pv` | `*prettyview.PrettyView` | The response **Body** viewer ([go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view)): one virtualized widget rendering JSON/XML/HTML/raw with auto-detect, fold, syntax highlighting, search and soft-wrap. Fed via `pv.SetData` in `applyResponse`; subsumes the former Structured tree + Raw text viewer. Repainted on theme change via `pv.SetTheme(variantFor(...))`. |
 | `headersText` | `*widget.Entry` | Response headers view. |
 | `corsBanner` | `*canvas.Text` | Orange banner above the response panel surfacing CORS warnings. |

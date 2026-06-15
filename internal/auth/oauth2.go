@@ -110,8 +110,9 @@ func (c *TokenCache) Clear(key string) {
 	delete(c.tokens, key)
 }
 
-// ClearAll drops every cached entry. Used by the UI "Clear cached tokens"
-// button on the OAuth2 panel and on logout-like operations.
+// ClearAll drops every cached entry across all namespaces. Reserved for a
+// deliberate global logout; the per-request UI button uses ClearNamespace so
+// one collection's clear doesn't force a re-auth for every other collection.
 func (c *TokenCache) ClearAll() {
 	if c == nil {
 		return
@@ -119,6 +120,24 @@ func (c *TokenCache) ClearAll() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.tokens = map[string]TokenEntry{}
+}
+
+// ClearNamespace drops only the cached entries whose key belongs to namespace
+// (the CacheKey namespace prefix — typically a collection directory), leaving
+// other collections' tokens intact. A CacheKey is "namespace|grant|…", so the
+// match is on the "namespace|" prefix.
+func (c *TokenCache) ClearNamespace(namespace string) {
+	if c == nil {
+		return
+	}
+	prefix := namespace + "|"
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for k := range c.tokens {
+		if strings.HasPrefix(k, prefix) {
+			delete(c.tokens, k)
+		}
+	}
 }
 
 // CacheKey returns a stable string identifying an OAuth2 config under the

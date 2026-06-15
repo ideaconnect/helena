@@ -14,6 +14,41 @@ import (
 	"github.com/idct/helena/internal/model"
 )
 
+// TestClearNamespaceScopesToCollection verifies a scoped clear drops only the
+// target namespace's tokens and leaves other collections' tokens intact (#96).
+func TestClearNamespaceScopesToCollection(t *testing.T) {
+	c := NewTokenCache()
+	cfg := model.OAuth2Auth{Grant: model.OAuth2ClientCredentials, TokenURL: "https://t", ClientID: "id"}
+	kA := CacheKey("/coll/A", cfg)
+	kB := CacheKey("/coll/B", cfg)
+	c.Set(kA, TokenEntry{AccessToken: "a"})
+	c.Set(kB, TokenEntry{AccessToken: "b"})
+
+	c.ClearNamespace("/coll/A")
+	if _, ok := c.Get(kA); ok {
+		t.Error("ClearNamespace left the target collection's token")
+	}
+	if _, ok := c.Get(kB); !ok {
+		t.Error("ClearNamespace wrongly dropped another collection's token")
+	}
+
+	// A namespace with no matching keys is a no-op (B survives).
+	c.ClearNamespace("/coll/does-not-exist")
+	if _, ok := c.Get(kB); !ok {
+		t.Error("ClearNamespace with no match dropped an unrelated token")
+	}
+	// Nil cache is a safe no-op across the mutators / lock.
+	var nilCache *TokenCache
+	nilCache.ClearNamespace("/coll/A")
+	nilCache.ClearAll()
+	nilCache.Clear(kA)
+	nilCache.Set(kA, TokenEntry{})
+	if _, ok := nilCache.Get(kA); ok {
+		t.Error("nil cache Get returned ok=true")
+	}
+	nilCache.LockKey("x")() // returns a no-op unlock; calling it must not panic
+}
+
 // TestCacheKeyDistinguishesSensitiveInputs verifies the cache key changes when
 // any token-determining input changes, so a rotated secret / changed redirect /
 // toggled PKCE can't silently reuse a stale token.

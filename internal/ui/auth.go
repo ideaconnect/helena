@@ -118,8 +118,10 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.ensureOAuth2().UsePKCE = b
 	})
 	m.authOAuth2ClearTokens = widget.NewButton("Clear cached tokens", func() {
-		m.sess.TokenCache().ClearAll()
-		m.Status.SetText("Cleared cached OAuth2 tokens")
+		// Scope the clear to the active collection's namespace (the CacheKey
+		// prefix used on Send) so other collections' tokens survive.
+		m.sess.TokenCache().ClearNamespace(m.sess.ActiveCollectionDir())
+		m.Status.SetText("Cleared cached OAuth2 tokens for this collection")
 	})
 
 	m.authInheritLabel = widget.NewLabel("")
