@@ -304,13 +304,80 @@ func (s *Session) ActiveEnvironment() *model.Environment {
 	return nil
 }
 
-// AddEnvironment appends a new environment to the active collection.
-func (s *Session) AddEnvironment(name string) {
+// environmentIndex returns the index of the named environment in the active
+// collection, or -1.
+func (s *Session) environmentIndex(name string) int {
 	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
-		return
+		return -1
+	}
+	for i, e := range s.cols[s.activeCol].Environments {
+		if e.Name == name {
+			return i
+		}
+	}
+	return -1
+}
+
+// AddEnvironment appends a new uniquely-named environment to the active
+// collection and persists. Returns an error if no collection is active, the
+// name is empty, or an environment with that name already exists.
+func (s *Session) AddEnvironment(name string) error {
+	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
+		return fmt.Errorf("no active collection")
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if s.environmentIndex(name) >= 0 {
+		return fmt.Errorf("an environment named %q already exists", name)
 	}
 	s.cols[s.activeCol].Environments = append(s.cols[s.activeCol].Environments,
 		model.Environment{ID: model.NewID(), Name: name})
+	return s.SaveActiveCollection()
+}
+
+// RenameEnvironment renames an environment in the active collection and
+// persists. The new name must be non-empty and not collide with another
+// environment; if the renamed environment was active, the active selection
+// follows it.
+func (s *Session) RenameEnvironment(oldName, newName string) error {
+	idx := s.environmentIndex(oldName)
+	if idx < 0 {
+		return fmt.Errorf("environment %q not found", oldName)
+	}
+	newName = strings.TrimSpace(newName)
+	if newName == "" {
+		return fmt.Errorf("environment name cannot be empty")
+	}
+	if newName != oldName && s.environmentIndex(newName) >= 0 {
+		return fmt.Errorf("an environment named %q already exists", newName)
+	}
+	s.cols[s.activeCol].Environments[idx].Name = newName
+	if s.ActiveEnvName() == oldName {
+		s.SetActiveEnv(newName)
+	}
+	return s.SaveActiveCollection()
+}
+
+// DeleteEnvironment removes an environment from the active collection and
+// persists. If it was the active environment, the active selection moves to the
+// first remaining one (or clears when none remain).
+func (s *Session) DeleteEnvironment(name string) error {
+	idx := s.environmentIndex(name)
+	if idx < 0 {
+		return fmt.Errorf("environment %q not found", name)
+	}
+	wasActive := s.ActiveEnvName() == name
+	s.cols[s.activeCol].Environments = slices.Delete(s.cols[s.activeCol].Environments, idx, idx+1)
+	if wasActive {
+		if names := s.CollectionEnvironmentNames(); len(names) > 0 {
+			s.SetActiveEnv(names[0])
+		} else {
+			s.SetActiveEnv("")
+		}
+	}
+	return s.SaveActiveCollection()
 }
 
 // SetActiveEnvironmentVariables replaces the active environment's variables.

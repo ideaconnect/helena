@@ -474,6 +474,14 @@ The Environments… button opens `editEnvironments` at
    pre-existing secret keys -> `SetActiveEnvironmentVariables` ->
    `SaveActiveCollection` -> `refreshEnvironments` + `updateURLPreview`.
 
+The **Manage…** button opens `manageEnvironments` ([environments.go](environments.go)) —
+a list of the collection's environments with **+ New / Rename / Delete /
+Set active**. Each wires to the session's `AddEnvironment` /
+`RenameEnvironment` / `DeleteEnvironment` / `SetActiveEnv` (which persist to
+the collection YAML), then refreshes the toolbar dropdown + URL preview.
+"Variables…" still edits the active environment's key/value pairs; "Manage…"
+is the multi-environment lifecycle surface.
+
 ## Changing theme
 
 The Settings… button opens `editSettings` ([shell.go](shell.go)). The Theme

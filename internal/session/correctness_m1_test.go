@@ -2,8 +2,75 @@ package session
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 )
+
+// TestEnvironmentCRUD verifies AddEnvironment/RenameEnvironment/DeleteEnvironment
+// validation, active-follows-rename, active-moves-on-delete, and that changes
+// round-trip through storage (#115).
+func TestEnvironmentCRUD(t *testing.T) {
+	dir := writeSampleCollection(t)
+	cfg := filepath.Join(t.TempDir(), "config.yml")
+	s, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatalf("OpenCollection: %v", err)
+	}
+
+	if err := s.AddEnvironment("Dev"); err != nil {
+		t.Fatalf("Add Dev: %v", err)
+	}
+	if err := s.AddEnvironment("Prod"); err != nil {
+		t.Fatalf("Add Prod: %v", err)
+	}
+	if err := s.AddEnvironment("Dev"); err == nil {
+		t.Error("duplicate environment name was allowed")
+	}
+	if err := s.AddEnvironment("   "); err == nil {
+		t.Error("empty environment name was allowed")
+	}
+
+	s.SetActiveEnv("Dev")
+	if err := s.RenameEnvironment("Dev", "Local"); err != nil {
+		t.Fatalf("Rename Dev->Local: %v", err)
+	}
+	if s.ActiveEnvName() != "Local" {
+		t.Errorf("active env after rename = %q, want Local (should follow)", s.ActiveEnvName())
+	}
+	if err := s.RenameEnvironment("Local", "Prod"); err == nil {
+		t.Error("rename onto an existing name was allowed")
+	}
+	if err := s.RenameEnvironment("Nope", "X"); err == nil {
+		t.Error("rename of a missing environment was allowed")
+	}
+
+	if err := s.DeleteEnvironment("Local"); err != nil {
+		t.Fatalf("Delete Local: %v", err)
+	}
+	if s.ActiveEnvName() != "Prod" {
+		t.Errorf("active env after deleting the active one = %q, want Prod", s.ActiveEnvName())
+	}
+	if err := s.DeleteEnvironment("Nope"); err == nil {
+		t.Error("delete of a missing environment was allowed")
+	}
+
+	// Round-trip: a fresh session restored from the same config sees the
+	// surviving environment (and not the deleted one).
+	s2, err := New(cfg)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	got := s2.CollectionEnvironmentNames()
+	if !slices.Contains(got, "Prod") {
+		t.Errorf("reloaded env names = %v, want to contain Prod", got)
+	}
+	if slices.Contains(got, "Local") || slices.Contains(got, "Dev") {
+		t.Errorf("reloaded env names = %v, want neither Local nor Dev", got)
+	}
+}
 
 // TestOpenCollectionDeduplicates verifies opening an already-open directory
 // re-activates the existing entry instead of loading a second racing copy (#106).

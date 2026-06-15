@@ -79,7 +79,12 @@ when displaying or sending requests.
 - `Session.CollectionEnvironmentNames() []string`
 - `Session.ActiveEnvName() string` / `Session.SetActiveEnv(name string)`
 - `Session.ActiveEnvironment() *model.Environment`
-- `Session.AddEnvironment(name string)`
+- `Session.AddEnvironment(name string) error` — append a uniquely-named
+  environment and persist (errors on empty/duplicate name or no active collection).
+- `Session.RenameEnvironment(oldName, newName string) error` — rename + persist;
+  the active selection follows a renamed active env.
+- `Session.DeleteEnvironment(name string) error` — remove + persist; the active
+  selection moves to the first remaining env (or clears) when the active one goes.
 - `Session.SetActiveEnvironmentVariables(variables []model.Variable)`
 - `Session.Resolver() *vars.Resolver` — enabled env variables only.
 - `ParseEnvVars(text string) []model.Variable` — `"key = value"` line text

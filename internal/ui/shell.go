@@ -394,11 +394,12 @@ func NewMainUI(sess *session.Session) *MainUI {
 
 	wsBtn := widget.NewButton("Workspaces…", m.editWorkspaces)
 	envBtn := widget.NewButton("Variables…", m.editEnvironments)
+	envMgrBtn := widget.NewButton("Manage…", m.manageEnvironments)
 	settingsBtn := widget.NewButton("Settings…", m.editSettings)
 	helpBtn := widget.NewButton("?", m.showShortcuts)
 	toolbar := container.NewHBox(
 		widget.NewLabel("Workspace:"), m.Workspace, wsBtn,
-		widget.NewLabel("Environment:"), m.Environment, envBtn,
+		widget.NewLabel("Environment:"), m.Environment, envBtn, envMgrBtn,
 		settingsBtn, helpBtn,
 	)
 	exportBtn := tipButton("file-export", "Export…", m.actionExport)
@@ -1388,7 +1389,7 @@ func (m *MainUI) editEnvironments() {
 		if names := m.sess.CollectionEnvironmentNames(); len(names) > 0 {
 			m.sess.SetActiveEnv(names[0])
 		} else {
-			m.sess.AddEnvironment("Default")
+			_ = m.sess.AddEnvironment("Default")
 			m.sess.SetActiveEnv("Default")
 		}
 	}

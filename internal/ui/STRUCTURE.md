@@ -9,6 +9,7 @@
 | [query.go](query.go) | Pure helpers for the two-way **Query**↔URL sync: `splitURLQuery`, `parseQueryParams`, `buildQueryString`, `displayURL`, `mergeQueryFromURL` (keeps disabled rows), and `encodeQueryComponent` (percent-encodes but leaves `{{vars}}` intact). The UI glue (`applyURLEdit`, `syncURLFieldFromParams`) lives in [shell.go](shell.go). `currentRequest.Params` stays the send-path source of truth, so the backend is unchanged. |
 | [items.go](items.go) | Tree CRUD actions (new request, new folder, rename, duplicate, delete) plus `parentForNew`, `promptName`, `nameOfNode`, `isAncestor` helpers. |
 | [workspaces.go](workspaces.go) | `editWorkspaces` dialog and `refreshWorkspaceDropdown`. |
+| [environments.go](environments.go) | `manageEnvironments` — the create/rename/delete/set-active manager for a collection's named environments (wires to the session env CRUD; "Variables…" edits the active env's pairs). |
 | [collections.go](collections.go) | `actionNewCollection` — prompt + folder picker + empty YAML write. |
 | [import.go](import.go) | `actionImport` chooser plus URL / file paths and `slugify` / `uniqueCollectionDir` helpers. |
 | [export.go](export.go) | `actionExport` — cURL / wget snippet dialog plus `newSnippetEntry`. |
