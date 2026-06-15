@@ -126,7 +126,7 @@ func (s *Session) RenameItem(nodeID, name string) error {
 		newParts[len(newParts)-1] = name
 		ci := nodeCollectionIndex(nodeID)
 		if ci >= 0 && ci < len(s.cols) {
-			cascadeChainRefs(&s.cols[ci], oldParts, newParts)
+			cascadeChainRefs(&s.cols[ci], oldParts, newParts, kind == "f")
 		}
 	}
 
@@ -188,22 +188,29 @@ func nodeCollectionIndex(nodeID string) int {
 }
 
 // cascadeChainRefs walks every request under col and rewrites any
-// ChainStep.Request whose split path begins with oldParts to use
-// newParts as the new prefix. The tail (any segments past the prefix)
-// is preserved unchanged. Matching is case-sensitive on display names.
-func cascadeChainRefs(col *model.Collection, oldParts, newParts []string) {
-	rewriteRequests(col.Requests, oldParts, newParts)
-	rewriteFoldersChain(col.Folders, oldParts, newParts)
+// ChainStep.Request that genuinely targets the moved/renamed node (or, for a
+// folder, a descendant of it) to use newParts as the new prefix. The tail (any
+// segments past the prefix) is preserved unchanged. Matching is segment-wise
+// (so "Auth" never matches a sibling "AuthBackup") and case-sensitive.
+//
+// movedIsFolder discriminates the two cases that share a name-path prefix:
+//   - A request has no descendants, so only an EXACT path match targets it.
+//   - A folder is never itself a chain target, so only a STRICT-prefix match
+//     (a request inside it) is rewritten; an exact match is a same-named
+//     request elsewhere and must be left alone.
+func cascadeChainRefs(col *model.Collection, oldParts, newParts []string, movedIsFolder bool) {
+	rewriteRequests(col.Requests, oldParts, newParts, movedIsFolder)
+	rewriteFoldersChain(col.Folders, oldParts, newParts, movedIsFolder)
 }
 
-func rewriteFoldersChain(folders []model.Folder, oldParts, newParts []string) {
+func rewriteFoldersChain(folders []model.Folder, oldParts, newParts []string, movedIsFolder bool) {
 	for i := range folders {
-		rewriteRequests(folders[i].Requests, oldParts, newParts)
-		rewriteFoldersChain(folders[i].Folders, oldParts, newParts)
+		rewriteRequests(folders[i].Requests, oldParts, newParts, movedIsFolder)
+		rewriteFoldersChain(folders[i].Folders, oldParts, newParts, movedIsFolder)
 	}
 }
 
-func rewriteRequests(requests []model.Request, oldParts, newParts []string) {
+func rewriteRequests(requests []model.Request, oldParts, newParts []string, movedIsFolder bool) {
 	for i := range requests {
 		for j := range requests[i].Chain {
 			ref := requests[i].Chain[j].Request
@@ -213,6 +220,13 @@ func rewriteRequests(requests []model.Request, oldParts, newParts []string) {
 			parts := splitChainPath(ref)
 			if !hasPrefix(parts, oldParts) {
 				continue
+			}
+			exact := len(parts) == len(oldParts)
+			if movedIsFolder && exact {
+				continue // a folder isn't a chain target — this ref means a same-named request
+			}
+			if !movedIsFolder && !exact {
+				continue // a request has no descendants — only its exact path targets it
 			}
 			rewrote := append(append([]string(nil), newParts...), parts[len(oldParts):]...)
 			requests[i].Chain[j].Request = strings.Join(rewrote, "/")
@@ -390,7 +404,7 @@ func (s *Session) MoveNode(srcID, dstParentID string, index int) (string, error)
 	// Cascade chain refs whose prefix was the moved subtree's old path.
 	if oldPath != "" {
 		if newPath := s.nodeNamePath(newID); newPath != "" && newPath != oldPath {
-			cascadeChainRefs(&s.cols[ci], strings.Split(oldPath, "/"), strings.Split(newPath, "/"))
+			cascadeChainRefs(&s.cols[ci], strings.Split(oldPath, "/"), strings.Split(newPath, "/"), kind == "f")
 		}
 	}
 

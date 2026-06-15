@@ -46,6 +46,42 @@ func TestMoveCascadesChainRefs(t *testing.T) {
 	}
 }
 
+// TestCascadeChainRefsKindAware verifies the cascade rewrites only refs that
+// genuinely target the moved node (#100): a folder rename touches descendant
+// refs but leaves a same-named request ref and a same-prefix sibling alone; a
+// request rename touches only its exact ref, not a descendant of a same-named
+// folder.
+func TestCascadeChainRefsKindAware(t *testing.T) {
+	mkCol := func() *model.Collection {
+		return &model.Collection{Requests: []model.Request{
+			{Name: "child", Chain: []model.ChainStep{{Alias: "a", Request: "Auth/Login"}}},   // descendant of folder Auth
+			{Name: "sibling", Chain: []model.ChainStep{{Alias: "a", Request: "AuthBackup"}}}, // same prefix, different node
+			{Name: "reqref", Chain: []model.ChainStep{{Alias: "a", Request: "Auth"}}},        // targets a request named Auth
+		}}
+	}
+	// Folder "Auth" -> "Sec": only the descendant ref changes.
+	col := mkCol()
+	cascadeChainRefs(col, []string{"Auth"}, []string{"Sec"}, true)
+	if got := col.Requests[0].Chain[0].Request; got != "Sec/Login" {
+		t.Errorf("folder rename: descendant ref = %q, want Sec/Login", got)
+	}
+	if got := col.Requests[1].Chain[0].Request; got != "AuthBackup" {
+		t.Errorf("folder rename: same-prefix sibling wrongly rewritten: %q", got)
+	}
+	if got := col.Requests[2].Chain[0].Request; got != "Auth" {
+		t.Errorf("folder rename: same-named request ref wrongly rewritten: %q", got)
+	}
+	// Request "Auth" -> "Sec": only the exact ref changes.
+	col = mkCol()
+	cascadeChainRefs(col, []string{"Auth"}, []string{"Sec"}, false)
+	if got := col.Requests[2].Chain[0].Request; got != "Sec" {
+		t.Errorf("request rename: exact ref = %q, want Sec", got)
+	}
+	if got := col.Requests[0].Chain[0].Request; got != "Auth/Login" {
+		t.Errorf("request rename: same-named folder's descendant wrongly rewritten: %q", got)
+	}
+}
+
 // TestMoveErrorPaths covers MoveNode's rejection branches.
 func TestMoveErrorPaths(t *testing.T) {
 	s := openSessionWithCollection(t)
