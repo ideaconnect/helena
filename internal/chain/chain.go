@@ -191,12 +191,11 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		if !ok {
 			return nil, fmt.Errorf("chain: cannot resolve request %q (alias %q)", step.Request, step.Alias)
 		}
-		if sub.ID != "" && visiting[sub.ID] {
+		key := visitKey(sub, step)
+		if visiting[key] {
 			return nil, fmt.Errorf("chain: cycle detected through %q (alias %q)", sub.Name, step.Alias)
 		}
-		if sub.ID != "" {
-			visiting[sub.ID] = true
-		}
+		visiting[key] = true
 		subChainMap, err := resolveSteps(ctx, sub.Chain, finder, exec, visiting, console, depth+1, stepCount, progress, total)
 		if err != nil {
 			return nil, err
@@ -221,12 +220,25 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		if err != nil {
 			return nil, fmt.Errorf("chain step %q (%s): %w", step.Alias, sub.Name, err)
 		}
-		if sub.ID != "" {
-			delete(visiting, sub.ID)
-		}
+		delete(visiting, key)
 		out[step.Alias] = view
 	}
 	return out, nil
+}
+
+// visitKey returns the cycle-detection key for a resolved chain target. It uses
+// the stable Request.ID when present, and otherwise falls back to a path-derived
+// sentinel key. Without the fallback an empty-ID request — the state of any
+// freshly imported or never-saved collection, since IDs are backfilled only on
+// the first Helena save (invariant 14) — would skip the visiting set entirely
+// and a self/mutual reference would recurse until the depth/step caps instead of
+// being reported as a cycle. The NUL prefix keeps the path key from colliding
+// with a real ID.
+func visitKey(sub model.Request, step model.ChainStep) string {
+	if sub.ID != "" {
+		return sub.ID
+	}
+	return "\x00path:" + step.Request
 }
 
 // resolveTarget looks up a chain step's target via the finder. It
@@ -270,17 +282,14 @@ func countSteps(steps []model.ChainStep, finder RequestFinder, visiting map[stri
 		if !ok {
 			continue
 		}
-		if sub.ID != "" && visiting[sub.ID] {
+		key := visitKey(sub, step)
+		if visiting[key] {
 			continue
 		}
-		if sub.ID != "" {
-			visiting[sub.ID] = true
-		}
+		visiting[key] = true
 		total += countSteps(sub.Chain, finder, visiting, depth+1)
 		total++
-		if sub.ID != "" {
-			delete(visiting, sub.ID)
-		}
+		delete(visiting, key)
 		if total >= MaxChainSteps {
 			return MaxChainSteps
 		}

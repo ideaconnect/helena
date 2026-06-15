@@ -175,6 +175,32 @@ func TestResolveCycleIndirect(t *testing.T) {
 	}
 }
 
+// TestResolveCycleEmptyIDDirect verifies a self-cycle among never-saved
+// (empty-ID) requests is reported as a cycle via the path-based visiting key,
+// not allowed to recurse to the depth/step cap (#99).
+func TestResolveCycleEmptyIDDirect(t *testing.T) {
+	leaf := model.Request{Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "self", Request: "Leaf"},
+	}}
+	finder := fakeFinder{"Leaf": leaf}
+	_, _, err := Resolve(context.Background(), leaf, finder, newRecordingExec(), nil)
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("err = %v, want a cycle error", err)
+	}
+}
+
+// TestResolveCycleEmptyIDIndirect verifies A → B → A among empty-ID requests
+// is caught as a cycle (#99).
+func TestResolveCycleEmptyIDIndirect(t *testing.T) {
+	a := model.Request{Name: "A", Chain: []model.ChainStep{{Alias: "b", Request: "B"}}}
+	b := model.Request{Name: "B", Chain: []model.ChainStep{{Alias: "a", Request: "A"}}}
+	finder := fakeFinder{"A": a, "B": b}
+	_, _, err := Resolve(context.Background(), a, finder, newRecordingExec(), nil)
+	if err == nil || !strings.Contains(err.Error(), "cycle") {
+		t.Errorf("err = %v, want a cycle error (not a depth/step-cap error)", err)
+	}
+}
+
 // TestResolveUnknownRef verifies an unresolved name path surfaces a
 // clear error naming the alias.
 func TestResolveUnknownRef(t *testing.T) {

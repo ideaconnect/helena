@@ -89,10 +89,16 @@ walk A.Chain → encounter B → push B → visiting = {A, B}
 walk B.Chain → encounter A → A is in visiting → cycle.
 ```
 
-`Request.ID` being empty is tolerated for tests — the cycle check
-just skips visiting-set bookkeeping for that step. Production
-requests always carry a non-empty ID assigned by
-[internal/storage](../storage/) on load.
+When `Request.ID` is empty (a freshly imported or never-saved
+collection — IDs are backfilled only on the first Helena save), the
+cycle check falls back to a path-derived visiting key
+(`visitKey` → `"\x00path:" + step.Request`) instead of skipping
+bookkeeping. So a self/mutual reference among empty-ID requests is still
+reported as a cycle (caught one level into the recursion, well under the
+depth/step caps) rather than recursing until `MaxChainDepth`/`MaxChainSteps`.
+Production requests carry a non-empty ID assigned by
+[internal/storage](../storage/) on load, which keys cycle detection
+exactly; the path fallback is the safety net for the pre-ID window.
 
 ## How a chain step's `helena.env.set` reaches the leaf
 
