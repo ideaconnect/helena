@@ -58,8 +58,11 @@ func (m *MainUI) actionExport() {
 	d.Show()
 }
 
-// newSnippetEntry builds a read-only-ish multi-line entry showing either the
+// newSnippetEntry builds a read-only multi-line entry showing either the
 // exporter's output or an error comment, never panicking on a nil exporter.
+// It is disabled so the generated command can't be edited and an accidental
+// edit copied — the Copy buttons read the entry's Text directly, so copy still
+// works on the unmodified snippet.
 func newSnippetEntry(text string, err error) *widget.Entry {
 	e := widget.NewMultiLineEntry()
 	e.Wrapping = fyne.TextWrapOff
@@ -68,5 +71,6 @@ func newSnippetEntry(text string, err error) *widget.Entry {
 	} else {
 		e.SetText(text)
 	}
+	e.Disable()
 	return e
 }
