@@ -29,3 +29,29 @@ func TestIconMissingPanics(t *testing.T) {
 	}()
 	_ = Icon("definitely-not-an-icon")
 }
+
+// TestFontReturnsResource verifies Font loads an embedded TTF and returns a
+// non-nil Fyne resource named after the font (the happy path).
+func TestFontReturnsResource(t *testing.T) {
+	r := Font("Inter-Regular")
+	if r == nil {
+		t.Fatal("Font returned nil for Inter-Regular")
+	}
+	if r.Name() != "Inter-Regular.ttf" {
+		t.Errorf("name = %q, want Inter-Regular.ttf", r.Name())
+	}
+	if len(r.Content()) == 0 {
+		t.Error("Font returned empty content")
+	}
+}
+
+// TestFontMissingPanics verifies the documented panic-on-missing contract for
+// fonts, mirroring Icon.
+func TestFontMissingPanics(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Error("Font(missing) did not panic")
+		}
+	}()
+	_ = Font("definitely-not-a-font")
+}
