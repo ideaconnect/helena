@@ -96,7 +96,10 @@ func stringify(v goja.Value) string {
 	}
 	b, err := json.Marshal(exported)
 	if err != nil {
-		return fmt.Sprintf("%v", exported)
+		// Unmarshalable host values (functions, channels, certain host objects):
+		// fall back to the value's JS string form, never Go's %v (which leaks
+		// pointer addresses and is non-deterministic across runs).
+		return v.String()
 	}
 	return string(b)
 }
