@@ -655,8 +655,8 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	// it shows in the table, keep currentRequest.URL as the bare base, and render
 	// base + the params query in the field. (SetText here is under m.loading, so
 	// its OnChanged won't re-run applyURLEdit.)
-	if base, urlQuery := splitURLQuery(req.URL); urlQuery != "" {
-		req.URL = base
+	if base, urlQuery, frag := splitURLQuery(req.URL); urlQuery != "" {
+		req.URL = withFragment(base, frag)
 		req.Params = append(parseQueryParams(urlQuery), req.Params...)
 	}
 	m.URL.SetText(displayURL(req.URL, req.Params))
@@ -907,8 +907,8 @@ func applyImpliedContentType(headers []model.KeyValue, oldType, newType model.Bo
 // itself is left untouched so the caret/typing isn't disturbed; the send path
 // still merges currentRequest.Params, so the base-only URL stays correct.
 func (m *MainUI) applyURLEdit(s string) {
-	base, query := splitURLQuery(s)
-	m.currentRequest.URL = base
+	base, query, frag := splitURLQuery(s)
+	m.currentRequest.URL = withFragment(base, frag)
 	m.currentRequest.Params = mergeQueryFromURL(m.currentRequest.Params, parseQueryParams(query))
 	m.rebuildParamsRows()
 }

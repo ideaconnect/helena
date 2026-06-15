@@ -10,16 +10,38 @@ import (
 )
 
 func TestSplitURLQuery(t *testing.T) {
-	cases := []struct{ in, base, query string }{
-		{"https://x/p?a=1&b=2", "https://x/p", "a=1&b=2"},
-		{"https://x/p", "https://x/p", ""},
-		{"https://x/p?", "https://x/p", ""},
-		{"", "", ""},
+	cases := []struct{ in, base, query, fragment string }{
+		{"https://x/p?a=1&b=2", "https://x/p", "a=1&b=2", ""},
+		{"https://x/p", "https://x/p", "", ""},
+		{"https://x/p?", "https://x/p", "", ""},
+		{"", "", "", ""},
+		// Fragment must be peeled out of the query, not folded into the last value.
+		{"https://x/p?a=1&b=2#section", "https://x/p", "a=1&b=2", "section"},
+		{"https://x/p#section", "https://x/p", "", "section"},
+		{"https://x/p?a=1#s?weird", "https://x/p", "a=1", "s?weird"},
 	}
 	for _, c := range cases {
-		if b, q := splitURLQuery(c.in); b != c.base || q != c.query {
-			t.Errorf("splitURLQuery(%q) = (%q,%q), want (%q,%q)", c.in, b, q, c.base, c.query)
+		if b, q, f := splitURLQuery(c.in); b != c.base || q != c.query || f != c.fragment {
+			t.Errorf("splitURLQuery(%q) = (%q,%q,%q), want (%q,%q,%q)", c.in, b, q, f, c.base, c.query, c.fragment)
 		}
+	}
+}
+
+// TestQueryFragmentRoundTrip pins the #18 fix: a fragment survives the
+// URL<->params split and is re-emitted after the query, not percent-encoded
+// into a param value.
+func TestQueryFragmentRoundTrip(t *testing.T) {
+	base, query, frag := splitURLQuery("https://x/p?a=1&b=2#section")
+	for _, p := range parseQueryParams(query) {
+		if p.Value == "2#section" {
+			t.Fatalf("fragment leaked into a query param value: %+v", p)
+		}
+	}
+	// currentRequest.URL would hold base+fragment; displayURL re-assembles order.
+	stored := withFragment(base, frag)
+	got := displayURL(stored, parseQueryParams(query))
+	if got != "https://x/p?a=1&b=2#section" {
+		t.Errorf("round-trip = %q, want https://x/p?a=1&b=2#section", got)
 	}
 }
 

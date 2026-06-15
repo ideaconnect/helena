@@ -13,13 +13,30 @@ import (
 // Params stays the source of truth the send path merges, so the backend is
 // unchanged — these helpers only translate between the two views in the UI.
 
-// splitURLQuery splits a URL into the part before the first "?" (base) and the
-// query string after it. A URL with no "?" yields an empty query.
-func splitURLQuery(raw string) (base, query string) {
-	if i := strings.IndexByte(raw, '?'); i >= 0 {
-		return raw[:i], raw[i+1:]
+// splitURLQuery splits a URL into its base (before the first "?"), query
+// (between "?" and "#"), and fragment (after the first "#"). The fragment is
+// peeled off first because in a URL it always trails the query, so a
+// fragment-bearing URL like "x/p?a=1#frag" must not fold "#frag" into the last
+// query value. A URL with no "?"/"#" yields empty query/fragment. {{vars}} are
+// cut manually (not via net/url) so a placeholder containing reserved bytes
+// isn't disturbed.
+func splitURLQuery(raw string) (base, query, fragment string) {
+	if i := strings.IndexByte(raw, '#'); i >= 0 {
+		raw, fragment = raw[:i], raw[i+1:]
 	}
-	return raw, ""
+	if i := strings.IndexByte(raw, '?'); i >= 0 {
+		return raw[:i], raw[i+1:], fragment
+	}
+	return raw, "", fragment
+}
+
+// withFragment re-attaches a fragment to a base, or returns base unchanged when
+// the fragment is empty.
+func withFragment(base, fragment string) string {
+	if fragment == "" {
+		return base
+	}
+	return base + "#" + fragment
 }
 
 // parseQueryParams turns a raw query string ("a=1&b=hi") into enabled KeyValue
@@ -57,12 +74,16 @@ func buildQueryString(params []model.KeyValue) string {
 	return strings.Join(parts, "&")
 }
 
-// displayURL combines a query-less base with the query rebuilt from params.
+// displayURL combines a base (which may carry a #fragment) with the query
+// rebuilt from params, re-emitting them in URL order: base?query#fragment. Any
+// query already on the base arg is dropped (params are the source of truth).
 func displayURL(base string, params []model.KeyValue) string {
+	b, _, fragment := splitURLQuery(base)
+	out := b
 	if q := buildQueryString(params); q != "" {
-		return base + "?" + q
+		out += "?" + q
 	}
-	return base
+	return withFragment(out, fragment)
 }
 
 // mergeQueryFromURL replaces the enabled query rows with the ones parsed from
