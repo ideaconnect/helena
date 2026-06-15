@@ -17,7 +17,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
-	prettyview "github.com/ideaconnect/go-fyne-pretty-view"
+	prettyview "github.com/ideaconnect/go-fyne-pretty-view/v2"
 
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/chain"
@@ -192,7 +192,7 @@ type MainUI struct {
 	paramsRows       *fyne.Container
 	headersRows      *fyne.Container
 	BodyType         *widget.Select
-	BodyContent      *widget.Entry
+	BodyContent      *prettyview.PrettyView // editable request body (live highlight + reformat)
 	docsEditor       *widget.Entry
 	docsPreview      *widget.RichText
 	preScriptEditor  *widget.Entry
@@ -312,25 +312,36 @@ func NewMainUI(sess *session.Session) *MainUI {
 		oldType := m.currentRequest.Body.Type
 		newType := model.BodyType(s)
 		m.currentRequest.Body.Type = newType
+		// Re-highlight the editor for the new body type (JSON/XML get syntax
+		// colors; everything else is raw). Reparse keeps the buffer bytes.
+		if m.BodyContent != nil {
+			m.BodyContent.Reparse(formatForBodyType(newType))
+		}
 		if h, changed := applyImpliedContentType(m.currentRequest.Headers, oldType, newType); changed {
 			m.currentRequest.Headers = h
 			m.rebuildHeadersRows()
 		}
 	})
 	m.BodyType.SetSelected(string(model.BodyNone))
-	m.BodyContent = widget.NewMultiLineEntry()
-	m.BodyContent.Wrapping = fyne.TextWrapOff
-	m.BodyContent.SetPlaceHolder("Body content — {{vars}} are resolved on Send. Validate / Format apply to JSON & XML.")
-	m.BodyContent.OnChanged = func(s string) {
+	// Request body: the same go-fyne-pretty-view widget as the response viewer,
+	// constructed editable (WithEditable) so the user types/pastes with live
+	// syntax highlighting and a caret, with on-demand Reformat. It is virtualized
+	// (scrolls itself — no enclosing VScroll). OnChanged is debounced, so the
+	// authoritative bytes are pulled via syncBodyFromEditor at Save/Send/Validate/Format.
+	m.BodyContent = prettyview.New(
+		prettyview.WithEditable(),
+		prettyview.WithLineNumbers(),
+	)
+	m.BodyContent.SetTheme(variantFor(sess.Settings().Theme), prettyview.Theme{})
+	m.BodyContent.SetOnChanged(func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Body.Content = s
 		}
-	}
+	})
 	validateBtn := widget.NewButton("Validate", m.validateBody)
 	formatBtn := widget.NewButton("Format", m.formatBody)
 	bodyTopRow := container.NewHBox(widget.NewLabel("Type:"), m.BodyType, validateBtn, formatBtn)
-	bodyTab := container.NewBorder(bodyTopRow, nil, nil, nil,
-		container.NewVScroll(m.BodyContent))
+	bodyTab := container.NewBorder(bodyTopRow, nil, nil, nil, m.BodyContent)
 
 	m.Request = container.NewAppTabs(
 		container.NewTabItem("Body", bodyTab),
@@ -657,7 +668,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		bt = model.BodyNone
 	}
 	m.BodyType.SetSelected(string(bt))
-	m.BodyContent.SetText(req.Body.Content)
+	m.BodyContent.SetData([]byte(req.Body.Content), formatForBodyType(bt))
 	if m.docsEditor != nil {
 		m.docsEditor.SetText(req.Docs)
 	}
@@ -675,6 +686,7 @@ func (m *MainUI) saveRequest() {
 		m.Status.SetText("No request selected")
 		return
 	}
+	m.syncBodyFromEditor()
 	// A scratch tab isn't in any collection yet — saving means choosing a
 	// destination, which commitScratchTab then converts into a tree-backed tab.
 	if t := m.activeTab(); t != nil && t.scratch {
@@ -736,10 +748,35 @@ func (m *MainUI) updateURLPreview() {
 	m.urlPreview.Show()
 }
 
+// formatForBodyType maps a request body type to the prettyview syntax format for
+// the editable body widget: JSON/XML get structured highlighting + Reformat;
+// everything else (text, form, multipart, none) renders as raw, uncoloured text.
+func formatForBodyType(bt model.BodyType) prettyview.Format {
+	switch bt {
+	case model.BodyJSON:
+		return prettyview.FormatJSON
+	case model.BodyXML:
+		return prettyview.FormatXML
+	default:
+		return prettyview.FormatRaw
+	}
+}
+
+// syncBodyFromEditor copies the editor's live edit-buffer bytes into the current
+// request. The widget's OnChanged is debounced, so any consumer that needs the
+// authoritative body *now* (Save, Send, Validate, Format) must pull synchronously
+// rather than trust the last settled callback.
+func (m *MainUI) syncBodyFromEditor() {
+	if m.currentRequest != nil && m.BodyContent != nil {
+		m.currentRequest.Body.Content = string(m.BodyContent.Source())
+	}
+}
+
 func (m *MainUI) validateBody() {
 	if m.currentRequest == nil {
 		return
 	}
+	m.syncBodyFromEditor()
 	body := []byte(m.currentRequest.Body.Content)
 	switch m.currentRequest.Body.Type {
 	case model.BodyJSON:
@@ -765,6 +802,7 @@ func (m *MainUI) formatBody() {
 	if m.currentRequest == nil {
 		return
 	}
+	m.syncBodyFromEditor()
 	body := []byte(m.currentRequest.Body.Content)
 	var formatted string
 	var err error
@@ -786,7 +824,7 @@ func (m *MainUI) formatBody() {
 		return
 	}
 	m.currentRequest.Body.Content = formatted
-	m.BodyContent.SetText(formatted)
+	m.BodyContent.SetData([]byte(formatted), formatForBodyType(m.currentRequest.Body.Type))
 	m.Status.SetText("Formatted")
 }
 
@@ -1064,6 +1102,9 @@ func (m *MainUI) send() {
 	}
 	var req model.Request
 	if m.currentRequest != nil {
+		// The body editor's OnChanged is debounced; pull its live bytes now so a
+		// Send fired before the settle still carries the latest body.
+		m.syncBodyFromEditor()
 		// Snapshot the live request on the UI goroutine, detaching its
 		// slice-backed fields (Params/Headers/Body.Form/Chain) from
 		// m.currentRequest's backing arrays — the user can keep editing those
@@ -1369,6 +1410,7 @@ func (m *MainUI) editSettings() {
 		// ApplyTheme's SetTheme(Light/Dark) does not flip — so force a rebuild
 		// at the new variant, or the body keeps the old light/dark colors.
 		m.pv.SetTheme(variantFor(newTheme), prettyview.Theme{})
+		m.BodyContent.SetTheme(variantFor(newTheme), prettyview.Theme{})
 		m.refreshThemedCanvas()
 		m.Status.SetText("Settings saved")
 	}, m.win)

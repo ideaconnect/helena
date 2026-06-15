@@ -10,9 +10,11 @@ collection parsing directly. It calls into `internal/session` for state and
 persistence, `internal/httpclient` to actually send requests, `internal/exporter`
 and `internal/importer` for cURL/wget output and OpenAPI/WSDL ingestion, and
 `internal/responsefmt` for request-body pretty-print/validate and the status-line
-size/duration/header formatting. The response **Body** is rendered by the
-external [go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view)
-widget (JSON/XML/HTML/raw, auto-detected, virtualized). All of that lets shell.go
+size/duration/header formatting. Both the response **Body** viewer and the
+**request body editor** are the external
+[go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view) `/v2`
+widget (JSON/XML/HTML/raw, auto-detected, virtualized) — the request body is
+constructed `WithEditable()` for live-highlighted, in-place editing. All of that lets shell.go
 focus on widget wiring while the rest of the codebase stays headless and
 testable.
 
@@ -96,7 +98,7 @@ toolbar button, sidebar button, or keyboard shortcut.
 
 - `fyne.io/fyne/v2` (and `container`, `canvas`, `dialog`, `widget`, `theme`,
   `driver/desktop`, `storage`, `test`) — widget toolkit.
-- `github.com/ideaconnect/go-fyne-pretty-view` — the response Body viewer
+- `github.com/ideaconnect/go-fyne-pretty-view/v2` — the response Body viewer and the editable request-body widget
   (virtualized JSON/XML/HTML/raw with fold, syntax highlighting, search,
   soft-wrap). Pinned at `v0.1.0-alpha`; same author / org as Helena.
 - `github.com/idct/helena/internal/session` — workspace/collection/env state

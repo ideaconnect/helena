@@ -136,11 +136,20 @@ m.URL.OnChanged = func(s string) {
 ```
 
 Without the `!m.loading` guard, the call to `m.URL.SetText(req.URL)` would
-write the loaded URL back into `currentRequest` (harmless), and then the next
-SetText on `BodyContent` would do the same — but inside more complex
-programmatic updates (KV rows, body type changes that reset content) the
-write-back loop can clobber freshly loaded data with stale values. The flag
+write the loaded URL back into `currentRequest` (harmless), but inside more
+complex programmatic updates (KV rows, body type changes that reset content)
+the write-back loop can clobber freshly loaded data with stale values. The flag
 makes `loadRequest` a single atomic UI write.
+
+The request **body editor** (`BodyContent`, an editable `go-fyne-pretty-view`
+widget) is loaded with `SetData`, which deliberately does **not** fire its
+`OnChanged` — so the debounced write-back never races a load. Its `OnChanged`
+*is* debounced for live edits, so the four consumers that need the body bytes
+synchronously (`saveRequest`, `send`, `validateBody`, `formatBody`) call
+`syncBodyFromEditor`, which pulls the editor's live `Source()` into
+`currentRequest.Body.Content` before reading it. `loadRequest` chooses the
+editor's syntax format via `formatForBodyType`, and a `BodyType` change
+`Reparse`s the buffer at the new format.
 
 ### Body Type → Content-Type sync
 

@@ -5,7 +5,7 @@
 | File | Purpose |
 | ---- | ------- |
 | [doc.go](doc.go) | Package doc comment. |
-| [shell.go](shell.go) | `MainUI` struct, `NewMainUI`, the main layout, send/save/loadRequest, params/headers row machinery, environment + settings dialogs, body validate/format. Also defines `sessionEnvBridge` (the `scripting.EnvBridge` adapter), `sessionRequestFinder` (the `chain.RequestFinder` adapter), and `chainExecutor` — the single execution path that runs pre-script → `client.Do` → post-script for both chain steps and the leaf. |
+| [shell.go](shell.go) | `MainUI` struct, `NewMainUI`, the main layout, send/save/loadRequest, params/headers row machinery, environment + settings dialogs, body validate/format. The request body uses an **editable** `go-fyne-pretty-view` widget (`BodyContent`); `formatForBodyType` maps the body type to its syntax format and `syncBodyFromEditor` pulls the debounced editor's live `Source()` before Save/Send/Validate/Format. Also defines `sessionEnvBridge` (the `scripting.EnvBridge` adapter), `sessionRequestFinder` (the `chain.RequestFinder` adapter), and `chainExecutor` — the single execution path that runs pre-script → `client.Do` → post-script for both chain steps and the leaf. |
 | [query.go](query.go) | Pure helpers for the two-way **Query**↔URL sync: `splitURLQuery`, `parseQueryParams`, `buildQueryString`, `displayURL`, `mergeQueryFromURL` (keeps disabled rows), and `encodeQueryComponent` (percent-encodes but leaves `{{vars}}` intact). The UI glue (`applyURLEdit`, `syncURLFieldFromParams`) lives in [shell.go](shell.go). `currentRequest.Params` stays the send-path source of truth, so the backend is unchanged. |
 | [items.go](items.go) | Tree CRUD actions (new request, new folder, rename, duplicate, delete) plus `parentForNew`, `promptName`, `nameOfNode`, `isAncestor` helpers. |
 | [workspaces.go](workspaces.go) | `editWorkspaces` dialog and `refreshWorkspaceDropdown`. |
@@ -71,7 +71,7 @@ without infinite write-back loops.
 | `paramsRows` | `*fyne.Container` | VBox of KV rows for the **Query** tab (query-string params), two-way synced with the URL field via `applyURLEdit` / `syncURLFieldFromParams` (guarded by `syncing`). |
 | `headersRows` | `*fyne.Container` | VBox of KV rows for headers. |
 | `BodyType` | `*widget.Select` | Body type select (none / json / xml / text / form / multipart). |
-| `BodyContent` | `*widget.Entry` | Body text area. |
+| `BodyContent` | `*prettyview.PrettyView` | Editable request-body widget — the same [go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view) widget as `pv`, constructed `WithEditable()` + `WithLineNumbers()` so the user types/pastes with live syntax highlighting and a caret. Fed via `SetData(content, formatForBodyType(type))` in `loadRequest`; `Reparse`d when `BodyType` changes; reformatted in place by `formatBody`. Its `OnChanged` write-back is **debounced**, so `syncBodyFromEditor` pulls `Source()` synchronously at Save/Send/Validate/Format. Repainted on theme change via `SetTheme(variantFor(...))`. |
 | `docsEditor` | `*widget.Entry` | Markdown source editor in the Docs tab. |
 | `docsPreview` | `*widget.RichText` | Rendered Markdown shown in the Docs > Preview subtab. |
 | `preScriptEditor` | `*widget.Entry` | Monospace editor for `request.Scripts.PreRequest` source. |

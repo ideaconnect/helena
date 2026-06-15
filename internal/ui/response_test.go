@@ -5,7 +5,7 @@ import (
 
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
-	prettyview "github.com/ideaconnect/go-fyne-pretty-view"
+	prettyview "github.com/ideaconnect/go-fyne-pretty-view/v2"
 
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/session"

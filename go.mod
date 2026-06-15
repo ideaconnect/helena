@@ -8,7 +8,7 @@ require (
 	github.com/dop251/goja v0.0.0-20260311135729-065cd970411c
 	github.com/dweymouth/fyne-tooltip v0.4.0
 	github.com/getkin/kin-openapi v0.139.0
-	github.com/ideaconnect/go-fyne-pretty-view v0.1.0-alpha
+	github.com/ideaconnect/go-fyne-pretty-view/v2 v2.2.0-alpha
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -61,7 +61,7 @@ require (
 	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/woodsbury/decimal128 v1.3.0 // indirect
 	github.com/yuin/goldmark v1.7.8 // indirect
-	golang.org/x/image v0.24.0 // indirect
+	golang.org/x/image v0.41.0 // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sys v0.45.0 // indirect
 	golang.org/x/text v0.37.0 // indirect
