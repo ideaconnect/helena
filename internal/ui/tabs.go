@@ -63,12 +63,14 @@ func (m *MainUI) tabIndexOf(t *openTab) int {
 	return -1
 }
 
-// tabIndexByRequestID returns the index of the open tab whose requestID
-// matches id, or -1. Used to dedup so re-opening a request activates its
-// existing tab instead of stacking a second one.
-func (m *MainUI) tabIndexByRequestID(id string) int {
+// tabIndexByIdentity returns the index of the open tab matching the full
+// (collection, requestID) identity, or -1. Request.ID is unique only within a
+// collection, so dedup must include the owning collection directory —
+// otherwise two collections that happen to share a Request.ID collapse onto
+// one tab and opening B activates A's tab.
+func (m *MainUI) tabIndexByIdentity(collection, id string) int {
 	for i, t := range m.tabs {
-		if t.requestID == id {
+		if t.requestID == id && t.collection == collection {
 			return i
 		}
 	}
@@ -82,14 +84,15 @@ func (m *MainUI) openOrActivate(nodeID string) {
 	if !ok {
 		return
 	}
-	if i := m.tabIndexByRequestID(req.ID); i >= 0 {
+	ci := m.sess.Tree().CollectionIndex(nodeID)
+	collection := m.sess.CollectionDir(ci)
+	if i := m.tabIndexByIdentity(collection, req.ID); i >= 0 {
 		m.activateTab(i)
 		return
 	}
-	ci := m.sess.Tree().CollectionIndex(nodeID)
 	m.tabs = append(m.tabs, &openTab{
 		requestID:  req.ID,
-		collection: m.sess.CollectionDir(ci),
+		collection: collection,
 		nodeID:     nodeID,
 	})
 	m.activateTab(len(m.tabs) - 1)
@@ -631,9 +634,13 @@ func (m *MainUI) commitScratchTab(t *openTab, parentNodeID, name string) {
 		m.Status.SetText("Invalid destination")
 		return
 	}
-	m.sess.SetActiveCollection(ci)
 	req := *t.scratchReq
 	req.Name = name
+	// AddRequestValue resolves + persists by the parent's collection index, so it
+	// does not require the active collection to be switched first. Defer the
+	// active-collection/env switch until AFTER the save succeeds — otherwise a
+	// failed save would leave the session pointing at a collection whose data
+	// wasn't persisted, diverging UI state from disk.
 	newNodeID, err := m.sess.AddRequestValue(parentNodeID, req)
 	if err != nil {
 		if m.win != nil {
@@ -647,6 +654,7 @@ func (m *MainUI) commitScratchTab(t *openTab, parentNodeID, name string) {
 		m.Status.SetText("Saved, but could not reopen the request")
 		return
 	}
+	m.sess.SetActiveCollection(ci)
 	t.scratch = false
 	t.scratchReq = nil
 	t.collection = m.sess.CollectionDir(ci)

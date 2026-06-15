@@ -123,31 +123,20 @@ func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
 // editing (that one would form an obvious cycle).
 func (m *MainUI) chainRefSuggestions() []string {
 	all := m.sess.AllRequestPaths()
-	if m.currentRequest == nil {
+	if m.currentRequest == nil || m.currentRequestID == "" {
 		return all
 	}
-	currentName := m.currentRequest.Name
 	out := make([]string, 0, len(all))
 	for _, p := range all {
-		// Skip exact match by name path — a request can't chain to itself.
-		// We don't know the full chain-path of the current request without
-		// a tree walk, but the cheapest heuristic (skip any suggestion whose
-		// last segment matches the current request's Name) catches the
-		// trivial self-cycle case.
-		if last := lastSegment(p); last == currentName {
+		// Exclude only the request being edited itself, matched by IDENTITY
+		// (its resolved Request.ID), not by bare name — a different request that
+		// merely shares this one's name in another folder is a legitimate target
+		// and must stay suggestable. Cycles beyond the trivial self-reference are
+		// caught at resolve time.
+		if id, ok := m.sess.RequestIDForPath(p); ok && id == m.currentRequestID {
 			continue
 		}
 		out = append(out, p)
 	}
 	return out
-}
-
-// lastSegment returns the substring after the final '/'.
-func lastSegment(path string) string {
-	for i := len(path) - 1; i >= 0; i-- {
-		if path[i] == '/' {
-			return path[i+1:]
-		}
-	}
-	return path
 }
