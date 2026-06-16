@@ -85,7 +85,7 @@ jobs:
 
       - name: Coverage gate (Linux)
         if: runner.os == 'Linux'
-        run: go run ./cmd/covergate -profile coverage.out -exclude internal/ui,cmd,features,integration -floor 90
+        run: go run ./cmd/covergate -profile coverage.out -exclude internal/ui,cmd,features,integration,examples -floor 90
 
       - name: Upload coverage profile (Linux)
         if: runner.os == 'Linux'

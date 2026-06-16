@@ -3,8 +3,11 @@ PKG := ./cmd/helena
 
 # Phase 8 coverage gate: every internal package outside internal/ui
 # must stay at or above this floor. UI tests are deferred to Phase 11.
+# Non-core packages are excluded: internal/ui (deferred), cmd (entrypoints +
+# tooling), features/integration (BDD/integration harnesses), and examples
+# (the bundled sample collection's loader — demo support, not core logic).
 COVERAGE_FLOOR    := 90
-COVERAGE_EXCLUDES := internal/ui,cmd,features,integration
+COVERAGE_EXCLUDES := internal/ui,cmd,features,integration,examples
 COVERAGE_PROFILE  := coverage.out
 COVERAGE_HTML     := coverage.html
 
