@@ -1205,6 +1205,14 @@ func snapshotRequest(req model.Request) model.Request {
 	return req
 }
 
+// panicResponse builds the synthetic error response delivered when the Send
+// worker recovers from a panic, so the originating tab reflects the failure
+// instead of keeping its previous (now-stale) cached response (#110).
+func panicResponse(r any) *tabResponse {
+	msg := fmt.Sprintf("Send panic: %v", r)
+	return &tabResponse{isError: true, errText: msg, status: msg}
+}
+
 func (m *MainUI) send() {
 	if m.sendCancel != nil {
 		// A Send is already in flight — Enter / URL OnSubmitted reach
@@ -1298,11 +1306,15 @@ func (m *MainUI) send() {
 		defer cancel()
 		defer func() {
 			if r := recover(); r != nil {
-				msg := fmt.Sprintf("Send panic: %v", r)
 				m.sess.RestoreEnvOverlay(preOverlay)
+				// Route the panic through the normal delivery path (#110) so the
+				// originating tab's stale cached response is replaced with the
+				// error and its in-flight state is cleared — not just a transient
+				// status string that leaves the prior response in place.
+				resp := panicResponse(r)
 				fyne.Do(func() {
 					m.resetSendButton()
-					m.Status.SetText(msg)
+					m.deliverResponse(initTab, resp)
 				})
 			}
 		}()

@@ -377,7 +377,10 @@ The Send button is the lifecycle marker AND the abort affordance:
   abort) calls `resetSendButton` to clear `m.sendCancel` and restore
   default appearance. `cancel()` is also `defer`-called inside the
   goroutine to release context resources regardless of the exit
-  path.
+  path. The recover handler additionally routes a synthetic
+  `panicResponse(r)` through `deliverResponse(initTab, …)` (#110), so a
+  recovered panic replaces the originating tab's stale cached response
+  with the error instead of leaving the prior one in place.
 
 The Enter shortcut and `URL.OnSubmitted` reach `m.send` directly
 (not `sendOrAbort`), but `send()` guards on `m.sendCancel != nil`
