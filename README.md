@@ -50,6 +50,17 @@ keep its [no-background-traffic guarantee](#privacy). Run `helena --version`
 to see your build. See [docs/PACKAGING.md](docs/PACKAGING.md) for the full
 distribution status.
 
+## Screenshots
+
+<!-- Images live in docs/media/ (see its README for the capture guide, #60).
+     Until they're captured these links show a broken-image icon. -->
+
+![Helena sending a request and showing the response](docs/media/hero.gif)
+
+| Request editor | Response | Environments |
+| --- | --- | --- |
+| ![Request editor](docs/media/request.png) | ![Response view](docs/media/response.png) | ![Environment manager](docs/media/environments.png) |
+
 ## Quickstart
 
 To get a feel for Helena without writing a request from scratch, open the
