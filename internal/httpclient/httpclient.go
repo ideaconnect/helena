@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -232,6 +233,37 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 	return req, body, nil
 }
 
+// sanitizeDoError redacts the resolved request URL embedded in a transport
+// error before it reaches the UI status line. Go's *url.Error carries
+// req.URL.String() verbatim, which can include userinfo (user:pass@host) or a
+// {{token}}-interpolated query — credentials that must not leak into a
+// user-facing error. The host stays visible (the useful diagnostic); only the
+// secret-bearing parts are masked.
+func sanitizeDoError(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return &url.Error{Op: ue.Op, URL: redactURL(ue.URL), Err: ue.Err}
+	}
+	return err
+}
+
+// redactURL strips userinfo and the query string from a URL string, leaving
+// scheme://host/path so the failed target is still identifiable without
+// exposing embedded credentials. An unparseable input is fully redacted.
+func redactURL(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "[redacted url]"
+	}
+	if u.User != nil {
+		u.User = url.User("redacted")
+	}
+	if u.RawQuery != "" {
+		u.RawQuery = "redacted"
+	}
+	return u.String()
+}
+
 // Do builds and executes the request, fully reading the response body.
 func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*Response, error) {
 	req, body, err := Build(ctx, r, res, c.oauth2Resolver)
@@ -242,7 +274,7 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, sanitizeDoError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

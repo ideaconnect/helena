@@ -141,11 +141,12 @@ func TestFetchClientCredentialsTokenHappyPath(t *testing.T) {
 	}
 }
 
-// TestFetchClientCredentialsTokenSurfacesErrorBody verifies that the
-// token endpoint's error response body is included in the returned
-// error, so users see what the server complained about.
-func TestFetchClientCredentialsTokenSurfacesErrorBody(t *testing.T) {
-	srv, _ := newTokenServer(t, `{"error":"invalid_client","error_description":"bad secret"}`, http.StatusUnauthorized)
+// TestFetchClientCredentialsTokenWithholdsErrorBody verifies that the token
+// endpoint's error response body is NOT pasted into the returned error (it can
+// echo submitted credentials), while the HTTP status is still surfaced so the
+// failure is identifiable. See #112.
+func TestFetchClientCredentialsTokenWithholdsErrorBody(t *testing.T) {
+	srv, _ := newTokenServer(t, `{"error":"invalid_client","error_description":"secret-echo-xyz"}`, http.StatusUnauthorized)
 	defer srv.Close()
 
 	_, err := FetchClientCredentialsToken(context.Background(), srv.Client(),
@@ -153,8 +154,11 @@ func TestFetchClientCredentialsTokenSurfacesErrorBody(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error")
 	}
-	if !strings.Contains(err.Error(), "invalid_client") {
-		t.Errorf("error %q does not include server body", err)
+	if strings.Contains(err.Error(), "invalid_client") || strings.Contains(err.Error(), "secret-echo-xyz") {
+		t.Errorf("error %q leaks the IdP response body", err)
+	}
+	if !strings.Contains(err.Error(), "401") {
+		t.Errorf("error %q does not surface the HTTP status", err)
 	}
 }
 
@@ -457,7 +461,14 @@ func TestExchangeAuthorizationCodeNon2xxErrors(t *testing.T) {
 	r := &cachingResolver{httpClient: srv.Client()}
 	_, err := r.exchangeAuthorizationCode(context.Background(),
 		model.OAuth2Auth{TokenURL: srv.URL}, "c", "http://localhost/cb", "")
-	if err == nil || !strings.Contains(err.Error(), "invalid_grant") {
-		t.Errorf("err = %v, want invalid_grant in message", err)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	// The IdP body is withheld (#112); the status is surfaced instead.
+	if strings.Contains(err.Error(), "invalid_grant") {
+		t.Errorf("err = %v leaks the IdP response body", err)
+	}
+	if !strings.Contains(err.Error(), "400") {
+		t.Errorf("err = %v does not surface the HTTP status", err)
 	}
 }

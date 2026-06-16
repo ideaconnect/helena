@@ -260,7 +260,7 @@ func (r *cachingResolver) exchangeAuthorizationCode(ctx context.Context, a model
 		return TokenEntry{}, fmt.Errorf("oauth2 authorization_code: read token response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return TokenEntry{}, fmt.Errorf("oauth2 authorization_code: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return TokenEntry{}, tokenEndpointError("authorization_code", resp.Status)
 	}
 	return parseTokenResponse(body)
 }

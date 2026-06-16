@@ -269,7 +269,7 @@ func (r *cachingResolver) refreshToken(ctx context.Context, a model.OAuth2Auth, 
 		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: read response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return TokenEntry{}, tokenEndpointError("refresh_token", resp.Status)
 	}
 	return parseTokenResponse(body)
 }
@@ -312,9 +312,19 @@ func FetchClientCredentialsToken(ctx context.Context, client *http.Client, a mod
 		return TokenEntry{}, fmt.Errorf("oauth2 client_credentials: read response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return TokenEntry{}, fmt.Errorf("oauth2 client_credentials: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		return TokenEntry{}, tokenEndpointError("client_credentials", resp.Status)
 	}
 	return parseTokenResponse(body)
+}
+
+// tokenEndpointError builds the error for a non-2xx token-endpoint response.
+// It surfaces the HTTP status but never the raw IdP response body: that body
+// can echo submitted client credentials or other sensitive provider output,
+// and this error bubbles all the way to the UI status line. A detailed body
+// belongs behind the diagnostic-logging verbose flag (#49), not in a
+// user-facing string.
+func tokenEndpointError(grant, status string) error {
+	return fmt.Errorf("oauth2 %s: token endpoint returned %s (response body withheld)", grant, status)
 }
 
 // tokenResponse mirrors the RFC 6749 §5.1 successful response shape.

@@ -98,9 +98,14 @@ with the default `cachingResolver`:
      `grant_type=client_credentials` + `client_id`, optional
      `client_secret`, `scope`, `audience`.
    - POSTs to `a.TokenURL` via the supplied `*http.Client`.
-   - On non-2xx, returns an error including the response body so the
-     user sees what the token endpoint complained about
-     (`invalid_client: bad secret`).
+   - On non-2xx, returns a redacted error of the form
+     `oauth2 client_credentials: token endpoint returned <status>
+     (response body withheld)` via `tokenEndpointError`. The raw IdP
+     body is deliberately **not** surfaced — it can echo submitted
+     client credentials or other sensitive provider output, and this
+     error reaches the UI status line (#112). Detailed bodies belong
+     behind the diagnostic-logging verbose flag (#49). The same helper
+     guards the `refresh_token` and `authorization_code` exchanges.
    - On 2xx, decodes `tokenResponse` (tolerating `expires_in` as
      either number or stringified seconds via `json.Number`), defaults
      missing `expires_in` to 3600s, and returns a `TokenEntry`.
