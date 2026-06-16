@@ -1,0 +1,344 @@
+package ui
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"runtime/debug"
+	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/widget"
+
+	"github.com/idct/helena/internal/auth"
+	"github.com/idct/helena/internal/chain"
+	"github.com/idct/helena/internal/httpclient"
+	"github.com/idct/helena/internal/logging"
+	"github.com/idct/helena/internal/model"
+	"github.com/idct/helena/internal/responsefmt"
+	"github.com/idct/helena/internal/scripting"
+)
+
+// send executes the active edited request (or the bare method/URL if nothing is
+// selected) off the UI goroutine, resolving {{vars}} against the active env.
+// The pre-request script runs before httpclient builds the *http.Request so
+// the script can mutate URL / method / body / headers / params; the
+// post-response script runs once the response body is read so it can write
+// extracted values into the session env overlay.
+// sendOrAbort is the Send button's OnTapped handler. When a Send is in
+// flight (sendCancel != nil), it cancels the in-flight context — the
+// goroutine drains and the fyne.Do path resets the button via
+// resetSendButton. Otherwise it starts a fresh Send. Both branches run
+// on the UI thread; cancel() is idempotent so a double-tap is harmless.
+func (m *MainUI) sendOrAbort() {
+	if m.sendCancel != nil {
+		m.sendCancel()
+		return
+	}
+	m.send()
+}
+
+// resetSendButton restores the Send button to its default appearance
+// and clears the abort state. UI-thread only — every Send teardown
+// (success, error, panic, abort) routes through this helper inside a
+// fyne.Do block.
+func (m *MainUI) resetSendButton() {
+	m.sendCancel = nil
+	m.Send.SetIcon(themedIcon("location-arrow"))
+	m.Send.SetText("")
+	m.Send.Importance = widget.HighImportance
+	m.Send.Refresh()
+}
+
+// setAbortButton switches the Send button into its in-flight "abort" look: a
+// stop icon in warning importance. It stays icon-only (no "Abort" text) so the
+// button keeps the same size as the default Send state — otherwise the wider
+// text button reflows the address bar, which flickers when a quick Send toggles
+// the button on and straight back off.
+func (m *MainUI) setAbortButton() {
+	m.Send.SetIcon(themedIcon("circle-stop"))
+	m.Send.SetText("")
+	m.Send.Importance = widget.WarningImportance
+	m.Send.Refresh()
+}
+
+// snapshotRequest returns a copy of req with every slice-backed field detached
+// from the original's backing arrays, so the off-UI send/chain worker never
+// shares mutable state with the live m.currentRequest the user keeps editing.
+// (ChainStep / KeyValue are all-value structs, so a shallow element copy fully
+// detaches them.)
+func snapshotRequest(req model.Request) model.Request {
+	req.Params = append([]model.KeyValue(nil), req.Params...)
+	req.Headers = append([]model.KeyValue(nil), req.Headers...)
+	req.Body.Form = append([]model.KeyValue(nil), req.Body.Form...)
+	req.Chain = append([]model.ChainStep(nil), req.Chain...)
+	return req
+}
+
+// sessionTransport returns the cached per-session *http.Transport, whose
+// connection pool is reused across sends so repeated requests to one host skip
+// TCP+TLS re-handshakes (#52). It is rebuilt only when InsecureSkipVerify (the
+// one transport-affecting setting) changes; timeout/redirect policy live on the
+// throwaway per-send Client. UI-thread only.
+func (m *MainUI) sessionTransport() *http.Transport {
+	insecure := m.sess.Settings().InsecureSkipVerify
+	if m.httpTransport == nil || m.httpTransportInsecure != insecure {
+		m.httpTransport = httpclient.NewTransport(m.sess.Settings())
+		m.httpTransportInsecure = insecure
+	}
+	return m.httpTransport
+}
+
+// guard runs fn and turns a panic into a surfaced error + log entry instead of
+// a process exit. Fyne has no panic boundary around event handlers, so a panic
+// in a dialog/action callback (e.g. a malformed-input parse) would otherwise
+// hard-exit and lose unsaved work (#48). label identifies the action in the
+// log and the error message.
+func (m *MainUI) guard(label string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			logging.L().Error("recovered panic in UI callback", "where", label, "recovered", r, "stack", string(debug.Stack()))
+			err := fmt.Errorf("%s failed unexpectedly: %v", label, r)
+			if m.win != nil {
+				dialog.ShowError(err, m.win)
+			} else if m.Status != nil {
+				m.Status.SetText("Error: " + err.Error())
+			}
+		}
+	}()
+	fn()
+}
+
+// refreshEmptyState shows the first-run starter panel when no collection is
+// loaded and hides it once one exists (#58). Safe to call before the panel is
+// built (a no-op).
+func (m *MainUI) refreshEmptyState() {
+	if m.emptyState == nil {
+		return
+	}
+	if len(m.sess.Collections()) == 0 {
+		m.emptyState.Show()
+	} else {
+		m.emptyState.Hide()
+	}
+}
+
+// showErrorBanner surfaces a request failure in the persistent, dismissible
+// banner above the response tabs (#51). Unlike m.Status it does not auto-clear
+// on the next status update.
+func (m *MainUI) showErrorBanner(msg string) {
+	if m.errorBanner == nil {
+		return
+	}
+	m.errorBannerLabel.SetText(msg)
+	m.errorBanner.Show()
+	m.errorBanner.Refresh()
+}
+
+// hideErrorBanner clears the failure banner (on a successful response or an
+// explicit dismiss).
+func (m *MainUI) hideErrorBanner() {
+	if m.errorBanner != nil {
+		m.errorBanner.Hide()
+		m.errorBanner.Refresh()
+	}
+}
+
+// panicResponse builds the synthetic error response delivered when the Send
+// worker recovers from a panic, so the originating tab reflects the failure
+// instead of keeping its previous (now-stale) cached response (#110).
+func panicResponse(r any) *tabResponse {
+	msg := fmt.Sprintf("Send panic: %v", r)
+	return &tabResponse{isError: true, errText: msg, status: msg}
+}
+
+func (m *MainUI) send() {
+	if m.sendCancel != nil {
+		// A Send is already in flight — Enter / URL OnSubmitted reach
+		// this path directly (bypassing sendOrAbort), so guard here to
+		// avoid leaking the in-flight cancel func when the field gets
+		// overwritten. The button-tap dispatch goes through
+		// sendOrAbort and would Abort instead.
+		return
+	}
+	if strings.TrimSpace(m.URL.Text) == "" {
+		m.Status.SetText("Enter a URL first")
+		return
+	}
+	var req model.Request
+	if m.currentRequest != nil {
+		// The body editor's OnChanged is debounced; pull its live bytes now so a
+		// Send fired before the settle still carries the latest body.
+		m.syncBodyFromEditor()
+		// Snapshot the live request on the UI goroutine, detaching its
+		// slice-backed fields (Params/Headers/Body.Form/Chain) from
+		// m.currentRequest's backing arrays — the user can keep editing those
+		// tabs while the send/chain runs for ~ScriptTimeout on the worker, and
+		// a shared backing array would be an unsynchronized read/write (race).
+		req = snapshotRequest(*m.currentRequest)
+		// Flatten any Inherit on the in-memory request copy via the session's
+		// ancestor walk so httpclient sees the concrete auth.
+		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
+	} else {
+		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
+	}
+	// Snapshot env vars + auth state on the UI goroutine so the worker
+	// goroutine can run for ~ScriptTimeout without racing against UI
+	// mutations of s.cols / s.activeCol / Environment.Variables. The leaf's
+	// slice fields are detached above; chain step targets come from the
+	// SnapshotChainFinder copy below, so nothing the worker touches is shared.
+	envSnap := m.sess.SnapshotActiveEnvVars()
+
+	client := httpclient.NewWithTransport(m.sess.Settings(), m.sessionTransport())
+	// If auth puts a key in a custom header, strip it on a host-changing
+	// redirect so the credential doesn't leak to the new host (Go already
+	// handles Authorization/Cookie).
+	if k := req.Auth.APIKey; req.Auth.Type == model.AuthAPIKey && k != nil && k.Name != "" &&
+		(k.Placement == model.APIKeyHeader || k.Placement == "") {
+		client.SetCrossHostStripHeaders([]string{k.Name})
+	}
+	client.SetOAuth2Resolver(auth.NewOAuth2Resolver(
+		m.sess.TokenCache(),
+		nil, // default http.Client; settings-derived TLS/timeout intentionally not applied to the token endpoint
+		m.sess.ActiveCollectionDir(),
+		newAuthCodeStarter(),
+	))
+	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
+	exec := chainExecutor{rt: rt, client: client, envSnap: envSnap, sess: m.sess}
+	// Snapshot the active collection on the UI goroutine so the
+	// chain runner reads from a frozen-at-Send-entry copy with
+	// pre-flattened Auth — never races against UI-thread tree edits
+	// and never sends a chain step with AuthInherit.
+	var finder chain.RequestFinder = nilFinder{}
+	if snap := m.sess.SnapshotChainFinder(); snap != nil {
+		finder = snap
+	}
+
+	m.Status.SetText("Sending…")
+	m.corsBanner.Hide()
+	m.hideErrorBanner() // clear a prior failure when a new send starts
+	// Diagnostic log with the URL redacted — never the resolved, secret-bearing
+	// form (#49).
+	logging.L().Info("send", "method", string(req.Method), "url", logging.RedactURL(req.URL), "name", req.Name)
+
+	// Build the cancellable context on the UI thread so the click
+	// handler (sendOrAbort) can call cancel() to abort an in-flight
+	// Send. The button text swap signals the toggled mode to the user.
+	ctx, cancel := context.WithCancel(context.Background())
+	m.sendCancel = cancel
+	// Abort mode: a warning-importance stop icon, icon-only so the button
+	// stays the same size as the default Send state (see setAbortButton).
+	m.setAbortButton()
+
+	// Capture the pre-script's view of method+URL so we can flag any
+	// mutation in the status line later.
+	originalMethod, originalURL := req.Method, req.URL
+
+	// Snapshot the overlay BEFORE the chain runs so we can roll back
+	// any helena.env.set writes the chain landed if it then errored.
+	// Failing chains shouldn't leak partial state into the next Send.
+	preOverlay := m.sess.SnapshotEnvOverlay()
+
+	// Capture the tab that initiated this Send so the async completion
+	// attaches the response to it and only repaints the shared panel if it is
+	// still active (the user may switch tabs mid-Send). nil when no tab is
+	// open (a bare-URL Send).
+	initTab := m.activeTab()
+
+	go func() {
+		defer cancel()
+		defer func() {
+			if r := recover(); r != nil {
+				m.sess.RestoreEnvOverlay(preOverlay)
+				// Route the panic through the normal delivery path (#110) so the
+				// originating tab's stale cached response is replaced with the
+				// error and its in-flight state is cleared — not just a transient
+				// status string that leaves the prior response in place.
+				resp := panicResponse(r)
+				fyne.Do(func() {
+					m.resetSendButton()
+					m.deliverResponse(initTab, resp)
+				})
+			}
+		}()
+
+		// Per-step progress feedback: chain.Resolve fires this once
+		// before each ExecuteOnce on the worker goroutine; fyne.Do
+		// marshals the status update to the UI thread.
+		progress := func(step, total int, _, name string) {
+			fyne.Do(func() {
+				m.Status.SetText(fmt.Sprintf("Chain step %d/%d: %s", step, total, name))
+			})
+		}
+		chainMap, chainConsole, chainErr := chain.Resolve(ctx, req, finder, exec, progress)
+		if chainErr != nil {
+			m.sess.RestoreEnvOverlay(preOverlay)
+			status := "Chain error: " + chainErr.Error()
+			if ctx.Err() == context.Canceled {
+				status = "Aborted"
+			}
+			resp := &tabResponse{isError: true, errText: chainErr.Error(), status: status, console: chainConsole}
+			fyne.Do(func() {
+				m.resetSendButton()
+				m.deliverResponse(initTab, resp)
+			})
+			return
+		}
+
+		// If the chain fired, swap the status back to a generic
+		// "Sending…" so the user knows the leaf is now in flight and
+		// not stuck on the last chain step.
+		if len(chainMap) > 0 {
+			fyne.Do(func() { m.Status.SetText("Sending: " + req.Name) })
+		}
+
+		view, leafConsole, leafErr := exec.ExecuteOnce(ctx, req, chainMap)
+		consoleLines := append(chainConsole, leafConsole...)
+
+		// Build the tab response off the UI goroutine (pure formatting, no
+		// widget access); the fyne.Do block only resets the button + delivers.
+		var resp *tabResponse
+		if view.Response.StatusCode == 0 {
+			// No HTTP completed → pre-script or HTTP failure.
+			errText := ""
+			if leafErr != nil {
+				errText = leafErr.Error()
+			}
+			status := "Error: " + errText
+			if ctx.Err() == context.Canceled {
+				status = "Aborted"
+			}
+			resp = &tabResponse{isError: true, errText: errText, status: status, console: consoleLines}
+		} else {
+			// HTTP completed → render response. leafErr (if any) is a
+			// post-script error; surfaced as a status-line suffix.
+			status := fmt.Sprintf("%s · %s · %s",
+				view.Response.Status,
+				responsefmt.HumanSize(view.Response.Size),
+				responsefmt.HumanDuration(view.Response.Duration))
+			if view.Request.Method != string(originalMethod) || view.Request.URL != originalURL {
+				status += fmt.Sprintf(" · sent %s %s", view.Request.Method, view.Request.URL)
+			}
+			if leafErr != nil {
+				status += " · " + leafErr.Error()
+			}
+			cors := ""
+			if view.Response.CORSWarning != "" {
+				cors = "⚠ CORS: " + view.Response.CORSWarning
+			}
+			resp = &tabResponse{
+				rawBody:     string(view.Response.Body),
+				headersText: responsefmt.FormatHeaders(view.Response.Headers),
+				status:      status,
+				cors:        cors,
+				console:     consoleLines,
+			}
+		}
+
+		fyne.Do(func() {
+			m.resetSendButton()
+			m.deliverResponse(initTab, resp)
+		})
+	}()
+}

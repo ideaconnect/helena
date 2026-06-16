@@ -262,7 +262,7 @@ that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
 
 ## Sending a request (UI → httpclient → fyne.Do)
 
-`send` lives at [shell.go:490](shell.go#L490). The Send button is bound
+`send` lives in [send.go](send.go). The Send button is bound
 to `m.sendOrAbort` (which dispatches between starting a new Send and
 cancelling an in-flight one); the URL entry's `OnSubmitted` and the
 Enter keyboard shortcut also route through `sendOrAbort` so they
@@ -486,8 +486,8 @@ User picks an environment in the toolbar Select:
 2. `updateURLPreview()` re-runs the resolver against the new env so the
    italic preview label reflects the change instantly.
 
-The Environments… button opens `editEnvironments` at
-[shell.go:580](shell.go#L580):
+The Environments… button opens `editEnvironments` in
+[envedit.go](envedit.go):
 
 1. Bails if no collection is open.
 2. If the active env name is empty, takes the first env or creates a
@@ -517,7 +517,7 @@ is the multi-environment lifecycle surface.
 
 ## Changing theme
 
-The Settings… button opens `editSettings` ([shell.go](shell.go)). The Theme
+The Settings… button opens `editSettings` ([settings.go](settings.go)). The Theme
 row is a Select pre-populated via `themeName(s.Theme)`. On Save:
 
 1. `themeFromName(themeSelect.Selected)` maps the label back to a
