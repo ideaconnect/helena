@@ -8,9 +8,12 @@ non-empty `PreRequest` or `PostResponse`. See
 plumbing.
 
 1. `MainUI.send` constructs a `scripting.Runtime` via
-   `scripting.New(sessionEnvBridge{s: m.sess})`. The bridge is a thin
-   adapter: `Get` reads through `Session.Resolver().Lookup` so scripts
-   see overlay-over-env values; `Set` calls `Session.SetEnvOverlay`.
+   `scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})`, where `envSnap`
+   is a snapshot of the active environment's variables taken on the UI thread
+   at send entry. The bridge is a thin adapter: `Get` returns a script-set
+   overlay value (`Session.EnvOverlay`) if present, else the frozen `base`
+   snapshot — so the worker goroutine never races UI-thread env edits; `Set`
+   calls `Session.SetEnvOverlay`.
 2. `send` spawns the off-UI goroutine. Inside:
    - If `req.Scripts.IsEmpty()` is false and `PreRequest` is non-empty,
      it calls `rt.RunPreRequest(ctx, req.Scripts.PreRequest, &req)`.
