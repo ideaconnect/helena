@@ -1521,6 +1521,12 @@ func (m *MainUI) editSettings() {
 
 	insecure := widget.NewCheck("Allow invalid / self-signed TLS certificates", nil)
 	insecure.SetChecked(s.InsecureSkipVerify)
+	// Spell out the blast radius: the toggle disables cert validation for every
+	// request AND the spec importer, not just one dev endpoint (#45).
+	insecureCaption := widget.NewLabel("Disables certificate validation for ALL requests and spec imports — use only for trusted dev endpoints.")
+	insecureCaption.Wrapping = fyne.TextWrapWord
+	insecureCaption.Importance = widget.WarningImportance
+	insecureBox := container.NewVBox(insecure, insecureCaption)
 	corsWarn := widget.NewCheck("Warn when a browser would block the response (CORS)", nil)
 	corsWarn.SetChecked(s.CORSWarning)
 	follow := widget.NewCheck("Follow redirects automatically", nil)
@@ -1542,7 +1548,7 @@ func (m *MainUI) editSettings() {
 
 	form := widget.NewForm(
 		widget.NewFormItem("Theme", themeSelect),
-		widget.NewFormItem("TLS", insecure),
+		widget.NewFormItem("TLS", insecureBox),
 		widget.NewFormItem("CORS", corsWarn),
 		widget.NewFormItem("Redirects", follow),
 		widget.NewFormItem("Timeout (s)", timeoutEntry),
@@ -1582,7 +1588,7 @@ func (m *MainUI) editSettings() {
 			m.Status.SetText(fmt.Sprintf("Settings saved (invalid max response ignored, kept %d MiB)", maxResp>>20))
 		}
 	}, m.win)
-	dlg.Resize(fyne.NewSize(520, 360))
+	dlg.Resize(fyne.NewSize(520, 420))
 	dlg.Show()
 }
 
