@@ -25,6 +25,11 @@ var (
 	date    = ""
 )
 
+// appID is the Fyne application ID. It MUST match the `ID` in FyneApp.toml so
+// the native `fyne package` tooling and the running app agree on identity; a
+// test guards against drift.
+const appID = "tech.idct.helena"
+
 // versionString renders the build metadata for `helena --version`. The commit
 // is trimmed to a short hash for readability; empty fields are omitted.
 func versionString(version, commit, date string) string {
@@ -67,7 +72,7 @@ func main() {
 		}
 	}()
 
-	a := app.NewWithID("tech.idct.helena")
+	a := app.NewWithID(appID)
 	icon := fyne.NewStaticResource("app_icon.png", assets.AppIcon)
 	a.SetIcon(icon)
 

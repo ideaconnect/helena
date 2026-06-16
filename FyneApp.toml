@@ -1,0 +1,9 @@
+# App metadata consumed by Fyne's native packaging tools (`fyne package` /
+# `fyne release`) so bundles carry a consistent identity/version without
+# hand-fed flags. ID MUST match cmd/helena's appID constant (a test guards it).
+[Details]
+  Name = "Helena"
+  ID = "tech.idct.helena"
+  Version = "0.1.0"
+  Build = 1
+  Icon = "assets/app_icon.png"

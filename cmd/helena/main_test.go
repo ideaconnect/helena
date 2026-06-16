@@ -1,9 +1,26 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+// TestFyneAppTOMLIDMatchesConst guards against drift between the app ID baked
+// into the binary (appID) and the ID in FyneApp.toml that the packaging tools
+// read — a mismatch would ship bundles whose identity differs from the running
+// app (#34).
+func TestFyneAppTOMLIDMatchesConst(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("..", "..", "FyneApp.toml"))
+	if err != nil {
+		t.Fatalf("read FyneApp.toml: %v", err)
+	}
+	want := `ID = "` + appID + `"`
+	if !strings.Contains(string(data), want) {
+		t.Errorf("FyneApp.toml does not contain %q; ID drifted from the appID const", want)
+	}
+}
 
 // TestVersionString covers the --version output formatting (#26): the default
 // dev build, a tagged release with a long commit (trimmed), and a full build

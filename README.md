@@ -152,6 +152,11 @@ Run `helena --version` to print the build metadata. Released binaries report
 their tag and commit (injected at build time); a local `go build` reports
 `dev`.
 
+App identity/version for packaging lives in [`FyneApp.toml`](FyneApp.toml) at
+the repo root, consumed by Fyne's native tooling (`go run fyne.io/tools/cmd/fyne
+package`) so bundles carry a consistent ID/icon/version without manual flags.
+Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
+
 `Makefile` and `make.bat` expose the same targets with the same defaults.
 
 ## Layout

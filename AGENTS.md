@@ -41,6 +41,7 @@ Top-level orientation:
 | [internal/ui/](internal/ui/) | Fyne views and actions. |
 | [examples/](examples/) | Bundled sample collection + smoke test. |
 | [assets/](assets/) | `go:embed`-ed app icon. |
+| [FyneApp.toml](FyneApp.toml) | App metadata (Name/ID/Version/Icon) for Fyne's native packaging tools. `ID` must match `cmd/helena`'s `appID` (test-guarded). |
 | [.github/workflows/](.github/workflows/) | Native Linux + Windows CI. |
 
 The plan of record is in

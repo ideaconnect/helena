@@ -4,8 +4,8 @@
 
 | File | Purpose |
 | ---- | ------- |
-| [main.go](main.go) | Declares `package main`, the build-metadata vars (`version`/`commit`/`date`, injected via `-ldflags -X`), `versionString`/`windowTitle` helpers, and `func main()`. |
-| [main_test.go](main_test.go) | Tests for `versionString` (formatting, commit-trim) and `windowTitle`. |
+| [main.go](main.go) | Declares `package main`, the `appID` constant (matched against `FyneApp.toml`), the build-metadata vars (`version`/`commit`/`date`, injected via `-ldflags -X`), `versionString`/`windowTitle` helpers, and `func main()`. |
+| [main_test.go](main_test.go) | Tests for `versionString` (formatting, commit-trim), `windowTitle`, and the `FyneApp.toml` ID drift guard. |
 
 ## Version / build metadata
 
