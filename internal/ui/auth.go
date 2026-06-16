@@ -76,6 +76,8 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 	m.authBearerToken = m.newAuthEntry("token (e.g. {{TOKEN}})", func(s string) {
 		m.ensureBearer().Token = s
 	})
+	// A bearer token is as sensitive as a Basic password — mask it (#44).
+	m.authBearerToken.Password = true
 
 	m.authAPIKeyName = m.newAuthEntry("key name (e.g. X-API-Key)", func(s string) {
 		m.ensureAPIKey().Name = s
@@ -83,6 +85,9 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 	m.authAPIKeyValue = m.newAuthEntry("key value", func(s string) {
 		m.ensureAPIKey().Value = s
 	})
+	// The key name is a header/query name (not secret); the value is the
+	// credential, so mask it like the other secret fields (#44).
+	m.authAPIKeyValue.Password = true
 	m.authAPIKeyPlacement = widget.NewSelect(apiKeyPlacementLabels, func(label string) {
 		if m.loading || m.currentRequest == nil {
 			return

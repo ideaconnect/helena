@@ -22,6 +22,27 @@ func newAuthUI(t *testing.T) *MainUI {
 	return m
 }
 
+// TestAuthSecretFieldsMasked verifies the credential entries that previously
+// rendered in cleartext are masked like the Basic password field (#44): the
+// Bearer token and the API-key value. The API-key Name stays visible (it's a
+// header name, not a secret).
+func TestAuthSecretFieldsMasked(t *testing.T) {
+	m := newAuthUI(t)
+	if !m.authBearerToken.Password {
+		t.Error("Bearer token field is not masked")
+	}
+	if !m.authAPIKeyValue.Password {
+		t.Error("API-key value field is not masked")
+	}
+	if m.authAPIKeyName.Password {
+		t.Error("API-key name field should not be masked (it is a header/query name)")
+	}
+	// Sanity: the pre-existing masked fields stayed masked.
+	if !m.authBasicPassword.Password || !m.authOAuth2ClientSecret.Password {
+		t.Error("a previously-masked credential field is no longer masked")
+	}
+}
+
 // TestAuthTabLoadsBearer verifies that loading a request with Bearer auth
 // switches the Type dropdown to "Bearer Token" and populates the token
 // entry.
