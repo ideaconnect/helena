@@ -539,6 +539,34 @@ func (m *MainUI) SetWindow(w fyne.Window) {
 	m.registerShortcuts()
 }
 
+// loadErrorReport formats the active workspace's collection load failures into
+// a user-facing diagnostic, or "" when every collection loaded. A failed
+// collection is dropped from the sidebar; this is how the user learns why
+// rather than seeing it silently disappear (#108).
+func (m *MainUI) loadErrorReport() string {
+	errs := m.sess.LoadErrors()
+	if len(errs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("These collections could not be loaded and were left out of the sidebar:\n")
+	for _, e := range errs {
+		fmt.Fprintf(&b, "\n• %s\n    %v", e.Dir, e.Err)
+	}
+	return b.String()
+}
+
+// SurfaceLoadErrors shows a non-transient dialog when one or more collections
+// failed to load on the last reload. Safe to call with no window or no errors
+// (a no-op in both cases).
+func (m *MainUI) SurfaceLoadErrors() {
+	report := m.loadErrorReport()
+	if report == "" || m.win == nil {
+		return
+	}
+	dialog.ShowInformation("Some collections could not be loaded", report, m.win)
+}
+
 func (m *MainUI) buildTree() *widget.Tree {
 	t := widget.NewTree(
 		func(id widget.TreeNodeID) []widget.TreeNodeID { return m.sess.Tree().ChildIDs(id) },

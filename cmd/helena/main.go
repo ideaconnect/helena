@@ -47,6 +47,11 @@ func main() {
 	// show hover tooltips — Fyne core has no tooltip support.
 	w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))
 
+	// Surface any collections that failed to load so they don't silently
+	// vanish from the sidebar (#108). Deferred to OnStarted so the dialog
+	// renders against an already-shown window.
+	a.Lifecycle().SetOnStarted(mainUI.SurfaceLoadErrors)
+
 	a.Lifecycle().SetOnStopped(func() {
 		size := w.Canvas().Size()
 		sess.SetWindowSize(int(size.Width), int(size.Height))

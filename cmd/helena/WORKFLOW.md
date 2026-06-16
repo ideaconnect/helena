@@ -19,6 +19,7 @@ main()
   -> mainUI := ui.NewMainUI(sess)             (builds widgets, m.win is nil)
   -> mainUI.SetWindow(w)                      (records m.win, installs shortcuts)
   -> w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))  (tooltip layer for icon-only buttons)
+  -> a.Lifecycle().SetOnStarted(mainUI.SurfaceLoadErrors)  (diagnostic dialog for collections that failed to load, #108)
   -> a.Lifecycle().SetOnStopped(...)          (persist window size on quit)
   -> w.ShowAndRun()                           (blocks until quit)
 ```
@@ -35,6 +36,10 @@ Key invariants:
 - **Fail-soft persistence.** Config-path resolution and session load both
   fall back to in-memory (`""`) rather than aborting the launch. Helena
   always brings up a usable window.
+- **Load-error surfacing happens on app start**, via
+  `a.Lifecycle().SetOnStarted(mainUI.SurfaceLoadErrors)`, so the diagnostic
+  dialog renders against an already-shown window rather than during
+  construction. It is a no-op when every collection loaded (#108).
 - **Window size persistence happens on app stop**, via
   `a.Lifecycle().SetOnStopped`, which fires before `ShowAndRun` returns.
 - **Blocking call.** `ShowAndRun` blocks; `main` returns only when the user

@@ -27,8 +27,18 @@ type Session struct {
 	activeCol int                // index into cols, or -1 when none
 	activeEnv map[int]string     // collection index -> active environment name
 	tokens    *auth.TokenCache   // OAuth2 access tokens cached for this session
+	loadErrs  []LoadError        // collections of the active workspace that failed to load
 	overlayMu sync.RWMutex
 	overlay   map[string]string // script-set env; in-memory only, never persisted
+}
+
+// LoadError records a collection directory in the active workspace that failed
+// to load during reload, together with the underlying error. The UI surfaces
+// these so a corrupt or moved collection does not silently disappear from the
+// sidebar with no explanation.
+type LoadError struct {
+	Dir string
+	Err error
 }
 
 // New loads the config at cfgPath (empty path = defaults, no persistence) and
@@ -71,16 +81,31 @@ func (s *Session) CollectionDir(i int) string {
 	return s.dirs[i]
 }
 
+// LoadErrors returns the collections of the active workspace that failed to
+// load on the most recent reload (empty when all loaded). The slice is a copy,
+// so callers may retain it across further reloads. The UI surfaces these as a
+// non-transient diagnostic so a failed collection is never silently dropped.
+func (s *Session) LoadErrors() []LoadError {
+	if len(s.loadErrs) == 0 {
+		return nil
+	}
+	return slices.Clone(s.loadErrs)
+}
+
 // reload re-reads the collections of the active workspace from disk and
-// rebuilds the per-collection active-environment map. Collections that fail to
-// load are skipped silently — the UI surfaces those failures elsewhere.
+// rebuilds the per-collection active-environment map. A collection that fails
+// to load is dropped from the in-memory set (so the misalignment-safe indexing
+// downstream can't mis-target it) but its error is captured in s.loadErrs so
+// the UI can surface a diagnostic rather than letting it silently disappear.
 func (s *Session) reload() {
 	s.cols = nil
 	s.dirs = nil
+	s.loadErrs = nil
 	for _, dir := range s.activeWorkspace().Collections {
 		c, err := storage.Load(dir)
 		if err != nil {
-			continue // skip collections that no longer load; surfaced in UI later
+			s.loadErrs = append(s.loadErrs, LoadError{Dir: dir, Err: err})
+			continue
 		}
 		s.cols = append(s.cols, c)
 		s.dirs = append(s.dirs, dir)

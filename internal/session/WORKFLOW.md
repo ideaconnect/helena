@@ -15,8 +15,10 @@ The user picks a directory from the file dialog. The UI calls
 5. Calls `persist()`, which writes the entire config back to `cfgPath`.
 
 On next launch, `New` will replay this through `reload`: every directory in
-the active workspace is loaded; failures are skipped silently (the UI will
-flag them separately).
+the active workspace is loaded; a failed load is dropped from `cols`/`dirs`
+but its `{Dir, Err}` is recorded in `loadErrs` and exposed via `LoadErrors()`,
+which the UI surfaces as a non-transient diagnostic (#108) instead of letting
+the collection silently disappear.
 
 ## Switching the active environment
 
@@ -71,9 +73,11 @@ runs under `go test -race`.
 (or `config.Default()` if the file is missing). `reload` then:
 
 1. Walks the active workspace's `Collections` and tries `storage.Load` on
-   each. Successful loads land in `cols` and `dirs`. Failures (renamed
-   directories, deleted folders, broken YAML) are skipped silently so the app
-   still starts.
+   each. Successful loads land in `cols` and `dirs`. A failure (renamed
+   directory, deleted folder, broken YAML) is dropped from `cols`/`dirs` so
+   the app still starts, but its `{Dir, Err}` is appended to `loadErrs`
+   (reset at the top of every `reload`) and exposed via `LoadErrors()` for the
+   UI to surface (#108).
 2. Picks `activeCol`: if `cfg.UI.ActiveCollection` matches a `dirs` entry,
    that becomes active; otherwise `0` if any collections loaded, `-1`
    otherwise.

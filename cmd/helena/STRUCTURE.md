@@ -44,10 +44,14 @@ step matters because some of them must happen before others can succeed.
    `w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))`
    ([main.go:48](main.go#L48)). The root is wrapped in fyne-tooltip's window
    layer so the icon-only toolbar/sidebar buttons can show hover tooltips.
-9. **Wire shutdown** —
-   `a.Lifecycle().SetOnStopped(...)` ([main.go:47-50](main.go#L47-L50))
-   records the final window size into the session so the next launch
-   restores it.
-10. **Run** —
-    `w.ShowAndRun()` ([main.go:52](main.go#L52)) shows the window and
-    blocks on the Fyne event loop until the app quits.
+9. **Wire startup diagnostic** —
+   `a.Lifecycle().SetOnStarted(mainUI.SurfaceLoadErrors)` shows a
+   non-transient dialog listing any collections that failed to load, deferred
+   to OnStarted so it renders against an already-shown window (#108). A no-op
+   when every collection loaded.
+10. **Wire shutdown** —
+   `a.Lifecycle().SetOnStopped(...)` records the final window size into the
+   session so the next launch restores it.
+11. **Run** —
+    `w.ShowAndRun()` shows the window and blocks on the Fyne event loop until
+    the app quits.

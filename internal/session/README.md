@@ -36,6 +36,9 @@ when displaying or sending requests.
 - `Session.ActiveCollection() int` / `Session.SetActiveCollection(i int)`
 - `Session.CollectionDir(i int) string` — on-disk directory of the loaded
   collection at index `i` (a stable key for open tabs across reordering).
+- `Session.LoadErrors() []LoadError` — collections of the active workspace that
+  failed to load on the most recent reload (a copy; `nil` when all loaded). The
+  UI surfaces these so a corrupt/moved collection is not silently dropped.
 - `Session.AddWorkspace(name string) error`
 - `Session.RenameWorkspace(i int, name string) error`
 - `Session.DeleteWorkspace(i int) error`
@@ -117,6 +120,8 @@ when displaying or sending requests.
   [STRUCTURE.md](STRUCTURE.md).
 - `ContainerRef` — a `{Label, NodeID}` destination container returned by
   `ContainerPaths` for the scratch-tab "Save As" picker.
+- `LoadError` — a `{Dir, Err}` record for a collection that failed to load
+  during reload, returned by `LoadErrors`.
 
 ## Dependencies
 
