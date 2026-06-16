@@ -18,10 +18,13 @@ import (
 	"github.com/idct/helena/internal/vars"
 )
 
-// MaxResponseBytes caps how much of a response body is buffered into memory, so
-// a huge or hostile response can't OOM the client (a desktop app, not a stream
+// MaxResponseBytes is the default cap on how much of a response body is
+// buffered into memory when Settings.MaxResponseBytes is unset, so a huge or
+// hostile response can't OOM the client (a desktop app, not a stream
 // processor). Bodies past the cap are truncated and Response.Truncated is set.
-const MaxResponseBytes = 100 << 20 // 100 MiB
+// The effective cap is per-Client and configurable via the setting; see
+// (*Client).maxResponseBytes.
+const MaxResponseBytes = model.DefaultMaxResponseBytes
 
 // readCapped reads up to max bytes from r, reporting whether the source had
 // more (in which case the returned data is exactly max bytes). Reading one byte
@@ -264,6 +267,17 @@ func redactURL(raw string) string {
 	return u.String()
 }
 
+// maxResponseBytes is the effective body cap for this client: the configured
+// Settings.MaxResponseBytes, or the built-in default when unset (<=0). Keeping
+// the fallback here means an old config (or a zero-valued Settings) still gets
+// a safe bound rather than an unbounded read.
+func (c *Client) maxResponseBytes() int64 {
+	if c.settings.MaxResponseBytes > 0 {
+		return c.settings.MaxResponseBytes
+	}
+	return MaxResponseBytes
+}
+
 // Do builds and executes the request, fully reading the response body.
 func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*Response, error) {
 	req, body, err := Build(ctx, r, res, c.oauth2Resolver)
@@ -279,7 +293,7 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	defer func() { _ = resp.Body.Close() }()
 
 	// Bound the read so an oversized/hostile body can't OOM the app.
-	data, truncated, err := readCapped(resp.Body, MaxResponseBytes)
+	data, truncated, err := readCapped(resp.Body, c.maxResponseBytes())
 	dur := time.Since(start)
 	if err != nil {
 		return nil, fmt.Errorf("reading response body: %w", err)

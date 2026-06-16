@@ -25,7 +25,7 @@ self-contained binary, no Electron.
 - **Import** OpenAPI 3, Swagger 2, or WSDL — from a local file or a URL.
 - **Export** to cURL or wget, with Copy-to-clipboard.
 - **Settings** — invalid-SSL toggle, CORS warning, follow-redirects, request
-  timeout, light/dark/system theme. Persisted in your OS's standard config
+  timeout, max response size (MiB), light/dark/system theme. Persisted in your OS's standard config
   dir (`AppData\Roaming` on Windows, `~/Library/Application Support` on
   macOS, `~/.config` on Linux).
 - **Keyboard shortcuts** (Mod = Ctrl on Linux/Windows, ⌘ on macOS):

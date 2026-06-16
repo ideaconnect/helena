@@ -9,7 +9,7 @@ Because Helena runs as a native app and not in a browser, the CORS preflight con
 ## Public API
 
 - `Client` — executes `model.Request` instances with behavior derived from settings.
-- `New(s model.Settings) *Client` — constructs a `Client` honoring insecure TLS, redirect policy and timeout.
+- `New(s model.Settings) *Client` — constructs a `Client` honoring insecure TLS, redirect policy, timeout, and the response-body cap (`Settings.MaxResponseBytes`, falling back to the 100 MiB default when unset).
 - `(*Client).SetOAuth2Resolver(r auth.OAuth2Resolver)` — install the resolver consulted when a request's resolved auth is OAuth2. Nil leaves OAuth2 surfacing as `ErrOAuth2NotImplemented`.
 - `(*Client).Do(ctx, r, res) (*Response, error)` — builds, sends, fully reads the response, optionally attaches a CORS advisory.
 - `Build(ctx, r, res, oauth2) (*http.Request, error)` — pure assembler: resolves variables, applies auth (including OAuth2 via the supplied resolver), and returns an `*http.Request`; errors name every unresolved `{{var}}`. Pass nil `oauth2` for callers like the exporter that don't want a live token fetch.

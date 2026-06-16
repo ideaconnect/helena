@@ -16,7 +16,7 @@ Wraps a configured `*http.Client` and the `model.Settings` it was built from. Th
 
 ### `Response` ([httpclient.go:19](httpclient.go#L19))
 
-Plain result struct returned by `Do`. The body is read into memory (no streaming) so callers can inspect it repeatedly, but bounded by `MaxResponseBytes` (100 MiB) via `readCapped`, so a huge/hostile response can't OOM the app; `Truncated` is set when the cap clipped the body. `Size` is the byte length of `Body`; `Duration` measures the wall-clock time of the `http.Do` call plus the body read. `CORSWarning` is `""` when no advisory applies — including when `Settings.CORSWarning` is disabled.
+Plain result struct returned by `Do`. The body is read into memory (no streaming) so callers can inspect it repeatedly, but bounded by the effective cap — `Settings.MaxResponseBytes`, or the `MaxResponseBytes` default (100 MiB) when unset (<=0) — via `(*Client).maxResponseBytes` + `readCapped`, so a huge/hostile response can't OOM the app; `Truncated` is set when the cap clipped the body. `Size` is the byte length of `Body`; `Duration` measures the wall-clock time of the `http.Do` call plus the body read. `CORSWarning` is `""` when no advisory applies — including when `Settings.CORSWarning` is disabled.
 
 ### `Settings` interactions
 

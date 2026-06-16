@@ -813,6 +813,20 @@ func sanitizeTimeoutSeconds(text string, fallback int) (seconds int, valid bool)
 	return model.DefaultSettings().TimeoutSeconds, false
 }
 
+// sanitizeMaxResponseMiB parses the response-body cap field (entered in MiB)
+// into bytes. A blank, non-numeric, or non-positive entry is rejected
+// (valid=false) and the supplied fallback (bytes) is returned, floored to the
+// built-in default so the result is always a safe positive bound.
+func sanitizeMaxResponseMiB(text string, fallback int64) (bytes int64, valid bool) {
+	if n, err := strconv.Atoi(strings.TrimSpace(text)); err == nil && n > 0 {
+		return int64(n) << 20, true
+	}
+	if fallback > 0 {
+		return fallback, false
+	}
+	return model.DefaultMaxResponseBytes, false
+}
+
 // formatForBodyType maps a request body type to the prettyview syntax format for
 // the editable body widget: JSON/XML get structured highlighting + Reformat;
 // everything else (text, form, multipart, none) renders as raw, uncoloured text.
@@ -1482,6 +1496,14 @@ func (m *MainUI) editSettings() {
 	timeoutEntry.SetText(strconv.Itoa(s.TimeoutSeconds))
 	timeoutEntry.SetPlaceHolder("0 = no timeout")
 
+	curMax := s.MaxResponseBytes
+	if curMax <= 0 {
+		curMax = model.DefaultMaxResponseBytes
+	}
+	maxRespEntry := widget.NewEntry()
+	maxRespEntry.SetText(strconv.FormatInt(curMax>>20, 10))
+	maxRespEntry.SetPlaceHolder("buffered response cap")
+
 	themeSelect := widget.NewSelect([]string{"System", "Light", "Dark"}, nil)
 	themeSelect.SetSelected(themeName(s.Theme))
 
@@ -1491,6 +1513,7 @@ func (m *MainUI) editSettings() {
 		widget.NewFormItem("CORS", corsWarn),
 		widget.NewFormItem("Redirects", follow),
 		widget.NewFormItem("Timeout (s)", timeoutEntry),
+		widget.NewFormItem("Max response (MiB)", maxRespEntry),
 	)
 
 	dlg := dialog.NewCustomConfirm("Settings", "Save", "Cancel", form, func(ok bool) {
@@ -1498,12 +1521,14 @@ func (m *MainUI) editSettings() {
 			return
 		}
 		t, validTimeout := sanitizeTimeoutSeconds(timeoutEntry.Text, m.sess.Settings().TimeoutSeconds)
+		maxResp, validMax := sanitizeMaxResponseMiB(maxRespEntry.Text, m.sess.Settings().MaxResponseBytes)
 		newTheme := themeFromName(themeSelect.Selected)
 		m.sess.SetSettings(model.Settings{
 			InsecureSkipVerify: insecure.Checked,
 			CORSWarning:        corsWarn.Checked,
 			FollowRedirects:    follow.Checked,
 			TimeoutSeconds:     t,
+			MaxResponseBytes:   maxResp,
 			Theme:              newTheme,
 		})
 		ApplyTheme(fyne.CurrentApp(), newTheme)
@@ -1513,13 +1538,18 @@ func (m *MainUI) editSettings() {
 		m.pv.SetTheme(variantFor(newTheme), prettyview.Theme{})
 		m.BodyContent.SetTheme(variantFor(newTheme), prettyview.Theme{})
 		m.refreshThemedCanvas()
-		if validTimeout {
+		switch {
+		case validTimeout && validMax:
 			m.Status.SetText("Settings saved")
-		} else {
+		case !validTimeout && !validMax:
+			m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout kept %ds, invalid max response kept %d MiB)", t, maxResp>>20))
+		case !validTimeout:
 			m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout ignored, kept %ds)", t))
+		default:
+			m.Status.SetText(fmt.Sprintf("Settings saved (invalid max response ignored, kept %d MiB)", maxResp>>20))
 		}
 	}, m.win)
-	dlg.Resize(fyne.NewSize(520, 320))
+	dlg.Resize(fyne.NewSize(520, 360))
 	dlg.Show()
 }
 

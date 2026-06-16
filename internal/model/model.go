@@ -200,12 +200,18 @@ const (
 	ThemeDark   Theme = "dark"
 )
 
+// DefaultMaxResponseBytes is the built-in response-body buffer cap (100 MiB),
+// used when Settings.MaxResponseBytes is unset (<=0). Helena is a desktop
+// client, not a stream processor, so an unbounded read could OOM the app.
+const DefaultMaxResponseBytes int64 = 100 << 20
+
 // Settings holds app-wide preferences.
 type Settings struct {
 	InsecureSkipVerify bool  `json:"insecureSkipVerify"` // allow invalid/self-signed TLS
 	CORSWarning        bool  `json:"corsWarning"`        // show CORS advisory on responses
 	FollowRedirects    bool  `json:"followRedirects"`
 	TimeoutSeconds     int   `json:"timeoutSeconds"`
+	MaxResponseBytes   int64 `json:"maxResponseBytes"` // buffered-body cap; <=0 uses DefaultMaxResponseBytes
 	Theme              Theme `json:"theme"`
 }
 
@@ -216,6 +222,7 @@ func DefaultSettings() Settings {
 		CORSWarning:        true,
 		FollowRedirects:    true,
 		TimeoutSeconds:     30,
+		MaxResponseBytes:   DefaultMaxResponseBytes,
 		Theme:              ThemeSystem,
 	}
 }

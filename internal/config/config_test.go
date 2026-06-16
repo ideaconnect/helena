@@ -58,6 +58,24 @@ func TestLoadPartialSettingsOverlaysDefaults(t *testing.T) {
 	}
 }
 
+// TestSettingsMaxResponseBytesRoundTrips verifies the configurable response
+// cap persists across Save/Load (#111).
+func TestSettingsMaxResponseBytesRoundTrips(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	c := Default()
+	c.Settings.MaxResponseBytes = 7 << 20
+	if err := Save(path, c); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if got.Settings.MaxResponseBytes != 7<<20 {
+		t.Errorf("MaxResponseBytes = %d, want %d", got.Settings.MaxResponseBytes, 7<<20)
+	}
+}
+
 // TestLoadEmptyPathReturnsDefault verifies that Load("") short-circuits to the default config.
 func TestLoadEmptyPathReturnsDefault(t *testing.T) {
 	got, err := Load("")

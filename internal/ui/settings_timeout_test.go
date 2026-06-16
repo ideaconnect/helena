@@ -1,6 +1,41 @@
 package ui
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/idct/helena/internal/model"
+)
+
+// TestSanitizeMaxResponseMiB verifies the response-cap field parses MiB into
+// bytes and rejects blank/non-numeric/non-positive entries to a safe positive
+// fallback (#111).
+func TestSanitizeMaxResponseMiB(t *testing.T) {
+	const def = model.DefaultMaxResponseBytes
+	cases := []struct {
+		text     string
+		fallback int64
+		want     int64
+		valid    bool
+	}{
+		{"100", def, 100 << 20, true}, // valid MiB -> bytes
+		{" 5 ", def, 5 << 20, true},   // trimmed
+		{"", def, def, false},         // blank -> fallback
+		{"abc", def, def, false},      // non-numeric -> fallback
+		{"0", def, def, false},        // zero rejected -> fallback
+		{"-3", def, def, false},       // negative rejected -> fallback
+		{"x", 0, def, false},          // bad fallback floored to default
+		{"x", -1, def, false},         // negative fallback floored to default
+	}
+	for _, c := range cases {
+		got, valid := sanitizeMaxResponseMiB(c.text, c.fallback)
+		if got != c.want || valid != c.valid {
+			t.Errorf("sanitizeMaxResponseMiB(%q,%d) = (%d,%v), want (%d,%v)", c.text, c.fallback, got, valid, c.want, c.valid)
+		}
+		if got <= 0 {
+			t.Errorf("sanitizeMaxResponseMiB(%q,%d) returned non-positive %d", c.text, c.fallback, got)
+		}
+	}
+}
 
 // TestSanitizeTimeoutSeconds verifies an invalid/blank/negative/zero timeout
 // never silently becomes 0 (== unlimited); it falls back to a positive value
