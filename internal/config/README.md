@@ -6,10 +6,20 @@ What lives here: the list of workspaces and which one is active, the user's `Set
 
 `Load` is forgiving: a missing file or an empty path yields `Default()` instead of an error, and an out-of-range `Active` index is clamped to 0. `Save` creates any missing parent directories.
 
+### Schema versioning
+
+`Config` carries a `Version int` (`version:` in YAML), written by `Save` and read by `Load`. The current schema is `CurrentSchemaVersion`. On load:
+
+- A file with **no `version:` key** is treated as version 0 (pre-versioning) and migrated forward.
+- A file at a **lower version** runs the ordered migration chain (`migrations[v]`, each a `func(*Config)`) up to the current version and is stamped to it. The v0→v1 step normalizes the legacy unsafe `TimeoutSeconds=0` to the default.
+- A file at a **higher (future) version** is loaded best-effort — known fields are preserved and the version is kept — and a warning is emitted (`warnf`) instead of silently downgrading it. Note that keys newer than the current schema are dropped by the struct unmarshal and would be lost if the app re-saves, which is why the warning surfaces rather than swallowing the mismatch.
+
+To evolve the schema: bump `CurrentSchemaVersion`, add a `migrations[N]` step that upgrades from `N-1`, and the rest is automatic. The same versioned-migration pattern can extend to the OpenCollection storage layer when its schema changes.
+
 ## Public API
 
 ### Types
-- `Config` — top-level persisted state (workspaces, active index, settings, UI state).
+- `Config` — top-level persisted state (schema `Version`, workspaces, active index, settings, UI state).
 - `Workspace` — a named workspace plus the directory paths of its referenced collections.
 - `UIState` — restorable UI state (active collection, active env per collection, open request, open tabs + active tab index, window size).
 - `UIOpenRequest` — pointer to the currently open request by collection path + in-collection node path.

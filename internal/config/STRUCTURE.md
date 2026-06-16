@@ -5,7 +5,8 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level godoc only. |
-| [config.go](config.go) | All persisted types (`Config`, `Workspace`, `UIState`, `UIOpenRequest`, `UIOpenTab`), defaults, path lookup, and `Load`/`Save`. |
+| [config.go](config.go) | All persisted types (`Config`, `Workspace`, `UIState`, `UIOpenRequest`, `UIOpenTab`), defaults, path lookup, `Load`/`Save`, and the schema-version machinery (`CurrentSchemaVersion`, `migrations`, `migrate`, `migrateTo1`). |
+| [migrate_test.go](migrate_test.go) | Schema-migration tests: legacy (unversioned) config migrates forward, future-version config warns without data loss, current-version no-op. |
 | [config_test.go](config_test.go) | Round-trip and edge-case tests: missing file, empty path, save/load fidelity, clamping of `Active`. |
 | [config_ui_test.go](config_ui_test.go) | Round-trip test for `UIState` (active collection, env map, open request pointer, open tabs + active index, window size) and the empty-tabs `omitempty` check. |
 

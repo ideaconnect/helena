@@ -14,6 +14,7 @@ import (
 // request, open tabs + active tab, window size) survives Save/Load.
 func TestUIStateRoundTrip(t *testing.T) {
 	want := Config{
+		Version:    CurrentSchemaVersion,
 		Workspaces: []Workspace{{Name: "Default", Collections: []string{"/c/a", "/c/b"}}},
 		Active:     0,
 		Settings:   model.DefaultSettings(),

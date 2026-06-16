@@ -87,6 +87,7 @@ func TestLoadEmptyPathReturnsDefault(t *testing.T) {
 // TestSaveLoadRoundTrip verifies that a Config persists and reloads identically through Save/Load, including nested directories.
 func TestSaveLoadRoundTrip(t *testing.T) {
 	want := Config{
+		Version: CurrentSchemaVersion,
 		Workspaces: []Workspace{
 			{Name: "Personal", Collections: []string{"/tmp/a", "/tmp/b"}},
 			{Name: "Work"},
