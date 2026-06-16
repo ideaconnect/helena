@@ -156,6 +156,59 @@ func TestSidebarAndToolbarThemes(t *testing.T) {
 	}
 }
 
+// TestSplitPaneRootThemeOverrides covers the override values of the remaining
+// scoped sub-themes (splitTheme/paneTheme/rootTheme) and that they delegate
+// everything else to the app theme via the embedded delegatingTheme (#56).
+func TestSplitPaneRootThemeOverrides(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
+	ApplyTheme(a, model.ThemeDark)
+
+	// splitTheme: thin divider padding, separator-coloured fill, transparent handle.
+	if got := (splitTheme{}).Size(theme.SizeNamePadding); got != 1.5 {
+		t.Errorf("split padding = %v; want 1.5", got)
+	}
+	sep := appTheme().Color(theme.ColorNameSeparator, theme.VariantDark)
+	if got := (splitTheme{}).Color(theme.ColorNameShadow, theme.VariantDark); got != sep {
+		t.Errorf("split shadow colour = %v; want separator %v", got, sep)
+	}
+	if got := (splitTheme{}).Color(theme.ColorNameForeground, theme.VariantDark); got != color.Transparent {
+		t.Errorf("split foreground (grab handle) = %v; want transparent", got)
+	}
+	// A non-overridden size/colour delegates.
+	if got := (splitTheme{}).Size(theme.SizeNameText); got != appTheme().Size(theme.SizeNameText) {
+		t.Error("split theme should delegate non-padding sizes")
+	}
+
+	// rootTheme: zero padding, everything else delegated.
+	if got := (rootTheme{}).Size(theme.SizeNamePadding); got != 0 {
+		t.Errorf("root padding = %v; want 0", got)
+	}
+	if got := (rootTheme{}).Size(theme.SizeNameText); got != appTheme().Size(theme.SizeNameText) {
+		t.Error("root theme should delegate non-padding sizes")
+	}
+
+	// paneTheme: pure delegation (the embedded base is the whole implementation).
+	if got := (paneTheme{}).Size(theme.SizeNamePadding); got != appTheme().Size(theme.SizeNamePadding) {
+		t.Error("pane theme should fully delegate padding")
+	}
+	if got := (paneTheme{}).Color(theme.ColorNamePrimary, theme.VariantDark); got != appTheme().Color(theme.ColorNamePrimary, theme.VariantDark) {
+		t.Error("pane theme should delegate colour")
+	}
+	if (paneTheme{}).Font(fyne.TextStyle{}) != appTheme().Font(fyne.TextStyle{}) {
+		t.Error("pane theme should delegate font")
+	}
+}
+
+// TestThemedIconReturnsThemedResource verifies themedIcon wraps an embedded SVG
+// into a non-nil, named resource (so toolbar icons recolour to the foreground).
+func TestThemedIconReturnsThemedResource(t *testing.T) {
+	r := themedIcon("circle-xmark")
+	if r == nil || r.Name() == "" || len(r.Content()) == 0 {
+		t.Errorf("themedIcon returned an empty resource: %+v", r)
+	}
+}
+
 // TestApplyThemeInstallsHelena verifies ApplyTheme actually installs the custom
 // theme (not a stock one) for every setting.
 func TestApplyThemeInstallsHelena(t *testing.T) {

@@ -110,18 +110,9 @@ func (h helenaTheme) Icon(name fyne.ThemeIconName) fyne.Resource {
 	return h.base.Icon(name)
 }
 
-// sidebarTheme tightens the collections tree. widget.Tree multiplies
-// SizeNameInlineIcon + SizeNamePadding into its per-level indentation (see
-// treeNode.Indent), so shrinking those two sizes makes nesting noticeably
-// shallower and the disclosure/action icons denser. It is applied only to the
-// tree subtree via container.NewThemeOverride, so the rest of the app keeps
-// full-size icons. Colour/font/icon delegate to the live app theme so the
-// sidebar still tracks Light/Dark switches with no rebuild; only Size differs,
-// and Size has no variant to keep in sync.
-type sidebarTheme struct{}
-
 // appTheme returns the currently installed app theme, or the stock theme if no
-// app is running (defensive — sidebarTheme delegates everything but Size here).
+// app is running (defensive — the sub-themes below delegate everything but a
+// few Size/Color overrides to it).
 func appTheme() fyne.Theme {
 	if a := fyne.CurrentApp(); a != nil {
 		if th := a.Settings().Theme(); th != nil {
@@ -131,13 +122,30 @@ func appTheme() fyne.Theme {
 	return theme.DefaultTheme()
 }
 
-func (sidebarTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+// delegatingTheme implements fyne.Theme by passing every method through to the
+// live app theme (appTheme). The scoped sub-themes below embed it and override
+// only the Color/Size cases they actually change, so the pass-through
+// boilerplate lives in exactly one place. It is stateless (appTheme reads the
+// global), so embedding it by value is fine; its methods call appTheme directly
+// rather than each other, so a sub-theme's Size override is never bypassed.
+type delegatingTheme struct{}
+
+func (delegatingTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
 	return appTheme().Color(n, v)
 }
-func (sidebarTheme) Font(s fyne.TextStyle) fyne.Resource { return appTheme().Font(s) }
-func (sidebarTheme) Icon(n fyne.ThemeIconName) fyne.Resource {
-	return appTheme().Icon(n)
-}
+func (delegatingTheme) Font(s fyne.TextStyle) fyne.Resource     { return appTheme().Font(s) }
+func (delegatingTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return appTheme().Icon(n) }
+func (delegatingTheme) Size(n fyne.ThemeSizeName) float32       { return appTheme().Size(n) }
+
+// sidebarTheme tightens the collections tree. widget.Tree multiplies
+// SizeNameInlineIcon + SizeNamePadding into its per-level indentation (see
+// treeNode.Indent), so shrinking those two sizes makes nesting noticeably
+// shallower and the disclosure/action icons denser. It is applied only to the
+// tree subtree via container.NewThemeOverride, so the rest of the app keeps
+// full-size icons. Only Size differs (no variant to keep in sync); colour/font/
+// icon delegate via the embedded base so the sidebar still tracks Light/Dark.
+type sidebarTheme struct{ delegatingTheme }
+
 func (sidebarTheme) Size(n fyne.ThemeSizeName) float32 {
 	switch n {
 	case theme.SizeNameInlineIcon:
@@ -149,17 +157,9 @@ func (sidebarTheme) Size(n fyne.ThemeSizeName) float32 {
 }
 
 // toolbarTheme enlarges the sidebar action toolbar's icons to 24px so the
-// buttons are chunky and easy to hit. Like sidebarTheme it only overrides sizes
-// and delegates colour/font/icon to the live app theme.
-type toolbarTheme struct{}
+// buttons are chunky and easy to hit. Like sidebarTheme it only overrides Size.
+type toolbarTheme struct{ delegatingTheme }
 
-func (toolbarTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
-	return appTheme().Color(n, v)
-}
-func (toolbarTheme) Font(s fyne.TextStyle) fyne.Resource { return appTheme().Font(s) }
-func (toolbarTheme) Icon(n fyne.ThemeIconName) fyne.Resource {
-	return appTheme().Icon(n)
-}
 func (toolbarTheme) Size(n fyne.ThemeSizeName) float32 {
 	if n == theme.SizeNameInlineIcon {
 		return 24
@@ -175,7 +175,7 @@ func (toolbarTheme) Size(n fyne.ThemeSizeName) float32 {
 // container.NewThemeOverride; each pane is re-wrapped in paneTheme so the shrunk
 // padding doesn't cascade into the pane contents. (dividerTheme uses the
 // divider's own Theme(), so the override does reach it.)
-type splitTheme struct{}
+type splitTheme struct{ delegatingTheme }
 
 func (splitTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
 	switch n {
@@ -186,8 +186,6 @@ func (splitTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color 
 	}
 	return appTheme().Color(n, v)
 }
-func (splitTheme) Font(s fyne.TextStyle) fyne.Resource     { return appTheme().Font(s) }
-func (splitTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return appTheme().Icon(n) }
 func (splitTheme) Size(n fyne.ThemeSizeName) float32 {
 	if n == theme.SizeNamePadding {
 		return 1.5 // divider thickness = padding*2 = 3px: a thin, still-grabbable line
@@ -195,17 +193,10 @@ func (splitTheme) Size(n fyne.ThemeSizeName) float32 {
 	return appTheme().Size(n)
 }
 
-// paneTheme delegates everything to the live app theme. It restores normal
-// sizing inside a splitTheme-wrapped split's panes (whose subtree would
-// otherwise inherit the split's shrunk padding).
-type paneTheme struct{}
-
-func (paneTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
-	return appTheme().Color(n, v)
-}
-func (paneTheme) Font(s fyne.TextStyle) fyne.Resource     { return appTheme().Font(s) }
-func (paneTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return appTheme().Icon(n) }
-func (paneTheme) Size(n fyne.ThemeSizeName) float32       { return appTheme().Size(n) }
+// paneTheme restores normal sizing inside a splitTheme-wrapped split's panes
+// (whose subtree would otherwise inherit the split's shrunk padding). It is
+// pure delegation — the embedded base is the whole implementation.
+type paneTheme struct{ delegatingTheme }
 
 // rootTheme zeroes SizeNamePadding so the root Border puts no gap between its
 // centre (the body / split) and the header/footer rows — the vertical split
@@ -214,13 +205,8 @@ func (paneTheme) Size(n fyne.ThemeSizeName) float32       { return appTheme().Si
 // padding.) Cascades to root-level children, which restore their own padding
 // via their own overrides (toolbar → toolbarTheme, split panes → paneTheme,
 // status → paneTheme).
-type rootTheme struct{}
+type rootTheme struct{ delegatingTheme }
 
-func (rootTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
-	return appTheme().Color(n, v)
-}
-func (rootTheme) Font(s fyne.TextStyle) fyne.Resource     { return appTheme().Font(s) }
-func (rootTheme) Icon(n fyne.ThemeIconName) fyne.Resource { return appTheme().Icon(n) }
 func (rootTheme) Size(n fyne.ThemeSizeName) float32 {
 	if n == theme.SizeNamePadding {
 		return 0
