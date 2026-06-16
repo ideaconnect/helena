@@ -7,6 +7,12 @@
 *.out
 coverage.html
 
+# Stray root build artifacts (binaries produced by `go build ./cmd/...` and
+# scratch mains) — never commit them (#41, #114).
+/helena
+/covergate
+/cmd_gojatest_main.go
+
 # OS / editor
 .DS_Store
 *.swp
