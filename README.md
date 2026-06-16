@@ -182,6 +182,24 @@ make.bat test
   `windows-latest` in a matrix so each binary is produced by its own OS's
   native cgo toolchain. No fyne-cross, no Docker. macOS deferred.
 
+## Privacy
+
+Helena makes **no background network requests** and ships **no telemetry,
+analytics, or crash reporting**. The only outbound traffic is what you
+explicitly trigger:
+
+- **sending a request** (to the host you typed),
+- **fetching an OAuth2 token** (from the token endpoint you configured),
+- **importing from a URL** (when you paste one into the importer).
+
+There are no other fixed-host calls anywhere in the codebase. Your
+collections, credentials, and settings stay on your local disk.
+
+## Security
+
+Found a vulnerability? Please report it privately — see
+[SECURITY.md](SECURITY.md). Do not open a public issue for security problems.
+
 ## License
 
 BSD 4-Clause — see [LICENSE](LICENSE).
