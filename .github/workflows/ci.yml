@@ -46,7 +46,7 @@ jobs:
             artifact: helena-darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-go@v5
         with:
@@ -148,7 +148,7 @@ jobs:
           - {pkg: ./internal/auth,       name: FuzzResolveValuesOAuth2}
           - {pkg: ./internal/auth,       name: FuzzResolveValuesAPIKey}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -166,7 +166,7 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -192,7 +192,7 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -215,7 +215,7 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
@@ -244,7 +244,7 @@ jobs:
       id-token: write     # OIDC for keyless provenance attestation
       attestations: write # record the build provenance attestation
     steps:
-      - uses: actions/checkout@v4 # source for the SBOM scan + nfpm config
+      - uses: actions/checkout@v6 # source for the SBOM scan + nfpm config
 
       - uses: actions/setup-go@v5 # to `go install nfpm`
         with:
