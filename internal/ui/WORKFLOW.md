@@ -472,10 +472,19 @@ The Environments… button opens `editEnvironments` at
 2. If the active env name is empty, takes the first env or creates a
    "Default" one.
 3. Shows a multi-line `key = value` entry pre-filled with
-   `session.FormatEnvVars(env.Variables)`.
-4. On Save: `session.ParseEnvVars` -> preserves the `Secret` flag for
-   pre-existing secret keys -> `SetActiveEnvironmentVariables` ->
-   `SaveActiveCollection` -> `refreshEnvironments` + `updateURLPreview`.
+   `maskedEnvText(env.Variables, false)` — each `Secret` variable's value is
+   replaced with `envSecretMask` so it is not shown in cleartext (#43). When
+   the env has any secret, a **Reveal secret values** checkbox re-renders the
+   entry with real values (toggling reloads from saved state).
+4. On Save: `session.ParseEnvVars` -> `restoreEnvSecrets` re-marks pre-existing
+   secret keys as `Secret` and, where the user left `envSecretMask` in place,
+   restores the stored value (so editing other lines never clobbers a hidden
+   secret; a changed value is taken as the new secret) -> `SetActiveEnvironmentVariables`
+   -> `SaveActiveCollection` -> `refreshEnvironments` + `updateURLPreview`.
+
+   Note on what `Secret` guarantees today: it controls **display masking in the
+   editor** and round-trips through storage; it is **not** encryption at rest —
+   values are still stored as plaintext YAML (tracked separately).
 
 The **Manage…** button opens `manageEnvironments` ([environments.go](environments.go)) —
 a list of the collection's environments with **+ New / Rename / Delete /
