@@ -29,11 +29,35 @@ A tagged `v*` push publishes a GitHub Release whose assets are (issues #27/#35):
 | `tech.idct.helena.metainfo.xml` | `/usr/share/metainfo/` | AppStream metadata for software centers / Flatpak (`appstreamcli validate` clean). |
 | `tech.idct.helena.png` | `/usr/share/icons/hicolor/<size>/apps/` (or `.../512x512/...`) | Application icon, named after the app ID. The source is 896×896; downscale into the hicolor sizes you ship, or install it under a single large size and let the icon theme scale it. |
 
-A packaged install (`.deb`/`.rpm`/Flatpak/AppImage) bundles all four plus the
-`helena` binary on `PATH`. These files are the gateway: every Linux packaging
-format embeds the same `.desktop` + icon + AppStream metainfo. (The packaging
-pipelines themselves — AppImage/Flatpak/.deb/.rpm and the Windows
-installer/winget/Scoop — are tracked separately as issues #37 and #38.)
+A packaged install bundles all four plus the `helena` binary on `PATH`. These
+files are the gateway: every Linux packaging format embeds the same `.desktop`
++ icon + AppStream metainfo.
+
+### Linux packages — `.deb` / `.rpm` (#37)
+
+[`packaging/nfpm.yaml`](../packaging/nfpm.yaml) drives [nfpm](https://nfpm.goreleaser.com)
+to build `.deb` and `.rpm` from the native Linux binary + the freedesktop
+assets. The release CI job runs it on a tag (`HELENA_VERSION=${tag#v} nfpm pkg
+--packager deb|rpm`) and uploads the packages alongside the archives. AppImage
+and Flatpak are the natural next formats (they consume the same `.desktop` +
+icon + metainfo); they're not yet wired into CI.
+
+### Windows — installer + winget / Scoop (#38)
+
+- [`packaging/windows/helena.iss`](../packaging/windows/helena.iss) — an Inno
+  Setup script; build on a Windows runner with `iscc /DAppVersion=… /DSourceExe=…`
+  to produce `helena-setup-<version>.exe`.
+- [`packaging/scoop/helena.json`](../packaging/scoop/helena.json) — a Scoop
+  manifest (with `autoupdate`) pointing at the release `.zip`; submit to a Scoop
+  bucket, or fill `version`/`hash` per release.
+- [`packaging/winget/IDCT.Helena.installer.yaml`](../packaging/winget/IDCT.Helena.installer.yaml)
+  — a winget installer-manifest template; fill version + URL + SHA-256 and submit
+  to `microsoft/winget-pkgs`.
+
+> These Windows configs are committed but not yet wired into CI (the installer
+> build + manifest submission are manual/per-release for now), and the whole
+> packaging path is first exercised on a real release tag — expect a round of
+> iteration there.
 
 ## macOS distribution — deferred (decided 2026-06-16)
 

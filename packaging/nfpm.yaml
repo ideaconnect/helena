@@ -1,0 +1,31 @@
+# nfpm config to build .deb and .rpm packages from the native Linux binary.
+# Usage (CI, on a tag):
+#   HELENA_VERSION=${TAG#v} nfpm pkg --config packaging/nfpm.yaml --packager deb --target dist/
+#   HELENA_VERSION=${TAG#v} nfpm pkg --config packaging/nfpm.yaml --packager rpm --target dist/
+# Expects the built binary at dist/helena-linux-amd64 and the freedesktop assets
+# under packaging/linux/ (see #36).
+name: helena
+arch: amd64
+platform: linux
+version: ${HELENA_VERSION}
+section: utils
+priority: optional
+maintainer: Bartosz Pachołek <bartosz+github@idct.tech>
+description: |
+  A free, open-source API client for testing and exploring HTTP APIs.
+  Collections, environments, request chaining, scripting, and
+  OpenAPI/Swagger/WSDL import — no cloud, no telemetry.
+vendor: IDCT
+homepage: https://github.com/ideaconnect/helena
+license: BSD-4-Clause
+contents:
+  - src: ./dist/helena-linux-amd64
+    dst: /usr/bin/helena
+    file_info:
+      mode: 0755
+  - src: ./packaging/linux/tech.idct.helena.desktop
+    dst: /usr/share/applications/tech.idct.helena.desktop
+  - src: ./packaging/linux/tech.idct.helena.metainfo.xml
+    dst: /usr/share/metainfo/tech.idct.helena.metainfo.xml
+  - src: ./packaging/linux/tech.idct.helena.png
+    dst: /usr/share/icons/hicolor/512x512/apps/tech.idct.helena.png

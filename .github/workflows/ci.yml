@@ -244,7 +244,12 @@ jobs:
       id-token: write     # OIDC for keyless provenance attestation
       attestations: write # record the build provenance attestation
     steps:
-      - uses: actions/checkout@v4 # source for the SBOM scan
+      - uses: actions/checkout@v4 # source for the SBOM scan + nfpm config
+
+      - uses: actions/setup-go@v5 # to `go install nfpm`
+        with:
+          go-version-file: go.mod
+          cache: true
 
       - uses: actions/download-artifact@v4
         with:
@@ -260,6 +265,17 @@ jobs:
           tar -C artifacts -czf dist/helena-linux-amd64.tar.gz helena-linux-amd64 LICENSE README.md
           tar -C artifacts -czf dist/helena-darwin-arm64.tar.gz helena-darwin-arm64 LICENSE README.md
           (cd artifacts && zip -q ../dist/helena-windows-amd64.zip helena-windows-amd64.exe LICENSE README.md)
+
+      # Linux .deb / .rpm from the native binary + the freedesktop assets (#37).
+      # nfpm packages the binary, .desktop, icon, and AppStream metainfo.
+      - name: Build .deb / .rpm (nfpm)
+        run: |
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
+          cp artifacts/helena-linux-amd64 dist/helena-linux-amd64
+          export HELENA_VERSION="${GITHUB_REF_NAME#v}"
+          nfpm pkg --config packaging/nfpm.yaml --packager deb --target dist/
+          nfpm pkg --config packaging/nfpm.yaml --packager rpm --target dist/
+          rm dist/helena-linux-amd64  # nfpm input only; not a release asset
 
       # Software bill of materials (SPDX) for the released module (#27).
       - name: Generate SBOM
@@ -280,7 +296,7 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: dist/helena-*.tar.gz dist/helena-*.zip
+          subject-path: dist/helena-*.tar.gz dist/helena-*.zip dist/helena*.deb dist/helena*.rpm
 
       - name: Create release
         uses: softprops/action-gh-release@v2

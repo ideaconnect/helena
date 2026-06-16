@@ -1,0 +1,24 @@
+{
+  "version": "0.0.0",
+  "description": "A free, open-source API client for testing and exploring HTTP APIs.",
+  "homepage": "https://github.com/ideaconnect/helena",
+  "license": "BSD-4-Clause",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/ideaconnect/helena/releases/download/v0.0.0/helena-windows-amd64.zip",
+      "hash": "REPLACE_WITH_SHA256",
+      "bin": "helena-windows-amd64.exe"
+    }
+  },
+  "checkver": "github",
+  "autoupdate": {
+    "architecture": {
+      "64bit": {
+        "url": "https://github.com/ideaconnect/helena/releases/download/v$version/helena-windows-amd64.zip"
+      }
+    },
+    "hash": {
+      "url": "https://github.com/ideaconnect/helena/releases/download/v$version/SHA256SUMS"
+    }
+  }
+}

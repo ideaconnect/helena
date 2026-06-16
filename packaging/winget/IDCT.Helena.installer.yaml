@@ -1,0 +1,13 @@
+# winget installer manifest TEMPLATE for the Inno Setup installer.
+# Per release, fill PackageVersion + InstallerUrl + InstallerSha256, then submit
+# this (with the matching version + locale manifests) to microsoft/winget-pkgs.
+# See https://learn.microsoft.com/windows/package-manager/package/manifest
+PackageIdentifier: IDCT.Helena
+PackageVersion: 0.0.0
+InstallerType: inno
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/ideaconnect/helena/releases/download/v0.0.0/helena-setup-0.0.0.exe
+    InstallerSha256: REPLACE_WITH_SHA256
+ManifestType: installer
+ManifestVersion: 1.6.0
