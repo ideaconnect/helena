@@ -41,8 +41,20 @@ of the keys Helena knows).
 
 ## Saving a collection (preserving Extra)
 
-`Save(c model.Collection, dir string)` is **atomic at the tree level** (#109).
-It never writes into `dir` directly; instead it:
+`Save(c model.Collection, dir string)` is **atomic at the tree level** (#109)
+and **externalizes secrets** (#42). Before staging, `splitSecrets` produces a
+sanitized deep copy of `c` with every secret field blanked (Basic password,
+Bearer token, API-key value, OAuth2 client secret, Secret env-var values),
+collecting the real values into a map keyed positionally
+(`col/auth/bearer.token`, `f0/r1/auth/oauth2.clientSecret`, `e0/v1`, …).
+`writeSecrets` persists that map to a per-collection file under the OS config
+dir (`$HELENA_SECRETS_DIR` overrides; `secretsDirOverride` in tests), named by a
+hash of the absolute collection dir — outside any repo, so it can never be
+git-committed. The sanitized copy (no cleartext secrets) is what gets staged.
+The secret store is written **first**, and the live in-memory model keeps its
+real values, so a later save failure loses no credential.
+
+The staging itself never writes into `dir` directly; instead it:
 
 1. Seeds a sibling staging dir `<dir>.helena-save` with a copy of the current
    on-disk tree (`copyTree`) — so the per-file Extra round-trip below can still
@@ -109,6 +121,11 @@ not carry Extra; it only matters again on Save):
      with `fileToRequest`.
    - Sort folders and requests by their `info.seq` so on-disk order is
      preserved.
+4. `applySecrets(&c, readSecrets(dir))` merges the externalized secrets (#42)
+   back into the blanked fields, keyed positionally to match `splitSecrets`.
+   Only **empty** fields are filled, so a pre-#42 collection that still carries
+   a cleartext secret in its YAML loads unchanged and migrates to the store on
+   its next save.
 
 ## Sweeping orphaned files on save
 

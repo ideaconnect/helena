@@ -5,6 +5,20 @@ domain types in [internal/model](../model/) — which carry the auth
 configuration — and [internal/httpclient](../httpclient/), which executes
 the request.
 
+## Credential storage (git-safety)
+
+The auth credential fields — Basic `password`, Bearer `token`, API-key `value`,
+and OAuth2 `clientSecret` — are **not written into the git-tracked collection
+YAML**. On save, [internal/storage](../storage/) externalizes them to a
+per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR`), outside
+any repository, and blanks the fields in the collection file (#42); they are
+merged back on load. So you can version-control a collection directory without
+committing cleartext credentials. A collection authored before this (or
+hand-edited) that still carries a cleartext value loads unchanged and migrates
+to the store on its next save. Note: the store itself is plaintext on local
+disk today — at-rest *encryption* (OS keychain) is a planned follow-up; treat
+the config dir like any local secrets location.
+
 This package does four things:
 
 1. **Resolve inheritance.** Walks the folder → collection ancestor chain

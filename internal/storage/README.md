@@ -25,7 +25,12 @@ performs IO and the model conversion ([store.go](store.go)).
   sweeping orphans afterwards. **Atomic at the tree level:** the whole
   collection is staged into a sibling `<dir>.helena-save` directory and swapped
   into place only once every file is written, so a failure mid-write leaves
-  `dir` exactly as it was (no half-updated tree).
+  `dir` exactly as it was (no half-updated tree). **Secrets are externalized
+  (#42):** Basic password, Bearer token, API-key value, OAuth2 client secret,
+  and Secret-flagged env-var values are written to a per-collection store
+  outside `dir` (under the OS config dir, or `$HELENA_SECRETS_DIR`) and blanked
+  in the collection YAML, so a git-tracked collection never contains a cleartext
+  credential. They are merged back on `Load`.
 - `Load(dir string) (model.Collection, error)` — read a collection from `dir`,
   assigning fresh IDs (the format does not record them).
 

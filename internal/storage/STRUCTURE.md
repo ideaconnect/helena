@@ -7,6 +7,7 @@
 | [doc.go](doc.go) | Package-level doc comment. |
 | [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. |
 | [store.go](store.go) | The `Save`/`Load` entry points and the directory walker, including the Extra round-trip and orphan sweep. |
+| [secrets.go](secrets.go) | Secret externalization (#42): split secret fields out of the collection YAML into a config-dir store on Save, merge back on Load. |
 | [storage_test.go](storage_test.go) | Round-trip, key-naming and docs-key tests. |
 | [storage_extras_test.go](storage_extras_test.go) | Extra round-trip and orphan sweep tests against hand-written YAML. |
 | [storage_scripts_test.go](storage_scripts_test.go) | Scripts round-trip — on-disk key names, empty-Scripts omission, `scripts.Extra` survival, and Extra preservation when the user clears both hooks. |
@@ -61,6 +62,7 @@ the negated form.
 | --- | --- |
 | `Save` | Public entry. Stages the whole collection into `<dir>.helena-save` then atomically swaps it into place, so a mid-write failure leaves `dir` untouched (#109). |
 | `copyTree` | Recursively copies `dir` into the staging dir so the Extra round-trip can read prior files. |
+| `splitSecrets` / `applySecrets` (secrets.go) | Externalize secret fields out of the collection YAML on Save and merge them back on Load (#42). `eachSecret` walks the secret-bearing fields with positional keys; `writeSecrets`/`readSecrets`/`secretsPath` own the per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR` / the `secretsDirOverride` test seam); `cloneForSecretSplit` deep-copies the mutated parts so the live model keeps its credentials. |
 | `saveInPlace` | The non-atomic write logic (root file, environments, items, sweep) that `Save` runs against the staging dir. |
 | `Load` | Public entry, reads the root file, environments and items. |
 | `saveItems` | Recursive: writes one container (collection root or folder) and recurses into subfolders. |

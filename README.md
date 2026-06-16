@@ -10,6 +10,9 @@ self-contained binary, no Electron.
 
 - **Workspaces, collections, folders, requests** stored as plain Open
   Collection YAML on disk — version-control them like any other source code.
+  Credentials (auth secrets + Secret env vars) are kept out of that YAML —
+  externalized to a store under your config dir — so a committed collection
+  carries no cleartext secret (see [Privacy](#privacy)).
 - **Environments per collection** with `{{variable}}` resolution everywhere
   (URL, query params, headers, body) plus a live preview of the resolved URL.
 - **Scripting & request chaining** — per-request pre/post JavaScript hooks, and
@@ -218,6 +221,15 @@ explicitly trigger:
 
 There are no other fixed-host calls anywhere in the codebase. Your
 collections, credentials, and settings stay on your local disk.
+
+**Credentials & git-safety.** Auth secrets (Basic password, Bearer token,
+API-key value, OAuth2 client secret) and Secret-flagged environment variables
+are **not** written into the collection YAML. They're externalized to a
+per-collection store under your OS config dir (override with `$HELENA_SECRETS_DIR`),
+so you can commit a collection directory without leaking cleartext credentials.
+The store itself is plaintext on local disk today — at-rest encryption (OS
+keychain) is a planned follow-up — so treat your config dir like any secrets
+location.
 
 ## Security
 

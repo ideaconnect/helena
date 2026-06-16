@@ -46,6 +46,9 @@ the next tagged release; there are no separate long-term support branches yet.
   of the [README](README.md). Outbound traffic happens only for actions you
   explicitly trigger (sending a request, importing from a URL, fetching an
   OAuth2 token).
-- Collections and credentials are stored as plaintext YAML on your local disk
-  today; treat those files with the same care as any secrets file. Encrypting
-  secrets at rest is tracked as a planned enhancement.
+- Credentials (auth secrets + Secret env vars) are kept out of the git-tracked
+  collection YAML — externalized to a per-collection store under your OS config
+  dir (or `$HELENA_SECRETS_DIR`) — so a committed collection carries no
+  cleartext secret. That store is still plaintext on local disk today; treat
+  your config dir like any secrets location. At-rest *encryption* (OS keychain)
+  is a tracked follow-up.

@@ -34,6 +34,16 @@ func Save(c model.Collection, dir string) error {
 		return err
 	}
 
+	// Externalize secret values to a store outside the (git-tracked) collection
+	// dir, and save a sanitized copy whose secret fields are blanked, so the
+	// on-disk collection YAML never contains a cleartext credential (#42). The
+	// secret store is written first (it is the sensitive data); the live model
+	// keeps the real values, so a later save failure loses nothing.
+	c, secrets := splitSecrets(c)
+	if err := writeSecrets(dir, secrets); err != nil {
+		return err
+	}
+
 	tmp := dir + ".helena-save"
 	old := dir + ".helena-old"
 	_ = os.RemoveAll(tmp)
@@ -443,6 +453,12 @@ func Load(dir string) (model.Collection, error) {
 	}
 	c.Folders = folders
 	c.Requests = requests
+
+	// Merge externalized secrets back into the (blanked) fields (#42). Only
+	// empty fields are filled, so an older collection that still carries
+	// cleartext secrets in its YAML loads unchanged and migrates to the store
+	// on its next save.
+	applySecrets(&c, readSecrets(dir))
 	return c, nil
 }
 

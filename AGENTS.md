@@ -94,7 +94,10 @@ Don't recreate decisions captured there — read the task notes first.
     two collections sharing a token URL never share tokens. The user's
     TLS / timeout settings deliberately don't apply to the OAuth2 token
     endpoint (those are for the API under test). Persisting tokens
-    requires an encryption story; that's in the backlog.
+    requires an encryption story; that's in the backlog. (Stored *collection*
+    credentials — auth secrets + Secret env vars — are now externalized by
+    `internal/storage` out of the git-tracked YAML into a config-dir store, #42;
+    that store is plaintext on disk, with OS-keychain encryption a follow-up.)
 12. **OAuth2 authorization_code is interactive — never headless.** The
     flow binds an ephemeral `127.0.0.1:0` listener, opens the user's
     browser via `AuthCodeStarter`, and waits up to 5 minutes for the

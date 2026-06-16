@@ -84,10 +84,22 @@ docs: |
 		t.Fatalf("no request file found in %s", dir)
 	}
 	reqData, _ := os.ReadFile(reqPath)
-	for _, want := range []string{"auth:", "bearer", "secret-abc", "runtime:", `console.log`, "docs:", "https://example.test/y"} {
+	for _, want := range []string{"auth:", "bearer", "runtime:", `console.log`, "docs:", "https://example.test/y"} {
 		if !bytes.Contains(reqData, []byte(want)) {
 			t.Errorf("request file lost %q after save:\n%s", want, reqData)
 		}
+	}
+	// The bearer token is now externalized (#42): it must NOT appear in the
+	// git-tracked request file, but must round-trip back on a fresh Load.
+	if bytes.Contains(reqData, []byte("secret-abc")) {
+		t.Errorf("request file still contains the cleartext token:\n%s", reqData)
+	}
+	reloaded, err := Load(dir)
+	if err != nil {
+		t.Fatalf("reload: %v", err)
+	}
+	if got := reloaded.Requests[0].Auth.Bearer.Token; got != "secret-abc" {
+		t.Errorf("externalized token did not round-trip: got %q, want secret-abc", got)
 	}
 }
 
