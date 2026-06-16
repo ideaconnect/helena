@@ -273,7 +273,7 @@ share the same dispatch.
    auth (Basic / Bearer / API-Key / etc.) instead of the literal `Inherit`
    sentinel. Done on a *copy*, so the in-memory request the user is editing
    keeps its `Inherit` value.
-4. Build a fresh `httpclient.New(m.sess.Settings())`, install an
+4. Build a per-send `httpclient.NewWithTransport(m.sess.Settings(), m.sessionTransport())` — the throwaway Client carries per-send state (cross-host strip, OAuth2 resolver) but reuses the cached `m.httpTransport` connection pool so repeated sends to one host skip TCP+TLS re-handshakes (#52); the transport is rebuilt only when `InsecureSkipVerify` changes. Install an
    OAuth2 resolver via `client.SetOAuth2Resolver(auth.NewOAuth2Resolver(sess.TokenCache(), nil, sess.ActiveCollectionDir(), newAuthCodeStarter()))`,
    and grab `m.sess.Resolver()` — variable substitution uses the active
    env. The OAuth2 resolver uses `http.DefaultClient` for the token

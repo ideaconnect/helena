@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -246,6 +247,12 @@ type MainUI struct {
 	// Send button doubles as Abort in that state. Set + cleared on the
 	// UI thread only; the cancel func itself is goroutine-safe.
 	sendCancel context.CancelFunc
+
+	// httpTransport is the per-session connection pool, reused across sends so
+	// repeated requests to one host skip TCP+TLS re-handshakes (#52). Rebuilt
+	// only when the TLS-affecting setting changes. Accessed on the UI thread.
+	httpTransport         *http.Transport
+	httpTransportInsecure bool
 
 	shortcuts []shortcutSpec
 
@@ -1205,6 +1212,20 @@ func snapshotRequest(req model.Request) model.Request {
 	return req
 }
 
+// sessionTransport returns the cached per-session *http.Transport, whose
+// connection pool is reused across sends so repeated requests to one host skip
+// TCP+TLS re-handshakes (#52). It is rebuilt only when InsecureSkipVerify (the
+// one transport-affecting setting) changes; timeout/redirect policy live on the
+// throwaway per-send Client. UI-thread only.
+func (m *MainUI) sessionTransport() *http.Transport {
+	insecure := m.sess.Settings().InsecureSkipVerify
+	if m.httpTransport == nil || m.httpTransportInsecure != insecure {
+		m.httpTransport = httpclient.NewTransport(m.sess.Settings())
+		m.httpTransportInsecure = insecure
+	}
+	return m.httpTransport
+}
+
 // panicResponse builds the synthetic error response delivered when the Send
 // worker recovers from a panic, so the originating tab reflects the failure
 // instead of keeping its previous (now-stale) cached response (#110).
@@ -1250,7 +1271,7 @@ func (m *MainUI) send() {
 	// SnapshotChainFinder copy below, so nothing the worker touches is shared.
 	envSnap := m.sess.SnapshotActiveEnvVars()
 
-	client := httpclient.New(m.sess.Settings())
+	client := httpclient.NewWithTransport(m.sess.Settings(), m.sessionTransport())
 	// If auth puts a key in a custom header, strip it on a host-changing
 	// redirect so the credential doesn't leak to the new host (Go already
 	// handles Authorization/Cookie).

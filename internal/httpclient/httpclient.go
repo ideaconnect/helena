@@ -93,10 +93,33 @@ func (c *Client) SetOAuth2Resolver(r auth.OAuth2Resolver) {
 
 // New builds a Client honoring the given settings: invalid-TLS tolerance,
 // redirect policy, and request timeout.
-func New(s model.Settings) *Client {
-	transport := &http.Transport{Proxy: http.ProxyFromEnvironment}
+// NewTransport builds the *http.Transport for the given settings (proxy from
+// environment, optional insecure TLS). The transport owns the connection pool,
+// so a caller that caches one across requests gets keep-alive reuse and skips
+// repeated TCP+TLS handshakes. Only InsecureSkipVerify affects the transport;
+// timeout/redirect policy live on the per-call *http.Client.
+func NewTransport(s model.Settings) *http.Transport {
+	t := &http.Transport{Proxy: http.ProxyFromEnvironment}
 	if s.InsecureSkipVerify {
-		transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit user opt-in
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit user opt-in
+	}
+	return t
+}
+
+// New constructs a Client with its own fresh transport (and connection pool).
+func New(s model.Settings) *Client {
+	return NewWithTransport(s, NewTransport(s))
+}
+
+// NewWithTransport constructs a Client that reuses the supplied transport, so
+// its connection pool survives across the throwaway per-send Clients the UI
+// builds (#52). The transport's TLS config is the caller's responsibility:
+// pass one built for the same InsecureSkipVerify setting (see NewTransport). A
+// nil transport falls back to a fresh one. Per-send state (crossHostStrip, the
+// OAuth2 resolver) stays on the returned Client, never on the shared transport.
+func NewWithTransport(s model.Settings, transport *http.Transport) *Client {
+	if transport == nil {
+		transport = NewTransport(s)
 	}
 	hc := &http.Client{Transport: transport}
 	if s.TimeoutSeconds > 0 {
