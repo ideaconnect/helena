@@ -44,6 +44,7 @@ func (m *MainUI) actionNewCollection() {
 			}
 			m.Tree.Refresh()
 			m.refreshEnvironments()
+			m.refreshEmptyState()
 			m.Status.SetText("Created: " + name)
 		}, m.win)
 	})

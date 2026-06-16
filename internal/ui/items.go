@@ -199,6 +199,7 @@ func (m *MainUI) deleteNode(id string) {
 		m.reconcileTabs()
 		if isCollection {
 			m.refreshEnvironments()
+			m.refreshEmptyState()
 			m.Status.SetText("Removed collection: " + label)
 		} else {
 			m.Status.SetText("Deleted: " + label)

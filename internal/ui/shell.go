@@ -230,6 +230,9 @@ type MainUI struct {
 	// response sub-tab is active.
 	errorBanner      *fyne.Container
 	errorBannerLabel *widget.Label
+	// emptyState is the first-run panel shown in the sidebar when no collection
+	// is loaded, offering starter actions (#58). refreshEmptyState toggles it.
+	emptyState *fyne.Container
 
 	currentRequest     *model.Request
 	currentRequestID   string
@@ -519,9 +522,24 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// so its per-level indentation is shallower and its icons denser — scoped
 	// to the sidebar so the rest of the app keeps full-size icons. The drop
 	// layer stacks on top to draw the drag indicators.
+	// First-run empty state: shown over the (empty) tree when no collection is
+	// loaded, giving a new user somewhere to start (#58).
+	emptyHeading := widget.NewLabelWithStyle("No collections yet", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	emptyHint := widget.NewLabel("Open or import a collection,\nor load the bundled sample to explore.")
+	emptyHint.Alignment = fyne.TextAlignCenter
+	emptyHint.Wrapping = fyne.TextWrapWord
+	m.emptyState = container.NewCenter(container.NewVBox(
+		emptyHeading,
+		emptyHint,
+		widget.NewButtonWithIcon("Open collection…", themedIcon("folder-open"), m.openCollection),
+		widget.NewButtonWithIcon("Import…", themedIcon("download"), m.actionImport),
+		widget.NewButtonWithIcon("Load sample", themedIcon("cube"), m.loadSample),
+	))
+	m.emptyState.Hide()
 	treeArea := container.NewStack(
 		container.NewThemeOverride(m.Tree, sidebarTheme{}),
 		dropLayer,
+		m.emptyState,
 	)
 	sidebar := container.NewBorder(container.NewPadded(actionToolbar), nil, nil, nil, treeArea)
 
@@ -549,6 +567,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		rootTheme{})
 
 	m.refreshEnvironments()
+	m.refreshEmptyState()
 	m.restoreTabs()
 	return m
 }
@@ -1195,6 +1214,7 @@ func (m *MainUI) onWorkspaceChanged(name string) {
 		m.Tree.Refresh()
 	}
 	m.refreshEnvironments()
+	m.refreshEmptyState()
 }
 
 // openCollection shows a folder picker and asks the session to load whatever
@@ -1216,6 +1236,7 @@ func (m *MainUI) openCollection() {
 			}
 			m.Tree.Refresh()
 			m.refreshEnvironments()
+			m.refreshEmptyState()
 			m.Status.SetText("Opened collection: " + u.Name())
 		}
 	}, m.win)
@@ -1309,6 +1330,20 @@ func (m *MainUI) guard(label string, fn func()) {
 		}
 	}()
 	fn()
+}
+
+// refreshEmptyState shows the first-run starter panel when no collection is
+// loaded and hides it once one exists (#58). Safe to call before the panel is
+// built (a no-op).
+func (m *MainUI) refreshEmptyState() {
+	if m.emptyState == nil {
+		return
+	}
+	if len(m.sess.Collections()) == 0 {
+		m.emptyState.Show()
+	} else {
+		m.emptyState.Hide()
+	}
 }
 
 // showErrorBanner surfaces a request failure in the persistent, dismissible

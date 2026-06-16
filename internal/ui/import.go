@@ -14,10 +14,56 @@ import (
 	fynestorage "fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/idct/helena/examples"
 	"github.com/idct/helena/internal/importer"
 	"github.com/idct/helena/internal/model"
 	appstorage "github.com/idct/helena/internal/storage"
 )
+
+// sampleDestDir returns the directory the bundled sample is materialized into:
+// a "samples" folder beside the config file, falling back to a temp dir when no
+// user config dir is available.
+func sampleDestDir() string {
+	base, err := os.UserConfigDir()
+	if err != nil {
+		return filepath.Join(os.TempDir(), "helena", "samples")
+	}
+	return filepath.Join(base, "helena", "samples")
+}
+
+// loadSample materializes the embedded sample collection to disk and opens it,
+// so a binary-only user (no source tree) can try Helena immediately (#57).
+func (m *MainUI) loadSample() { m.loadSampleFrom(sampleDestDir()) }
+
+// loadSampleFrom is the testable core of loadSample: it writes the sample under
+// destDir and opens it.
+func (m *MainUI) loadSampleFrom(destDir string) {
+	m.guard("Load sample", func() {
+		dir, err := examples.WriteSample(destDir)
+		if err != nil {
+			if m.win != nil {
+				dialog.ShowError(err, m.win)
+			} else {
+				m.Status.SetText("Load sample failed: " + err.Error())
+			}
+			return
+		}
+		if err := m.sess.OpenCollection(dir); err != nil {
+			if m.win != nil {
+				dialog.ShowError(err, m.win)
+			} else {
+				m.Status.SetText("Load sample failed: " + err.Error())
+			}
+			return
+		}
+		if m.Tree != nil {
+			m.Tree.Refresh()
+		}
+		m.refreshEnvironments()
+		m.refreshEmptyState()
+		m.Status.SetText("Loaded sample collection")
+	})
+}
 
 // actionImport opens a chooser dialog letting the user import from either a
 // URL or a local file. The URL fetch obeys the user's TLS / timeout settings;
@@ -141,6 +187,7 @@ func (m *MainUI) chooseImportDestination(c model.Collection) {
 			}
 			m.Tree.Refresh()
 			m.refreshEnvironments()
+			m.refreshEmptyState()
 			m.Status.SetText("Imported: " + c.Name)
 		})
 	}, m.win)

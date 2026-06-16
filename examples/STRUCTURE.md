@@ -4,7 +4,9 @@
 
 | File | Purpose |
 | ---- | ------- |
+| [sample.go](sample.go) | `package examples`. `//go:embed httpbin` bundles the sample into the binary; `WriteSample(destDir)` materializes it to `destDir/httpbin` and returns the path, and `SampleName` is that subdir name. Lets a downloaded binary load the sample with no source tree (#57). |
 | [example_test.go](example_test.go) | `TestHttpbinSampleLoads` — smoke test that loads `httpbin/` via `storage.Load` and asserts the parsed collection name, request methods, environment name, and `base_url` variable. Lives in `package examples_test` so it depends on `internal/storage` from the outside. |
+| [sample_test.go](sample_test.go) | `TestWriteSampleMaterializesAndLoads` — writes the embedded sample to a temp dir and loads it through `storage.Load`. |
 
 ## Bundled artifacts (httpbin/)
 
