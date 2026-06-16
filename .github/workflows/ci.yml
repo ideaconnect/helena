@@ -97,12 +97,14 @@ jobs:
 
       - name: Build (Linux)
         if: runner.os == 'Linux'
-        run: go build -trimpath -ldflags="-s -w" -o ${{ matrix.artifact }} ./cmd/helena
+        # ref_name is the tag (e.g. v0.1.0) on a release build, else the branch
+        # — a non-empty default so every binary can report its origin (#26).
+        run: go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         # -H windowsgui suppresses the console window when launched from Explorer.
-        run: go build -trimpath -ldflags="-s -w -H windowsgui" -o ${{ matrix.artifact }} ./cmd/helena
+        run: go build -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

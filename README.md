@@ -148,6 +148,10 @@ make.bat build   :: writes bin\helena.exe
 make.bat test
 ```
 
+Run `helena --version` to print the build metadata. Released binaries report
+their tag and commit (injected at build time); a local `go build` reports
+`dev`.
+
 `Makefile` and `make.bat` expose the same targets with the same defaults.
 
 ## Layout

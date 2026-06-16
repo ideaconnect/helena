@@ -7,12 +7,13 @@ detailed line-by-line map; this is the high-level view callers usually need.
 
 ```
 main()
+  -> if os.Args[1] is --version: print versionString() and return  (#26, before any UI)
   -> app.NewWithID(...)
   -> assets.AppIcon -> fyne.NewStaticResource -> a.SetIcon
   -> config.DefaultPath()                     (fail-soft: empty path)
   -> session.New(cfgPath)                     (fail-soft: retry with "")
   -> ui.ApplyTheme(a, sess.Settings().Theme)  (must precede widgets)
-  -> w := a.NewWindow("Helena")
+  -> w := a.NewWindow(windowTitle(version))   (suffixes the version for a released build)
   -> w.SetIcon(...)
   -> w.Resize(sess.WindowSize() OR 1100x720)
   -> w.CenterOnScreen()

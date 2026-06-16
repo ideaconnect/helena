@@ -2,7 +2,9 @@
 package main
 
 import (
+	"fmt"
 	"log"
+	"os"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -14,7 +16,47 @@ import (
 	"github.com/idct/helena/internal/ui"
 )
 
+// Build metadata, injected at release time via the linker
+// (-ldflags "-X main.version=... -X main.commit=... -X main.date=...").
+// Defaults keep a local `go build` self-describing as a dev build.
+var (
+	version = "dev"
+	commit  = ""
+	date    = ""
+)
+
+// versionString renders the build metadata for `helena --version`. The commit
+// is trimmed to a short hash for readability; empty fields are omitted.
+func versionString(version, commit, date string) string {
+	s := "helena " + version
+	if commit != "" {
+		short := commit
+		if len(short) > 12 {
+			short = short[:12]
+		}
+		s += " (" + short + ")"
+	}
+	if date != "" {
+		s += " built " + date
+	}
+	return s
+}
+
+// windowTitle is the app window title, suffixed with the version for a
+// non-dev (released) build so the running build is identifiable at a glance.
+func windowTitle(version string) string {
+	if version == "dev" || version == "" {
+		return "Helena"
+	}
+	return "Helena " + version
+}
+
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
+		fmt.Println(versionString(version, commit, date))
+		return
+	}
+
 	a := app.NewWithID("tech.idct.helena")
 	icon := fyne.NewStaticResource("app_icon.png", assets.AppIcon)
 	a.SetIcon(icon)
@@ -32,7 +74,7 @@ func main() {
 
 	ui.ApplyTheme(a, sess.Settings().Theme)
 
-	w := a.NewWindow("Helena")
+	w := a.NewWindow(windowTitle(version))
 	w.SetIcon(icon)
 	if ww, wh := sess.WindowSize(); ww > 0 && wh > 0 {
 		w.Resize(fyne.NewSize(float32(ww), float32(wh)))
