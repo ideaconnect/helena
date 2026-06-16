@@ -1,0 +1,34 @@
+# Categorizes auto-generated release notes (generate_release_notes: true) by
+# the labels on merged PRs. See CHANGELOG.md for the human-curated summary and
+# the SemVer/tag convention.
+changelog:
+  exclude:
+    labels:
+      - duplicate
+      - invalid
+      - wontfix
+  categories:
+    - title: ⚠️ Breaking changes
+      labels:
+        - breaking
+    - title: 🚀 Features
+      labels:
+        - enhancement
+        - feature
+    - title: 🐛 Bug fixes
+      labels:
+        - bug
+    - title: 🔒 Security
+      labels:
+        - security
+    - title: 📦 CI / packaging
+      labels:
+        - cicd
+        - packaging
+    - title: 📝 Documentation
+      labels:
+        - documentation
+        - docs
+    - title: Other changes
+      labels:
+        - "*"

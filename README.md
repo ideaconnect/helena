@@ -204,6 +204,20 @@ collections, credentials, and settings stay on your local disk.
 Found a vulnerability? Please report it privately — see
 [SECURITY.md](SECURITY.md). Do not open a public issue for security problems.
 
+## Contributing
+
+Contributions are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md)
+(build/test, the tests-and-docs mandate, the coverage floor, commit identity)
+and the [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and feature requests
+use the GitHub issue templates.
+
+## Versioning & releases
+
+Helena follows [Semantic Versioning](https://semver.org): tags are
+`vMAJOR.MINOR.PATCH`. Notable changes are recorded in
+[CHANGELOG.md](CHANGELOG.md); GitHub releases additionally carry
+auto-generated, label-categorized notes.
+
 ## License
 
 BSD 4-Clause — see [LICENSE](LICENSE).
