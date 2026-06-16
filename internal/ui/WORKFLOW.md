@@ -365,6 +365,23 @@ share the same dispatch.
     `tabResponse` the same way. (Per-tab restore on a tab switch goes
     through the same `applyResponse(tab.resp)`.)
 
+### Error-surfacing contract (#51)
+
+There are two surfaces, with different lifetimes:
+
+- **`m.Status`** (the footer label) is **transient**: it carries
+  informational progress ("Sending…", "Chain step 2/3", "Settings saved")
+  and is freely overwritten by the next update. It must not be the *only*
+  place a failure is shown.
+- **The error banner** (`errorBanner`, above the response tabs) and the
+  response **Body pane** are **non-transient**: on an `isError` response
+  `applyResponse` raises the dismissible banner with the failure text and
+  renders the error in the Body pane (raw). The banner stays until the user
+  dismisses it, the next send starts (`send` hides it), or a subsequent
+  successful response clears it (`applyResponse` / `clearResponsePanel`). It is
+  visible whichever response sub-tab is active, so a failure can't be missed by
+  switching tabs or by a later status update.
+
 The Send button is the lifecycle marker AND the abort affordance:
 
 - **Default state** — text "Send", high importance, `m.sendCancel == nil`.

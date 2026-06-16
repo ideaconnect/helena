@@ -558,11 +558,15 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 		m.headersText.SetText("")
 		m.Status.SetText(r.status)
 		m.corsBanner.Hide()
+		// Non-transient surface so the failure isn't lost when the status line
+		// is overwritten or the user switches response sub-tabs (#51).
+		m.showErrorBanner(r.status)
 		return
 	}
 	m.pv.SetData([]byte(r.rawBody), prettyview.FormatAuto)
 	m.headersText.SetText(r.headersText)
 	m.Status.SetText(r.status)
+	m.hideErrorBanner()
 	if r.cors != "" {
 		m.corsBanner.Text = r.cors
 		m.corsBanner.Refresh()
@@ -577,6 +581,7 @@ func (m *MainUI) clearResponsePanel() {
 	m.pv.SetData(nil, prettyview.FormatRaw)
 	m.headersText.SetText("")
 	m.corsBanner.Hide()
+	m.hideErrorBanner()
 	m.setScriptConsole(nil)
 }
 

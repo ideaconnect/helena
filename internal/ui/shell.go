@@ -224,6 +224,12 @@ type MainUI struct {
 	pv          *prettyview.PrettyView // response body viewer (structured + raw + search)
 	headersText *widget.Entry
 	corsBanner  *canvas.Text
+	// errorBanner is a persistent, user-dismissible failure indicator above the
+	// response tabs (#51). Unlike the transient status line it stays until the
+	// next successful response or an explicit dismiss, and is visible whichever
+	// response sub-tab is active.
+	errorBanner      *fyne.Container
+	errorBannerLabel *widget.Label
 
 	currentRequest     *model.Request
 	currentRequestID   string
@@ -397,6 +403,15 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.corsBanner = canvas.NewText("", theme.Color(theme.ColorNameWarning))
 	m.corsBanner.TextStyle.Bold = true
 	m.corsBanner.Hide()
+
+	m.errorBannerLabel = widget.NewLabel("")
+	m.errorBannerLabel.Wrapping = fyne.TextWrapWord
+	m.errorBannerLabel.Importance = widget.DangerImportance
+	errDismiss := widget.NewButtonWithIcon("", themedIcon("circle-xmark"), m.hideErrorBanner)
+	errDismiss.Importance = widget.LowImportance
+	m.errorBanner = container.NewBorder(nil, nil, nil, errDismiss, m.errorBannerLabel)
+	m.errorBanner.Hide()
+
 	m.Status = widget.NewLabel("Ready")
 
 	m.Send.OnTapped = m.sendOrAbort
@@ -513,7 +528,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// The CORS banner sits above the response tabs (hidden until a warning
 	// fires). Copy is handled in-widget: PrettyView has Ctrl+C / right-click
 	// copy, and the Headers entry copies natively.
-	responsePanel := container.NewBorder(m.corsBanner, nil, nil, nil, m.Response)
+	responsePanel := container.NewBorder(container.NewVBox(m.errorBanner, m.corsBanner), nil, nil, nil, m.Response)
 	// Request / response split with a thin-line divider.
 	editor := thinVSplit(m.Request, responsePanel, 0.5)
 	// Editor column carries its own address bar so the sidebar runs
@@ -1296,6 +1311,27 @@ func (m *MainUI) guard(label string, fn func()) {
 	fn()
 }
 
+// showErrorBanner surfaces a request failure in the persistent, dismissible
+// banner above the response tabs (#51). Unlike m.Status it does not auto-clear
+// on the next status update.
+func (m *MainUI) showErrorBanner(msg string) {
+	if m.errorBanner == nil {
+		return
+	}
+	m.errorBannerLabel.SetText(msg)
+	m.errorBanner.Show()
+	m.errorBanner.Refresh()
+}
+
+// hideErrorBanner clears the failure banner (on a successful response or an
+// explicit dismiss).
+func (m *MainUI) hideErrorBanner() {
+	if m.errorBanner != nil {
+		m.errorBanner.Hide()
+		m.errorBanner.Refresh()
+	}
+}
+
 // panicResponse builds the synthetic error response delivered when the Send
 // worker recovers from a panic, so the originating tab reflects the failure
 // instead of keeping its previous (now-stale) cached response (#110).
@@ -1368,6 +1404,7 @@ func (m *MainUI) send() {
 
 	m.Status.SetText("Sending…")
 	m.corsBanner.Hide()
+	m.hideErrorBanner() // clear a prior failure when a new send starts
 
 	// Build the cancellable context on the UI thread so the click
 	// handler (sendOrAbort) can call cancel() to abort an in-flight
