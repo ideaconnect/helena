@@ -191,6 +191,7 @@ type MainUI struct {
 	Status        *widget.Label
 
 	paramsRows       *fyne.Container
+	paramRows        []*kvRow // widget handles for each Query row, for in-place updates (#53)
 	headersRows      *fyne.Container
 	BodyType         *widget.Select
 	BodyContent      *prettyview.PrettyView // editable raw body (json/xml/text); hidden for form types
@@ -682,6 +683,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.rebuildBodyFormRows()
 		m.refreshBodyEditorVisibility(model.BodyNone)
 		m.paramsRows.RemoveAll()
+		m.paramRows = m.paramRows[:0]
 		m.paramsRows.Refresh()
 		m.headersRows.RemoveAll()
 		m.headersRows.Refresh()
@@ -947,7 +949,7 @@ func (m *MainUI) rebuildBodyFormRows() {
 	m.bodyFormRows.RemoveAll()
 	if m.currentRequest != nil {
 		for i := range m.currentRequest.Body.Form {
-			m.bodyFormRows.Add(m.buildKVRow(&m.currentRequest.Body.Form, i, m.rebuildBodyFormRows, nil))
+			m.bodyFormRows.Add(m.buildKVRow(&m.currentRequest.Body.Form, i, m.rebuildBodyFormRows, nil).obj)
 		}
 	}
 	m.bodyFormRows.Refresh()
@@ -974,12 +976,43 @@ func (m *MainUI) refreshBodyEditorVisibility(bt model.BodyType) {
 // slice.
 func (m *MainUI) rebuildParamsRows() {
 	m.paramsRows.RemoveAll()
+	m.paramRows = m.paramRows[:0]
 	if m.currentRequest != nil {
 		for i := range m.currentRequest.Params {
-			m.paramsRows.Add(m.buildKVRow(&m.currentRequest.Params, i, m.rebuildParamsRows, m.syncURLFieldFromParams))
+			r := m.buildKVRow(&m.currentRequest.Params, i, m.rebuildParamsRows, m.syncURLFieldFromParams)
+			m.paramRows = append(m.paramRows, r)
+			m.paramsRows.Add(r.obj)
 		}
 	}
 	m.paramsRows.Refresh()
+}
+
+// syncParamsRowsInPlace updates the existing Query row widgets to match
+// m.currentRequest.Params without tearing them down — used while the user types
+// in the URL field, where typically only param values/keys change, not the
+// count. It returns false when the row count no longer matches, signalling the
+// caller to fall back to a full rebuild (add/remove). Updates run under
+// m.syncing so the entries' OnChanged handlers don't loop back into the URL.
+func (m *MainUI) syncParamsRowsInPlace() bool {
+	if m.currentRequest == nil || len(m.paramRows) != len(m.currentRequest.Params) {
+		return false
+	}
+	prev := m.syncing
+	m.syncing = true
+	defer func() { m.syncing = prev }()
+	for i, p := range m.currentRequest.Params {
+		r := m.paramRows[i]
+		if r.key.Text != p.Key {
+			r.key.SetText(p.Key)
+		}
+		if r.val.Text != p.Value {
+			r.val.SetText(p.Value)
+		}
+		if r.check.Checked != p.Enabled {
+			r.check.SetChecked(p.Enabled)
+		}
+	}
+	return true
 }
 
 // rebuildHeadersRows is the Headers-tab counterpart to rebuildParamsRows.
@@ -987,7 +1020,8 @@ func (m *MainUI) rebuildHeadersRows() {
 	m.headersRows.RemoveAll()
 	if m.currentRequest != nil {
 		for i := range m.currentRequest.Headers {
-			m.headersRows.Add(m.buildKVRow(&m.currentRequest.Headers, i, m.rebuildHeadersRows, nil))
+			r := m.buildKVRow(&m.currentRequest.Headers, i, m.rebuildHeadersRows, nil)
+			m.headersRows.Add(r.obj)
 		}
 	}
 	m.headersRows.Refresh()
@@ -1035,7 +1069,11 @@ func (m *MainUI) applyURLEdit(s string) {
 	base, query, frag := splitURLQuery(s)
 	m.currentRequest.URL = withFragment(base, frag)
 	m.currentRequest.Params = mergeQueryFromURL(m.currentRequest.Params, parseQueryParams(query))
-	m.rebuildParamsRows()
+	// Update rows in place when the param count is unchanged (the common case
+	// while typing); only a genuine add/remove tears down and rebuilds (#53).
+	if !m.syncParamsRowsInPlace() {
+		m.rebuildParamsRows()
+	}
 }
 
 // syncURLFieldFromParams rewrites the URL field to base + the query rebuilt from
@@ -1050,12 +1088,22 @@ func (m *MainUI) syncURLFieldFromParams() {
 	m.syncing = false
 }
 
+// kvRow bundles one KeyValue editor row's container with its editable widgets
+// so callers can refresh the displayed values in place (see
+// syncParamsRowsInPlace) instead of tearing the row down and rebuilding it.
+type kvRow struct {
+	obj   fyne.CanvasObject
+	check *widget.Check
+	key   *widget.Entry
+	val   *widget.Entry
+}
+
 // buildKVRow renders one editable row of a KeyValue list. The row's widgets
 // write back into list by index; the delete button removes that index and calls
 // refresh to rebuild the row container.
 // onChange (may be nil) fires after any edit that alters the list's contents —
 // the Query tab passes syncURLFieldFromParams so edits flow back into the URL.
-func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onChange func()) fyne.CanvasObject {
+func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onChange func()) *kvRow {
 	fire := func() {
 		if onChange != nil {
 			onChange()
@@ -1097,8 +1145,9 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onC
 		fire()
 	})
 	delBtn.Importance = widget.LowImportance
-	return container.NewBorder(nil, nil, check, delBtn,
+	obj := container.NewBorder(nil, nil, check, delBtn,
 		container.NewGridWithColumns(2, keyEntry, valEntry))
+	return &kvRow{obj: obj, check: check, key: keyEntry, val: valEntry}
 }
 
 // onWorkspaceChanged is the Workspace dropdown's selection handler; it tells

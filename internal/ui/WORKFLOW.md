@@ -181,8 +181,12 @@ backend is untouched. The field just shows base + query. Pure helpers live in
 - **Editing the URL field** → `OnChanged` (guarded by `!m.loading && !m.syncing`)
   calls `applyURLEdit`: split off the query, store the base in
   `currentRequest.URL`, reparse the query into `Params` via `mergeQueryFromURL`
-  (which keeps disabled rows the URL can't express), and `rebuildParamsRows`. The
-  field text is left alone so typing isn't disturbed.
+  (which keeps disabled rows the URL can't express). It then tries
+  `syncParamsRowsInPlace` — when the param count is unchanged (the common case
+  while typing) the existing `kvRow` widgets are updated in place (under
+  `m.syncing`) instead of being torn down, avoiding a full `RemoveAll`+rebuild
+  per keystroke (#53); only a genuine add/remove falls back to
+  `rebuildParamsRows`. The field text is left alone so typing isn't disturbed.
 - **Editing a Query row** (key/value/enable/delete) → the row's `onChange`
   (`buildKVRow`'s new last arg; nil for the Headers tab) calls
   `syncURLFieldFromParams`, which rewrites the field to `displayURL(base, params)`.
