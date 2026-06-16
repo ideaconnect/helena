@@ -22,7 +22,10 @@ performs IO and the model conversion ([store.go](store.go)).
 
 - `Save(c model.Collection, dir string) error` — write a collection to `dir`
   in OpenCollection layout, preserving unknown fields from existing files and
-  sweeping orphans afterwards.
+  sweeping orphans afterwards. **Atomic at the tree level:** the whole
+  collection is staged into a sibling `<dir>.helena-save` directory and swapped
+  into place only once every file is written, so a failure mid-write leaves
+  `dir` exactly as it was (no half-updated tree).
 - `Load(dir string) (model.Collection, error)` — read a collection from `dir`,
   assigning fresh IDs (the format does not record them).
 

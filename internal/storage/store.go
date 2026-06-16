@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,12 +21,87 @@ const (
 	ymlExt          = ".yml"
 )
 
-// Save writes the collection to dir using the OpenCollection YAML layout,
-// creating directories as needed: opencollection.yml at the root, one file per
-// environment under environments/, and request/folder files (folders become
-// subdirectories with a folder.yml). After writing, orphan files and folders
-// not produced by this save are removed.
+// Save writes the collection to dir using the OpenCollection YAML layout. It is
+// atomic at the tree level: the whole collection is staged into a sibling
+// temporary directory and only swapped into place once every file has been
+// written successfully. A failure mid-write therefore never leaves dir
+// half-updated — dir is left exactly as it was (#109). The staging dir is
+// seeded with the current on-disk tree first so the per-file Extra round-trip
+// (invariant 1) can still read prior files to preserve unknown fields.
 func Save(c model.Collection, dir string) error {
+	parent := filepath.Dir(dir)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return err
+	}
+
+	tmp := dir + ".helena-save"
+	old := dir + ".helena-old"
+	_ = os.RemoveAll(tmp)
+
+	dirExisted := false
+	if info, err := os.Stat(dir); err == nil && info.IsDir() {
+		dirExisted = true
+		if err := copyTree(dir, tmp); err != nil {
+			_ = os.RemoveAll(tmp)
+			return err
+		}
+	} else if err := os.MkdirAll(tmp, 0o755); err != nil {
+		return err
+	}
+
+	if err := saveInPlace(c, tmp); err != nil {
+		_ = os.RemoveAll(tmp)
+		return err
+	}
+
+	// Atomic swap: move the live tree aside, move the staged tree into place,
+	// then drop the old one. If the second rename fails, restore the old tree
+	// so dir is never left missing.
+	_ = os.RemoveAll(old)
+	if dirExisted {
+		if err := os.Rename(dir, old); err != nil {
+			_ = os.RemoveAll(tmp)
+			return err
+		}
+	}
+	if err := os.Rename(tmp, dir); err != nil {
+		if dirExisted {
+			_ = os.Rename(old, dir)
+		}
+		_ = os.RemoveAll(tmp)
+		return err
+	}
+	_ = os.RemoveAll(old)
+	return nil
+}
+
+// copyTree recursively copies the directory src into dst (creating dst), used
+// to seed the staging directory so an atomic re-save can read prior files for
+// the Extra round-trip.
+func copyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		if d.IsDir() {
+			return os.MkdirAll(target, 0o755)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
+}
+
+// saveInPlace writes the collection directly into dir (no staging). Save wraps
+// it with the stage-and-swap atomicity guard; callers always go through Save.
+func saveInPlace(c model.Collection, dir string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}

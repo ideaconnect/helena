@@ -59,7 +59,9 @@ the negated form.
 
 | Symbol | Role |
 | --- | --- |
-| `Save` | Public entry, writes the root file, environments and items, then sweeps. |
+| `Save` | Public entry. Stages the whole collection into `<dir>.helena-save` then atomically swaps it into place, so a mid-write failure leaves `dir` untouched (#109). |
+| `copyTree` | Recursively copies `dir` into the staging dir so the Extra round-trip can read prior files. |
+| `saveInPlace` | The non-atomic write logic (root file, environments, items, sweep) that `Save` runs against the staging dir. |
 | `Load` | Public entry, reads the root file, environments and items. |
 | `saveItems` | Recursive: writes one container (collection root or folder) and recurses into subfolders. |
 | `loadItems` | Recursive: reads one container's `.yml` request files and folder subdirectories. |

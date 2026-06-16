@@ -853,20 +853,33 @@ func cloneRequestsWithAuth(in []model.Request, ancestors []model.Auth) []model.R
 
 // SaveActiveCollection writes the active collection back to its source directory.
 func (s *Session) SaveActiveCollection() error {
-	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
-		return nil
-	}
-	return storage.Save(s.cols[s.activeCol], s.dirs[s.activeCol])
+	return s.persistCollection(s.activeCol)
 }
 
 // saveCollection writes the collection at index ci to its source dir. Used by
 // in-collection mutations (e.g. drag-reorder) that may target a collection
 // other than the active one.
 func (s *Session) saveCollection(ci int) error {
+	return s.persistCollection(ci)
+}
+
+// persistCollection writes the collection at index ci to disk and, on failure,
+// reloads the active workspace so the in-memory model matches what is actually
+// stored. storage.Save is atomic (it stages then swaps), so a failed save
+// leaves disk exactly as it was, and reload restores memory to that last-good
+// state. This is the rollback guard for tree mutators (#109): a mutator that
+// applies an in-memory change then fails to persist it never leaves memory
+// diverged from disk. Because reload rebuilds the tree, any node IDs/pointers a
+// caller computed before the failed save are invalid once an error is returned.
+func (s *Session) persistCollection(ci int) error {
 	if ci < 0 || ci >= len(s.cols) {
 		return nil
 	}
-	return storage.Save(s.cols[ci], s.dirs[ci])
+	if err := storage.Save(s.cols[ci], s.dirs[ci]); err != nil {
+		s.reload()
+		return err
+	}
+	return nil
 }
 
 // MoveCollection reorders the top-level collection list so the collection at

@@ -41,7 +41,23 @@ of the keys Helena knows).
 
 ## Saving a collection (preserving Extra)
 
-`Save(c model.Collection, dir string)` does the following:
+`Save(c model.Collection, dir string)` is **atomic at the tree level** (#109).
+It never writes into `dir` directly; instead it:
+
+1. Seeds a sibling staging dir `<dir>.helena-save` with a copy of the current
+   on-disk tree (`copyTree`) — so the per-file Extra round-trip below can still
+   read prior files — or creates it empty on a first save.
+2. Runs the full save logic (`saveInPlace`, below) against the staging dir.
+3. Swaps atomically: renames `dir` aside to `<dir>.helena-old`, renames the
+   staging dir into place as `dir`, then removes the old tree. If the second
+   rename fails the old tree is renamed back, so `dir` is never left missing.
+
+Any failure during steps 1–2 removes the staging dir and returns the error with
+`dir` untouched — a half-written collection is impossible. The session layer
+relies on this: on a save error it reloads from disk, and because disk is
+unchanged the in-memory model rolls back to the last-good state.
+
+`saveInPlace(c, dir)` (the staged target) does the following:
 
 1. `os.MkdirAll(dir, …)`.
 2. Build the root DTO: `ocCollectionFile{Info: ocInfo{Name: c.Name, Type: "collection"}}`.

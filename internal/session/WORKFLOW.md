@@ -122,15 +122,21 @@ Two distinct edit surfaces feed into the same save path:
 - Tree mutation helpers ([items.go](items.go)) — `AddRequest`, `AddFolder`,
   `RenameItem`, `DeleteItem`, `DuplicateItem`, `MoveNode`. Each one walks the
   tree via `containerAtPtr` (which returns pointers into the in-memory model),
-  applies the mutation, and persists. If save fails the in-memory state may be
-  ahead of disk; the caller is expected to surface the error.
+  applies the mutation, and persists. **Rollback guard (#109):** all save sites
+  funnel through `persistCollection(ci)`, which on a `storage.Save` failure
+  calls `reload()` so the in-memory model snaps back to disk. Because
+  `storage.Save` is atomic (a failed save leaves disk unchanged), reload
+  restores the exact pre-mutation state — memory never stays ahead of disk. The
+  caller still surfaces the error; any node IDs it computed are invalid on
+  failure.
 - Direct edits — the request editor in the UI gets a pointer from
   `Tree.Request(id)` and mutates fields in place (URL, headers, body, …).
   When the user triggers save (e.g. closes the tab, hits the save shortcut),
   the shell calls `Session.SaveActiveCollection()`.
 
-`SaveActiveCollection()` is a thin wrapper around
-`storage.Save(cols[activeCol], dirs[activeCol])`. The interesting work
+`SaveActiveCollection()` and `saveCollection(ci)` both delegate to
+`persistCollection(ci)` (the rollback guard above), which wraps
+`storage.Save(cols[ci], dirs[ci])`. The interesting work
 (preserving unknown YAML fields, sweeping orphans) is in
 [`internal/storage`](../storage/) — see its
 [WORKFLOW.md](../storage/WORKFLOW.md).
