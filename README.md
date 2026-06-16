@@ -192,9 +192,11 @@ Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
   CORS. Helena compares the request `Origin` against the response
   `Access-Control-Allow-Origin` and shows an orange warning if a browser
   would have blocked the response. The request is sent regardless.
-- **Native CI, no cross-compile.** GitHub Actions runs `ubuntu-latest` and
-  `windows-latest` in a matrix so each binary is produced by its own OS's
-  native cgo toolchain. No fyne-cross, no Docker. macOS deferred.
+- **Native CI, no cross-compile.** GitHub Actions runs `ubuntu-latest`,
+  `windows-latest`, and `macos-latest` in a matrix so each binary is produced
+  by its own OS's native cgo toolchain. No fyne-cross, no Docker. (macOS is
+  built + tested in CI; macOS *distribution* — signing/notarization/Homebrew —
+  is still deferred, see issue #39.)
 
 ## Privacy
 

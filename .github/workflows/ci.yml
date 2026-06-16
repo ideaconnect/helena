@@ -40,6 +40,8 @@ jobs:
             artifact: helena-linux-amd64
           - os: windows-latest
             artifact: helena-windows-amd64.exe
+          - os: macos-latest
+            artifact: helena-darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -91,8 +93,10 @@ jobs:
           path: coverage.out
           if-no-files-found: error
 
-      - name: Test (Windows)
-        if: runner.os == 'Windows'
+      - name: Test (non-Linux)
+        if: runner.os != 'Linux'
+        # macOS + Windows run the same race suite; the coverage gate runs once
+        # on Linux (coverage is platform-agnostic).
         run: go test ./... -race
 
       - name: Build (Linux)
@@ -105,6 +109,11 @@ jobs:
         if: runner.os == 'Windows'
         # -H windowsgui suppresses the console window when launched from Explorer.
         run: go build -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        # macOS runners ship the Xcode CLT, so cgo/Metal build with no extra deps.
+        run: go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
