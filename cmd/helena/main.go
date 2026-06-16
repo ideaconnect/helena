@@ -119,6 +119,7 @@ func main() {
 	w.CenterOnScreen()
 
 	mainUI := ui.NewMainUI(sess)
+	mainUI.SetVersion(version)
 	mainUI.SetWindow(w)
 	// Wrap in a tooltip layer (fyne-tooltip) so the icon-only toolbar buttons can
 	// show hover tooltips — Fyne core has no tooltip support.

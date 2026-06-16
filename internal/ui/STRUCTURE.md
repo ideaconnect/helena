@@ -13,6 +13,7 @@
 | [collections.go](collections.go) | `actionNewCollection` — prompt + folder picker + empty YAML write. |
 | [import.go](import.go) | `actionImport` chooser plus URL / file paths and `slugify` / `uniqueCollectionDir` helpers. `loadSample`/`loadSampleFrom` materialize the embedded `examples` sample (via `sampleDestDir`) and open it for the first-run try-it path (#57). |
 | [export.go](export.go) | `actionExport` — cURL / wget snippet dialog plus `newSnippetEntry`. |
+| [help.go](help.go) | The Help menu behind the "?" toolbar button (#61): `helpMenuItems` (getting-started, shortcuts, web links to the user guide + issues, About), `showHelpMenu`, `showGettingStarted`, `showAbout`, `openURL`, and `SetVersion` (feeds About). |
 | [docs.go](docs.go) | `buildDocsTab` and `refreshDocsPreview` — per-request Markdown editor with rendered preview subtab. |
 | [scripts.go](scripts.go) | `buildScriptsTab` — the Pre-request / Post-response code editors and the read-only Console panel below. `loadScriptsTab` populates the editors during `loadRequest`; `setScriptConsole` renders the captured console output after each Send. |
 | [chain.go](chain.go) | `buildChainTab` — the list of (Alias, Request path) rows for declaring before-hooks. `loadChainTab` / `rebuildChainRows` / `addChainStep` / `buildChainRow` follow the same patterns as the Params and Headers tabs. |

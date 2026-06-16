@@ -235,6 +235,9 @@ type MainUI struct {
 	// is loaded, offering starter actions (#58). refreshEmptyState toggles it.
 	emptyState *fyne.Container
 
+	helpBtn    *widget.Button // anchors the Help popup menu (#61)
+	appVersion string         // build version for the About entry; set via SetVersion
+
 	currentRequest     *model.Request
 	currentRequestID   string
 	lastSelectedNodeID string
@@ -424,7 +427,8 @@ func NewMainUI(sess *session.Session) *MainUI {
 	envBtn := widget.NewButton("Variables…", m.editEnvironments)
 	envMgrBtn := widget.NewButton("Manage…", m.manageEnvironments)
 	settingsBtn := widget.NewButton("Settings…", m.editSettings)
-	helpBtn := widget.NewButton("?", m.showShortcuts)
+	m.helpBtn = widget.NewButton("?", m.showHelpMenu)
+	helpBtn := m.helpBtn
 	toolbar := container.NewHBox(
 		widget.NewLabel("Workspace:"), m.Workspace, wsBtn,
 		widget.NewLabel("Environment:"), m.Environment, envBtn, envMgrBtn,

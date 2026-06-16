@@ -214,6 +214,12 @@ collections, credentials, and settings stay on your local disk.
 Found a vulnerability? Please report it privately — see
 [SECURITY.md](SECURITY.md). Do not open a public issue for security problems.
 
+## User guide
+
+New to Helena? The [User Guide](docs/USER_GUIDE.md) walks through collections,
+sending requests, environments/variables, auth, chaining, scripting, and
+import/export. It's also linked in-app under the **?** button.
+
 ## Contributing
 
 Contributions are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md)
