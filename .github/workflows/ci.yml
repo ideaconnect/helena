@@ -239,15 +239,50 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write     # OIDC for keyless provenance attestation
+      attestations: write # record the build provenance attestation
     steps:
+      - uses: actions/checkout@v4 # source for the SBOM scan
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
           merge-multiple: true
 
+      # Archive each native binary so releases ship a conventional, named
+      # archive rather than a bare ELF/exe (#35).
+      - name: Archive binaries
+        run: |
+          mkdir -p dist
+          cp LICENSE README.md artifacts/ 2>/dev/null || true
+          tar -C artifacts -czf dist/helena-linux-amd64.tar.gz helena-linux-amd64 LICENSE README.md
+          tar -C artifacts -czf dist/helena-darwin-arm64.tar.gz helena-darwin-arm64 LICENSE README.md
+          (cd artifacts && zip -q ../dist/helena-windows-amd64.zip helena-windows-amd64.exe LICENSE README.md)
+
+      # Software bill of materials (SPDX) for the released module (#27).
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: dist/helena.sbom.spdx.json
+
+      # SHA-256 checksums over every artifact (#27/#35). Globbing happens
+      # before SHA256SUMS is created, so it never checksums itself.
+      - name: Checksums
+        run: (cd dist && sha256sum * > SHA256SUMS)
+
+      # Cryptographic, keyless (Sigstore) provenance attestation for the
+      # release archives — the signing + provenance of #27/#35 without managing
+      # long-lived keys.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/helena-*.tar.gz dist/helena-*.zip
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/*
+          files: dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true
