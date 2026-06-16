@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
+	"log"
 	"net/http"
 	"slices"
 	"strconv"
@@ -1275,6 +1276,26 @@ func (m *MainUI) sessionTransport() *http.Transport {
 	return m.httpTransport
 }
 
+// guard runs fn and turns a panic into a surfaced error + log entry instead of
+// a process exit. Fyne has no panic boundary around event handlers, so a panic
+// in a dialog/action callback (e.g. a malformed-input parse) would otherwise
+// hard-exit and lose unsaved work (#48). label identifies the action in the
+// log and the error message.
+func (m *MainUI) guard(label string, fn func()) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("helena: recovered panic in %s: %v", label, r)
+			err := fmt.Errorf("%s failed unexpectedly: %v", label, r)
+			if m.win != nil {
+				dialog.ShowError(err, m.win)
+			} else if m.Status != nil {
+				m.Status.SetText("Error: " + err.Error())
+			}
+		}
+	}()
+	fn()
+}
+
 // panicResponse builds the synthetic error response delivered when the Send
 // worker recovers from a panic, so the originating tab reflects the failure
 // instead of keeping its previous (now-stale) cached response (#110).
@@ -1590,15 +1611,17 @@ func (m *MainUI) editEnvironments() {
 		if !ok {
 			return
 		}
-		parsed := restoreEnvSecrets(session.ParseEnvVars(entry.Text), secretVals)
-		m.sess.SetActiveEnvironmentVariables(parsed)
-		if err := m.sess.SaveActiveCollection(); err != nil {
-			dialog.ShowError(err, m.win)
-			return
-		}
-		m.refreshEnvironments()
-		m.updateURLPreview()
-		m.Status.SetText("Saved environment: " + env.Name)
+		m.guard("Save environment", func() {
+			parsed := restoreEnvSecrets(session.ParseEnvVars(entry.Text), secretVals)
+			m.sess.SetActiveEnvironmentVariables(parsed)
+			if err := m.sess.SaveActiveCollection(); err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			m.refreshEnvironments()
+			m.updateURLPreview()
+			m.Status.SetText("Saved environment: " + env.Name)
+		})
 	}, m.win)
 	d.Resize(fyne.NewSize(540, 400))
 	d.Show()
@@ -1652,34 +1675,36 @@ func (m *MainUI) editSettings() {
 		if !ok {
 			return
 		}
-		t, validTimeout := sanitizeTimeoutSeconds(timeoutEntry.Text, m.sess.Settings().TimeoutSeconds)
-		maxResp, validMax := sanitizeMaxResponseMiB(maxRespEntry.Text, m.sess.Settings().MaxResponseBytes)
-		newTheme := themeFromName(themeSelect.Selected)
-		m.sess.SetSettings(model.Settings{
-			InsecureSkipVerify: insecure.Checked,
-			CORSWarning:        corsWarn.Checked,
-			FollowRedirects:    follow.Checked,
-			TimeoutSeconds:     t,
-			MaxResponseBytes:   maxResp,
-			Theme:              newTheme,
+		m.guard("Save settings", func() {
+			t, validTimeout := sanitizeTimeoutSeconds(timeoutEntry.Text, m.sess.Settings().TimeoutSeconds)
+			maxResp, validMax := sanitizeMaxResponseMiB(maxRespEntry.Text, m.sess.Settings().MaxResponseBytes)
+			newTheme := themeFromName(themeSelect.Selected)
+			m.sess.SetSettings(model.Settings{
+				InsecureSkipVerify: insecure.Checked,
+				CORSWarning:        corsWarn.Checked,
+				FollowRedirects:    follow.Checked,
+				TimeoutSeconds:     t,
+				MaxResponseBytes:   maxResp,
+				Theme:              newTheme,
+			})
+			ApplyTheme(fyne.CurrentApp(), newTheme)
+			// PrettyView memoizes its palette on the Fyne theme variant, which
+			// ApplyTheme's SetTheme(Light/Dark) does not flip — so force a rebuild
+			// at the new variant, or the body keeps the old light/dark colors.
+			m.pv.SetTheme(variantFor(newTheme), prettyview.Theme{})
+			m.BodyContent.SetTheme(variantFor(newTheme), prettyview.Theme{})
+			m.refreshThemedCanvas()
+			switch {
+			case validTimeout && validMax:
+				m.Status.SetText("Settings saved")
+			case !validTimeout && !validMax:
+				m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout kept %ds, invalid max response kept %d MiB)", t, maxResp>>20))
+			case !validTimeout:
+				m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout ignored, kept %ds)", t))
+			default:
+				m.Status.SetText(fmt.Sprintf("Settings saved (invalid max response ignored, kept %d MiB)", maxResp>>20))
+			}
 		})
-		ApplyTheme(fyne.CurrentApp(), newTheme)
-		// PrettyView memoizes its palette on the Fyne theme variant, which
-		// ApplyTheme's SetTheme(Light/Dark) does not flip — so force a rebuild
-		// at the new variant, or the body keeps the old light/dark colors.
-		m.pv.SetTheme(variantFor(newTheme), prettyview.Theme{})
-		m.BodyContent.SetTheme(variantFor(newTheme), prettyview.Theme{})
-		m.refreshThemedCanvas()
-		switch {
-		case validTimeout && validMax:
-			m.Status.SetText("Settings saved")
-		case !validTimeout && !validMax:
-			m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout kept %ds, invalid max response kept %d MiB)", t, maxResp>>20))
-		case !validTimeout:
-			m.Status.SetText(fmt.Sprintf("Settings saved (invalid timeout ignored, kept %ds)", t))
-		default:
-			m.Status.SetText(fmt.Sprintf("Settings saved (invalid max response ignored, kept %d MiB)", maxResp>>20))
-		}
 	}, m.win)
 	dlg.Resize(fyne.NewSize(520, 420))
 	dlg.Show()

@@ -57,6 +57,16 @@ func main() {
 		return
 	}
 
+	// Process-level safety net: log a panic during setup before the process
+	// exits, so a crash leaves a breadcrumb for bug reports (#48). UI event
+	// handlers are additionally guarded inside the ui package.
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("helena: fatal panic: %v", r)
+			panic(r) // re-panic so the runtime still prints the stack + exits non-zero
+		}
+	}()
+
 	a := app.NewWithID("tech.idct.helena")
 	icon := fyne.NewStaticResource("app_icon.png", assets.AppIcon)
 	a.SetIcon(icon)

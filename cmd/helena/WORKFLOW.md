@@ -8,6 +8,7 @@ detailed line-by-line map; this is the high-level view callers usually need.
 ```
 main()
   -> if os.Args[1] is --version: print versionString() and return  (#26, before any UI)
+  -> defer recover()+log  (process-level safety net for setup panics, #48; re-panics so the runtime still exits non-zero)
   -> app.NewWithID(...)
   -> assets.AppIcon -> fyne.NewStaticResource -> a.SetIcon
   -> config.DefaultPath()                     (fail-soft: empty path)

@@ -82,12 +82,15 @@ func (m *MainUI) importFromFile() {
 			dialog.ShowError(err, m.win)
 			return
 		}
-		c, err := importer.From(data)
-		if err != nil {
-			dialog.ShowError(err, m.win)
-			return
-		}
-		m.chooseImportDestination(c)
+		// Parsing untrusted/malformed spec data could panic; guard it (#48).
+		m.guard("Import", func() {
+			c, err := importer.From(data)
+			if err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			m.chooseImportDestination(c)
+		})
 	}, m.win)
 	open.SetFilter(fynestorage.NewExtensionFileFilter([]string{".yaml", ".yml", ".json", ".wsdl", ".xml"}))
 	open.Resize(fyne.NewSize(640, 480))
@@ -114,30 +117,32 @@ func (m *MainUI) importFromURL(url string) {
 
 func (m *MainUI) chooseImportDestination(c model.Collection) {
 	dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
-		if err != nil {
-			dialog.ShowError(err, m.win)
-			return
-		}
-		if uri == nil {
-			return // cancelled
-		}
-		sub := uniqueCollectionDir(uri.Path(), c.Name)
-		dir := filepath.Join(uri.Path(), sub)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			dialog.ShowError(err, m.win)
-			return
-		}
-		if err := appstorage.Save(c, dir); err != nil {
-			dialog.ShowError(err, m.win)
-			return
-		}
-		if err := m.sess.OpenCollection(dir); err != nil {
-			dialog.ShowError(err, m.win)
-			return
-		}
-		m.Tree.Refresh()
-		m.refreshEnvironments()
-		m.Status.SetText("Imported: " + c.Name)
+		m.guard("Import", func() {
+			if err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			if uri == nil {
+				return // cancelled
+			}
+			sub := uniqueCollectionDir(uri.Path(), c.Name)
+			dir := filepath.Join(uri.Path(), sub)
+			if err := os.MkdirAll(dir, 0o755); err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			if err := appstorage.Save(c, dir); err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			if err := m.sess.OpenCollection(dir); err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			m.Tree.Refresh()
+			m.refreshEnvironments()
+			m.Status.SetText("Imported: " + c.Name)
+		})
 	}, m.win)
 }
 
