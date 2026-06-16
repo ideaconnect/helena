@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Helena
+GenericName=API Client
+Comment=A free, open-source API client for testing and exploring HTTP APIs
+Exec=helena %U
+Icon=tech.idct.helena
+Terminal=false
+Categories=Development;Network;WebDevelopment;
+Keywords=API;HTTP;REST;OpenAPI;Swagger;client;
+StartupWMClass=Helena
+StartupNotify=true

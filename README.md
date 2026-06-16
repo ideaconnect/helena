@@ -35,9 +35,17 @@ self-contained binary, no Electron.
 
 ## Download
 
-Pre-built Linux (amd64) and Windows (amd64) binaries are attached to each
-[GitHub Release](https://github.com/idct/helena/releases). macOS builds
-come later.
+Pre-built Linux (amd64), Windows (amd64), and macOS (arm64) binaries are
+attached to each
+[GitHub Release](https://github.com/idct/helena/releases). macOS binaries are
+built in CI but not yet signed/notarized for Gatekeeper — see
+[docs/PACKAGING.md](docs/PACKAGING.md).
+
+**Updates** are delivered via package managers (as they land) or by
+re-downloading a release — Helena does not check for updates at runtime, to
+keep its [no-background-traffic guarantee](#privacy). Run `helena --version`
+to see your build. See [docs/PACKAGING.md](docs/PACKAGING.md) for the full
+distribution status.
 
 ## Quickstart
 

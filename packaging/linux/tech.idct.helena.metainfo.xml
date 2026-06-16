@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>tech.idct.helena</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>BSD-4-Clause</project_license>
+  <name>Helena</name>
+  <summary>A free, open-source API client</summary>
+  <description>
+    <p>
+      Helena is a free, open-source, no-cloud API client for testing and
+      exploring HTTP APIs — a devs-for-devs tool with no paid or hosted
+      features.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Collections, folders, and requests stored as plain YAML on disk</li>
+      <li>Environments and {{variables}} with secret masking</li>
+      <li>Basic / Bearer / API-key / OAuth2 authentication</li>
+      <li>Request chaining and sandboxed pre/post-request scripting</li>
+      <li>OpenAPI / Swagger / WSDL import and cURL / wget export</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">tech.idct.helena.desktop</launchable>
+  <url type="homepage">https://github.com/ideaconnect/helena</url>
+  <url type="bugtracker">https://github.com/ideaconnect/helena/issues</url>
+  <url type="vcs-browser">https://github.com/ideaconnect/helena</url>
+  <developer id="tech.idct">
+    <name>IDCT</name>
+  </developer>
+  <project_group>IDCT</project_group>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Development</category>
+    <category>Network</category>
+  </categories>
+  <provides>
+    <binary>helena</binary>
+  </provides>
+  <releases>
+    <release version="0.1.0" date="2026-06-16" type="development">
+      <description>
+        <p>Initial pre-release.</p>
+      </description>
+    </release>
+  </releases>
+</component>
