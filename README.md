@@ -120,7 +120,10 @@ object shapes — is documented in
 
 Requirements:
 
-- Go 1.23+ (project tracks Go via `go.mod`; currently `go 1.26.3`)
+- Go 1.23+ to build. The exact build toolchain is pinned in `go.mod`
+  (`go 1.26` language version, `toolchain go1.26.4`); `go` auto-selects that
+  toolchain, and CI locks it with `GOTOOLCHAIN=local` so it never silently
+  drifts.
 - A C compiler (Fyne uses cgo + OpenGL)
 - **Linux**: `sudo apt-get install -y libgl1-mesa-dev xorg-dev`
 - **Windows**: TDM-GCC or MSYS2 mingw-w64 on `PATH`

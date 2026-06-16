@@ -570,13 +570,12 @@ func TestRunPreRequestFormBody(t *testing.T) {
 // undefined for non-form body types so scripts can probe the body
 // shape via `typeof request.form`.
 func TestRunPreRequestFormNotBoundForRawBodies(t *testing.T) {
-	rt := New(newFakeBridge())
 	r := model.Request{
 		Method: model.POST, URL: "https://x/",
 		Body: model.Body{Type: model.BodyJSON, Content: "{}"},
 	}
 	bridge := newFakeBridge()
-	rt = New(bridge)
+	rt := New(bridge)
 	_, err := rt.RunPreRequest(context.Background(),
 		`helena.env.set("HAS_FORM", typeof request.form);`, &r, nil)
 	if err != nil {

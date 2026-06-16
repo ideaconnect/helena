@@ -62,7 +62,7 @@ func TestActiveCollectionDirAfterOpen(t *testing.T) {
 func TestActiveIndexReflectsWorkspaceSwitch(t *testing.T) {
 	tmp := t.TempDir()
 	s, _ := New(filepath.Join(tmp, "cfg.yml"))
-	s.AddWorkspace("Second")
+	_ = s.AddWorkspace("Second")
 	if got := s.ActiveIndex(); got != 0 {
 		t.Errorf("ActiveIndex initial = %d, want 0", got)
 	}
@@ -217,7 +217,7 @@ func TestAddEnvironmentAppendsAndPersists(t *testing.T) {
 	if err := s.OpenCollection(dir); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	s.AddEnvironment("Local")
+	_ = s.AddEnvironment("Local")
 	if got := s.CollectionEnvironmentNames(); len(got) != 1 || got[0] != "Local" {
 		t.Errorf("env names = %v, want [Local]", got)
 	}
@@ -241,7 +241,7 @@ func TestSnapshotActiveEnvVarsReflectsActiveEnv(t *testing.T) {
 	if err := s.OpenCollection(dir); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	s.AddEnvironment("E")
+	_ = s.AddEnvironment("E")
 	// Add a variable by editing the environment's Variables field.
 	col := &s.cols[s.activeCol]
 	col.Environments[0].Variables = []model.Variable{{Enabled: true, Key: "K", Value: "V"}}
@@ -352,8 +352,8 @@ func TestAddWorkspaceRejectsEmpty(t *testing.T) {
 	tmp := t.TempDir()
 	s, _ := New(filepath.Join(tmp, "cfg.yml"))
 	before := len(s.WorkspaceNames())
-	s.AddWorkspace("")
-	s.AddWorkspace("   ")
+	_ = s.AddWorkspace("")
+	_ = s.AddWorkspace("   ")
 	if got := len(s.WorkspaceNames()); got != before {
 		t.Errorf("workspaces grew to %d on blank names", got)
 	}
@@ -365,8 +365,8 @@ func TestRenameWorkspaceOutOfRangeNoop(t *testing.T) {
 	tmp := t.TempDir()
 	s, _ := New(filepath.Join(tmp, "cfg.yml"))
 	names := append([]string(nil), s.WorkspaceNames()...)
-	s.RenameWorkspace(99, "X")
-	s.RenameWorkspace(-1, "X")
+	_ = s.RenameWorkspace(99, "X")
+	_ = s.RenameWorkspace(-1, "X")
 	got := s.WorkspaceNames()
 	if len(got) != len(names) {
 		t.Errorf("workspace count changed: %v -> %v", names, got)
@@ -706,8 +706,8 @@ func TestSetActiveEnvUpdatesActiveCollectionOnly(t *testing.T) {
 	if err := s.OpenCollection(dir); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	s.AddEnvironment("E1")
-	s.AddEnvironment("E2")
+	_ = s.AddEnvironment("E1")
+	_ = s.AddEnvironment("E2")
 	s.SetActiveEnv("E1")
 	if got := s.ActiveEnvName(); got != "E1" {
 		t.Errorf("ActiveEnvName = %q, want E1", got)
@@ -867,11 +867,11 @@ func TestDeleteWorkspaceOutOfRangeNoop(t *testing.T) {
 	if got := len(s.WorkspaceNames()); got != 1 {
 		t.Fatalf("initial workspace count = %d, want 1", got)
 	}
-	s.DeleteWorkspace(0) // must NOT drop the last one
+	_ = s.DeleteWorkspace(0) // must NOT drop the last one
 	if got := len(s.WorkspaceNames()); got != 1 {
 		t.Errorf("after DeleteWorkspace(0) = %d, want 1 (last workspace kept)", got)
 	}
-	s.DeleteWorkspace(99)
+	_ = s.DeleteWorkspace(99)
 	if got := len(s.WorkspaceNames()); got != 1 {
 		t.Errorf("after DeleteWorkspace(99) = %d, want 1", got)
 	}

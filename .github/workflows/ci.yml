@@ -14,6 +14,18 @@ on:
 permissions:
   contents: read
 
+# Cancel superseded runs for the same ref to save CI minutes — but never a
+# tag run, so an in-flight release is always allowed to finish (#31).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+# Lock the Go toolchain to exactly what go.mod's `toolchain` directive pins,
+# so CI never silently auto-downloads a different one (#32). setup-go installs
+# that version from go.mod; `local` then forbids any further switch.
+env:
+  GOTOOLCHAIN: local
+
 jobs:
   build:
     name: Build & test (${{ matrix.os }})
@@ -134,6 +146,48 @@ jobs:
           sudo apt-get install -y libgl1-mesa-dev xorg-dev
       - name: Fuzz ${{ matrix.target.name }} for 20s
         run: go test ${{ matrix.target.pkg }} -fuzz='^${{ matrix.target.name }}$' -fuzztime=20s
+
+  lint:
+    name: golangci-lint
+    # Runs on every push + PR (not the nightly mutation cron).
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      # The ui package imports Fyne, so the linter needs the GL/X11 headers to
+      # type-check it.
+      - name: Install Linux GUI deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.8
+
+  vuln:
+    name: govulncheck
+    # Surfaces known-vulnerable dependencies / stdlib on every push + PR.
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install Linux GUI deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+      - name: Run govulncheck
+        run: govulncheck ./...
 
   mutation:
     name: Mutation testing (nightly)
