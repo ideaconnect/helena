@@ -164,10 +164,14 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgl1-mesa-dev xorg-dev
+      # Build golangci-lint from source with the pinned toolchain rather than
+      # downloading a prebuilt release: the v1.64.8 release binary is built with
+      # go1.24 and refuses to run against this repo's go1.26 target
+      # ("build Go version lower than targeted").
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
       - name: golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: v1.64.8
+        run: $(go env GOPATH)/bin/golangci-lint run ./...
 
   vuln:
     name: govulncheck
