@@ -5,6 +5,8 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -24,12 +26,13 @@ import (
 // callbacks act on the right node.
 type treeRow struct {
 	widget.BaseWidget
-	id        string
-	method    *canvas.Text
-	name      *widget.Label
-	onDrag    func(id string, e *fyne.DragEvent)
-	onDragEnd func(id string)
-	dragging  func() bool // reports whether a tree drag is currently in flight
+	id         string
+	method     *canvas.Text
+	methodSlot *fyne.Container // left-pads the chip to align with the name label's text inset (#tree-align)
+	name       *widget.Label
+	onDrag     func(id string, e *fyne.DragEvent)
+	onDragEnd  func(id string)
+	dragging   func() bool // reports whether a tree drag is currently in flight
 }
 
 func newTreeRow(onDrag func(string, *fyne.DragEvent), onDragEnd func(string), dragging func() bool) *treeRow {
@@ -65,15 +68,23 @@ func (r *treeRow) setRequest(id, method, name string) {
 	r.method.Text = method
 	r.method.Color = methodColor(method)
 	r.method.Show()
+	if r.methodSlot != nil {
+		r.methodSlot.Show()
+	}
 	r.method.Refresh()
 	r.name.SetText(name)
 }
 
 // setBranch configures the row as a folder or collection: just a label.
+// The whole method slot (not just the chip) is hidden so the Border drops its
+// left object and the name reflows flush — see CreateRenderer.
 func (r *treeRow) setBranch(id, label string) {
 	r.id = id
 	r.method.Text = ""
 	r.method.Hide()
+	if r.methodSlot != nil {
+		r.methodSlot.Hide()
+	}
 	r.name.SetText(label)
 }
 
@@ -94,5 +105,22 @@ func (r *treeRow) DragEnd() {
 func (r *treeRow) CreateRenderer() fyne.WidgetRenderer {
 	// Method chip on the left, name filling the rest (it truncates to the row
 	// width). No background of its own — the tree node paints hover/selection.
-	return widget.NewSimpleRenderer(container.NewBorder(nil, nil, r.method, nil, r.name))
+	//
+	// The chip is left-padded by SizeNameInnerPadding so its glyph starts at the
+	// same x as the name Label's text (a widget.Label/RichText insets its glyph
+	// by innerPadding on the left). Without this a request's method chip sits
+	// innerPadding to the LEFT of a same-depth folder's name (the bug). The whole
+	// slot — not just the chip — is hidden for branches: a hidden chip inside a
+	// *visible* wrapper would still reserve the wrapper's LeftPadding
+	// (CustomPaddedLayout.MinSize adds it even when its child is hidden, and
+	// Border checks the wrapper's visibility, not the child's), pushing the
+	// folder name right. Hiding the wrapper makes Border ignore the left slot so
+	// folder names stay flush. Top/bottom pad stay 0 so the chip keeps the full
+	// row height and canvas.Text self-centers vertically as before.
+	pad := theme.SizeForWidget(theme.SizeNameInnerPadding, r)
+	r.methodSlot = container.New(layout.NewCustomPaddedLayout(0, 0, pad, 0), r.method)
+	if !r.method.Visible() {
+		r.methodSlot.Hide()
+	}
+	return widget.NewSimpleRenderer(container.NewBorder(nil, nil, r.methodSlot, nil, r.name))
 }
