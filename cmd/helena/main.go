@@ -2,9 +2,10 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"log"
 	"os"
+	"runtime/debug"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/idct/helena/assets"
 	"github.com/idct/helena/internal/config"
+	"github.com/idct/helena/internal/logging"
 	"github.com/idct/helena/internal/session"
 	"github.com/idct/helena/internal/ui"
 )
@@ -57,17 +59,35 @@ func windowTitle(version string) string {
 }
 
 func main() {
-	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-version") {
+	var (
+		showVersion = flag.Bool("version", false, "print version and exit")
+		verbose     = flag.Bool("verbose", false, "verbose (debug) diagnostic logging")
+		logFile     = flag.String("log-file", "", "also write diagnostic logs to this file (or set HELENA_LOG)")
+	)
+	flag.Parse()
+
+	if *showVersion {
 		fmt.Println(versionString(version, commit, date))
 		return
 	}
 
-	// Process-level safety net: log a panic during setup before the process
-	// exits, so a crash leaves a breadcrumb for bug reports (#48). UI event
-	// handlers are additionally guarded inside the ui package.
+	lf := *logFile
+	if lf == "" {
+		lf = os.Getenv("HELENA_LOG")
+	}
+	closeLog, err := logging.Configure(*verbose, lf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "helena: could not open log file %q: %v\n", lf, err)
+	}
+	defer func() { _ = closeLog() }()
+	logging.L().Info("helena starting", "version", version, "commit", commit)
+
+	// Process-level safety net: log a panic (with stack) during setup before the
+	// process exits, so a crash leaves a breadcrumb for bug reports (#48/#49).
+	// UI event handlers are additionally guarded inside the ui package.
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("helena: fatal panic: %v", r)
+			logging.L().Error("fatal panic", "recovered", r, "stack", string(debug.Stack()))
 			panic(r) // re-panic so the runtime still prints the stack + exits non-zero
 		}
 	}()
@@ -78,12 +98,12 @@ func main() {
 
 	cfgPath, err := config.DefaultPath()
 	if err != nil {
-		log.Printf("helena: config path unavailable, running without persistence: %v", err)
+		logging.L().Warn("config path unavailable, running without persistence", "err", err)
 		cfgPath = ""
 	}
 	sess, err := session.New(cfgPath)
 	if err != nil {
-		log.Printf("helena: could not load session, starting fresh: %v", err)
+		logging.L().Warn("could not load session, starting fresh", "err", err)
 		sess, _ = session.New("")
 	}
 

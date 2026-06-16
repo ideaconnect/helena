@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"image/color"
-	"log"
 	"net/http"
+	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -24,6 +24,7 @@ import (
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
+	"github.com/idct/helena/internal/logging"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/responsefmt"
 	"github.com/idct/helena/internal/scripting"
@@ -1320,7 +1321,7 @@ func (m *MainUI) sessionTransport() *http.Transport {
 func (m *MainUI) guard(label string, fn func()) {
 	defer func() {
 		if r := recover(); r != nil {
-			log.Printf("helena: recovered panic in %s: %v", label, r)
+			logging.L().Error("recovered panic in UI callback", "where", label, "recovered", r, "stack", string(debug.Stack()))
 			err := fmt.Errorf("%s failed unexpectedly: %v", label, r)
 			if m.win != nil {
 				dialog.ShowError(err, m.win)
@@ -1440,6 +1441,9 @@ func (m *MainUI) send() {
 	m.Status.SetText("Sending…")
 	m.corsBanner.Hide()
 	m.hideErrorBanner() // clear a prior failure when a new send starts
+	// Diagnostic log with the URL redacted — never the resolved, secret-bearing
+	// form (#49).
+	logging.L().Info("send", "method", string(req.Method), "url", logging.RedactURL(req.URL), "name", req.Name)
 
 	// Build the cancellable context on the UI thread so the click
 	// handler (sendOrAbort) can call cancel() to abort an in-flight

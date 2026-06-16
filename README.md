@@ -152,6 +152,11 @@ Run `helena --version` to print the build metadata. Released binaries report
 their tag and commit (injected at build time); a local `go build` reports
 `dev`.
 
+For diagnostics, `helena --verbose` raises the log level and `--log-file PATH`
+(or the `HELENA_LOG` env var) tees logs to a file — useful for bug reports.
+Credentials are redacted from logs (Authorization/API-key headers and any
+URL userinfo/query), so a log is safe to attach.
+
 App identity/version for packaging lives in [`FyneApp.toml`](FyneApp.toml) at
 the repo root, consumed by Fyne's native tooling (`go run fyne.io/tools/cmd/fyne
 package`) so bundles carry a consistent ID/icon/version without manual flags.
