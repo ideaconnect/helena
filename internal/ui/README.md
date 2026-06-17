@@ -69,8 +69,8 @@ toolbar button, sidebar button, or keyboard shortcut.
 
 - `editWorkspaces` — list-style workspace manager
   ([workspaces.go](workspaces.go)).
-- `editEnvironments` — `key = value` editor for the active environment
-  ([shell.go](shell.go)).
+- `editEnvironments` — key/value list editor for the active environment
+  ([envedit.go](envedit.go)).
 - `editSettings` — theme / TLS / CORS / redirects / timeout dialog
   ([shell.go](shell.go)).
 - `refreshEnvironments` / `refreshWorkspaceDropdown` — reseed toolbar selects

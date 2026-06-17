@@ -470,12 +470,17 @@ User picks a workspace in the toolbar Select:
 1. `onWorkspaceChanged(name)` finds the index and calls `sess.SetActive(i)`.
 2. `m.Tree.Refresh()` re-reads `sess.Tree()` so the sidebar shows that
    workspace's collections.
+3. `updateWindowTitle()` retitles the window to include the active workspace
+   (e.g. "Helena — Default", #124). It is also called from `SetWindow` (initial
+   title) and `refreshWorkspaceDropdown` (so rename/add/delete keep it current).
 
 The Workspaces… button opens `editWorkspaces`
-([workspaces.go:14](workspaces.go#L14)), a list-style dialog with Add /
-Rename / Delete buttons. After mutation, `refreshWorkspaceDropdown` reseeds
-the toolbar Select. Delete also calls `loadRequest(nil, "")` to clear the
-editor (the previously open request may have been in the deleted workspace).
+([workspaces.go:14](workspaces.go#L14)), a list-style dialog with icon buttons
+for Add / Rename / Delete (#122); Rename and Delete stay disabled until a
+workspace row is selected (#130). After mutation, `refreshWorkspaceDropdown`
+reseeds the toolbar Select (and refreshes the title). Delete also calls
+`loadRequest(nil, "")` to clear the editor (the previously open request may have
+been in the deleted workspace).
 
 ## Switching environments
 
@@ -486,22 +491,25 @@ User picks an environment in the toolbar Select:
 2. `updateURLPreview()` re-runs the resolver against the new env so the
    italic preview label reflects the change instantly.
 
-The Environments… button opens `editEnvironments` in
+The Variables… button opens `editEnvironments` in
 [envedit.go](envedit.go):
 
 1. Bails if no collection is open.
 2. If the active env name is empty, takes the first env or creates a
    "Default" one.
-3. Shows a multi-line `key = value` entry pre-filled with
-   `maskedEnvText(env.Variables, false)` — each `Secret` variable's value is
-   replaced with `envSecretMask` so it is not shown in cleartext (#43). When
-   the env has any secret, a **Reveal secret values** checkbox re-renders the
-   entry with real values (toggling reloads from saved state).
-4. On Save: `session.ParseEnvVars` -> `restoreEnvSecrets` re-marks pre-existing
-   secret keys as `Secret` and, where the user left `envSecretMask` in place,
-   restores the stored value (so editing other lines never clobbers a hidden
-   secret; a changed value is taken as the new secret) -> `SetActiveEnvironmentVariables`
-   -> `SaveActiveCollection` -> `refreshEnvironments` + `updateURLPreview`.
+3. Shows an editable key/value list (like the Headers tab, #123): one
+   `buildVarRow` per variable — an enable checkbox, key + value entries, and a
+   delete button — plus an **Add variable** button. The editor keeps the real
+   values in a working copy and masks only the *display* of a `Secret` value:
+   its value entry shows `envSecretMask` and is **disabled** until a **Reveal
+   secret values** checkbox is toggled, so editing other rows can never clobber
+   a hidden secret (#43). An unchecked row is kept but marked `Enabled=false`
+   (this replaces the old `# key = value` disable syntax).
+4. On Save: `pruneEmptyVars` drops blank-key rows ->
+   `SetActiveEnvironmentVariables` -> `SaveActiveCollection` ->
+   `refreshEnvironments` + `updateURLPreview`. Because the working copy holds
+   the real values throughout, an un-revealed secret round-trips untouched with
+   no parse/restore step.
 
    Note on what `Secret` guarantees today: it controls **display masking in the
    editor** and round-trips through storage; it is **not** encryption at rest —
@@ -517,7 +525,7 @@ is the multi-environment lifecycle surface.
 
 ## Changing theme
 
-The Settings… button opens `editSettings` ([settings.go](settings.go)). The Theme
+The Settings (cog) toolbar button opens `editSettings` ([settings.go](settings.go)). The Theme
 row is a Select pre-populated via `themeName(s.Theme)`. On Save:
 
 1. `themeFromName(themeSelect.Selected)` maps the label back to a

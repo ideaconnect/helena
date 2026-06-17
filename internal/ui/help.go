@@ -33,7 +33,7 @@ func (m *MainUI) helpMenuItems() []*fyne.MenuItem {
 	}
 }
 
-// showHelpMenu pops up the Help menu anchored under the "?" toolbar button.
+// showHelpMenu pops up the Help menu anchored under the Help toolbar icon button.
 func (m *MainUI) showHelpMenu() {
 	if m.win == nil || m.helpBtn == nil {
 		return

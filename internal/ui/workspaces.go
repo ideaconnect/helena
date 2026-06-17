@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 )
 
 // editWorkspaces opens a list-style dialog for adding/renaming/deleting
@@ -23,10 +24,17 @@ func (m *MainUI) editWorkspaces() {
 			o.(*widget.Label).SetText(m.sess.WorkspaceNames()[i])
 		},
 	)
-	list.OnSelected = func(i widget.ListItemID) { selectedIdx = i }
-	list.OnUnselected = func(widget.ListItemID) { selectedIdx = -1 }
+	// Rename / Delete act on the selected row, so they stay disabled until one
+	// is selected (#130); selectionChanged keeps them in sync with the list.
+	var renameBtn, deleteBtn *ttwidget.Button
+	selectionChanged := func() {
+		enableButton(renameBtn, selectedIdx >= 0)
+		enableButton(deleteBtn, selectedIdx >= 0)
+	}
+	list.OnSelected = func(i widget.ListItemID) { selectedIdx = i; selectionChanged() }
+	list.OnUnselected = func(widget.ListItemID) { selectedIdx = -1; selectionChanged() }
 
-	addBtn := widget.NewButton("+ Add", func() {
+	addBtn := tipButton("square-plus", "Add workspace", func() {
 		m.promptName("New workspace", "Name", "", func(name string) {
 			if err := m.sess.AddWorkspace(name); err != nil {
 				dialog.ShowError(err, m.win)
@@ -36,7 +44,7 @@ func (m *MainUI) editWorkspaces() {
 			m.refreshWorkspaceDropdown()
 		})
 	})
-	renameBtn := widget.NewButton("Rename", func() {
+	renameBtn = tipButton("pen-to-square", "Rename workspace", func() {
 		if selectedIdx < 0 {
 			return
 		}
@@ -51,7 +59,7 @@ func (m *MainUI) editWorkspaces() {
 			m.refreshWorkspaceDropdown()
 		})
 	})
-	deleteBtn := widget.NewButton("Delete", func() {
+	deleteBtn = tipButton("trash-can", "Delete workspace", func() {
 		if selectedIdx < 0 {
 			return
 		}
@@ -70,12 +78,14 @@ func (m *MainUI) editWorkspaces() {
 				selectedIdx = -1
 				list.UnselectAll()
 				list.Refresh()
+				selectionChanged()
 				m.refreshWorkspaceDropdown()
 				m.refreshEnvironments()
 				m.Tree.Refresh()
 				m.loadRequest(nil, "")
 			}, m.win)
 	})
+	selectionChanged() // nothing selected yet → Rename/Delete start disabled
 
 	actions := container.NewHBox(addBtn, renameBtn, deleteBtn)
 	content := container.NewBorder(nil, actions, nil, nil, list)
@@ -92,4 +102,5 @@ func (m *MainUI) refreshWorkspaceDropdown() {
 		m.Workspace.SetSelected(names[m.sess.ActiveIndex()])
 	}
 	m.Workspace.Refresh()
+	m.updateWindowTitle()
 }

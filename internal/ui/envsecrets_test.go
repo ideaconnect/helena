@@ -1,74 +1,189 @@
 package ui
 
 import (
-	"strings"
+	"path/filepath"
 	"testing"
 
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
+
 	"github.com/idct/helena/internal/model"
+	"github.com/idct/helena/internal/session"
+	"github.com/idct/helena/internal/storage"
 )
 
-var envVarsFixture = []model.Variable{
-	{Enabled: true, Key: "HOST", Value: "api.test"},
-	{Enabled: true, Key: "TOKEN", Value: "s3cret-value", Secret: true},
-}
+// TestVarRowValueMasksUnrevealedSecret pins that the variables list masks a
+// Secret value until revealed and never masks a non-secret value (#43).
+func TestVarRowValueMasksUnrevealedSecret(t *testing.T) {
+	sec := model.Variable{Enabled: true, Key: "TOKEN", Value: "s3cret-value", Secret: true}
+	pub := model.Variable{Enabled: true, Key: "HOST", Value: "api.test"}
 
-// TestMaskedEnvTextHidesSecretsByDefault verifies the env editor seeds a masked
-// representation for Secret vars (no cleartext) unless reveal is set (#43).
-func TestMaskedEnvTextHidesSecretsByDefault(t *testing.T) {
-	masked := maskedEnvText(envVarsFixture, false)
-	if strings.Contains(masked, "s3cret-value") {
-		t.Errorf("masked text leaked the secret value:\n%s", masked)
+	if got := varRowValue(sec, false); got != envSecretMask {
+		t.Errorf("unrevealed secret value = %q; want the mask", got)
 	}
-	if !strings.Contains(masked, envSecretMask) {
-		t.Errorf("masked text missing the secret placeholder:\n%s", masked)
+	if got := varRowValue(sec, true); got != "s3cret-value" {
+		t.Errorf("revealed secret value = %q; want the real value", got)
 	}
-	if !strings.Contains(masked, "api.test") {
-		t.Errorf("masked text dropped a non-secret value:\n%s", masked)
-	}
-
-	revealed := maskedEnvText(envVarsFixture, true)
-	if !strings.Contains(revealed, "s3cret-value") {
-		t.Errorf("revealed text should show the secret value:\n%s", revealed)
+	if got := varRowValue(pub, false); got != "api.test" {
+		t.Errorf("non-secret value = %q; want it shown unmasked", got)
 	}
 }
 
-// TestRestoreEnvSecretsKeepsHiddenValue verifies that saving with the mask left
-// in place keeps the stored secret value and the Secret flag, while a changed
-// value is taken as the new secret.
-func TestRestoreEnvSecretsKeepsHiddenValue(t *testing.T) {
-	secretVals := map[string]string{"TOKEN": "s3cret-value"}
-
-	// User edited only the non-secret line; the secret line still shows the mask.
-	unrevealed := []model.Variable{
-		{Enabled: true, Key: "HOST", Value: "api.prod"},
-		{Enabled: true, Key: "TOKEN", Value: envSecretMask},
+// TestPruneEmptyVarsDropsBlankKeys pins that blank-key rows are dropped on save.
+func TestPruneEmptyVarsDropsBlankKeys(t *testing.T) {
+	in := []model.Variable{
+		{Key: "A", Value: "1"},
+		{Key: "  ", Value: "x"},
+		{Key: "", Value: ""},
+		{Key: "B", Value: "2"},
 	}
-	got := restoreEnvSecrets(unrevealed, secretVals)
-	tok := findVar(t, got, "TOKEN")
-	if tok.Value != "s3cret-value" || !tok.Secret {
-		t.Errorf("hidden secret not preserved: %+v", tok)
-	}
-	if findVar(t, got, "HOST").Value != "api.prod" {
-		t.Error("non-secret edit was lost")
-	}
-
-	// User revealed and changed the secret: the new value wins, flag preserved.
-	changed := []model.Variable{
-		{Enabled: true, Key: "TOKEN", Value: "rotated-secret"},
-	}
-	tok = findVar(t, restoreEnvSecrets(changed, secretVals), "TOKEN")
-	if tok.Value != "rotated-secret" || !tok.Secret {
-		t.Errorf("changed secret not taken / flag lost: %+v", tok)
+	got := pruneEmptyVars(in)
+	if len(got) != 2 || got[0].Key != "A" || got[1].Key != "B" {
+		t.Errorf("pruneEmptyVars = %+v; want only A and B", got)
 	}
 }
 
-func findVar(t *testing.T, vs []model.Variable, key string) model.Variable {
-	t.Helper()
-	for _, v := range vs {
-		if v.Key == key {
-			return v
+// TestEnvEditorMasksSecretUntilReveal opens the real editor dialog and verifies
+// the secret value is not present in any entry until the user reveals it (#43),
+// while a non-secret value is shown immediately.
+func TestEnvEditorMasksSecretUntilReveal(t *testing.T) {
+	test.NewApp()
+	dir := filepath.Join(t.TempDir(), "c0")
+	if err := storage.Save(model.Collection{Name: "C0"}, dir); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := session.New(filepath.Join(t.TempDir(), "cfg.yml"))
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveCollection(0)
+	_ = s.AddEnvironment("Default")
+	s.SetActiveEnv("Default")
+	s.SetActiveEnvironmentVariables([]model.Variable{
+		{Enabled: true, Key: "HOST", Value: "api.test"},
+		{Enabled: true, Key: "TOKEN", Value: "s3cret-value", Secret: true},
+	})
+
+	m := NewMainUI(s)
+	w := test.NewWindow(m.Root())
+	w.Resize(fyne.NewSize(800, 600))
+	defer w.Close()
+	m.SetWindow(w)
+
+	m.editEnvironments()
+	top := w.Canvas().Overlays().Top()
+	if top == nil {
+		t.Fatal("environment dialog did not open")
+	}
+
+	entryWith := func(text string) bool {
+		found := false
+		walkObjects(top, func(o fyne.CanvasObject) {
+			if e, ok := o.(*widget.Entry); ok && e.Text == text {
+				found = true
+			}
+		})
+		return found
+	}
+
+	if entryWith("s3cret-value") {
+		t.Error("secret value present in an entry before reveal")
+	}
+	if !entryWith("api.test") {
+		t.Error("non-secret value should be shown in an entry")
+	}
+
+	var reveal *widget.Check
+	walkObjects(top, func(o fyne.CanvasObject) {
+		if c, ok := o.(*widget.Check); ok && c.Text == "Reveal secret values" {
+			reveal = c
+		}
+	})
+	if reveal == nil {
+		t.Fatal("reveal-secrets checkbox not found")
+	}
+	reveal.SetChecked(true)
+
+	if !entryWith("s3cret-value") {
+		t.Error("secret value should be shown in an entry after reveal")
+	}
+}
+
+// TestEnvEditorSavePreservesUnrevealedSecret pins the #43 save invariant the
+// removed restoreEnvSecrets test used to cover: editing another row and saving
+// WITHOUT revealing keeps the secret's real value (never persists the mask).
+func TestEnvEditorSavePreservesUnrevealedSecret(t *testing.T) {
+	test.NewApp()
+	dir := filepath.Join(t.TempDir(), "c0")
+	if err := storage.Save(model.Collection{Name: "C0"}, dir); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := session.New(filepath.Join(t.TempDir(), "cfg.yml"))
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveCollection(0)
+	_ = s.AddEnvironment("Default")
+	s.SetActiveEnv("Default")
+	s.SetActiveEnvironmentVariables([]model.Variable{
+		{Enabled: true, Key: "HOST", Value: "api.test"},
+		{Enabled: true, Key: "TOKEN", Value: "s3cret-value", Secret: true},
+	})
+
+	m := NewMainUI(s)
+	w := test.NewWindow(m.Root())
+	w.Resize(fyne.NewSize(800, 600))
+	defer w.Close()
+	m.SetWindow(w)
+
+	m.editEnvironments()
+	top := w.Canvas().Overlays().Top()
+	if top == nil {
+		t.Fatal("environment dialog did not open")
+	}
+
+	// Edit the NON-secret row and Save without ever revealing the secret.
+	var hostEntry *widget.Entry
+	var saveBtn *widget.Button
+	walkObjects(top, func(o fyne.CanvasObject) {
+		switch v := o.(type) {
+		case *widget.Entry:
+			if v.Text == "api.test" {
+				hostEntry = v
+			}
+		case *widget.Button:
+			if v.Text == "Save" {
+				saveBtn = v
+			}
+		}
+	})
+	if hostEntry == nil || saveBtn == nil {
+		t.Fatalf("dialog widgets not found (host=%v save=%v)", hostEntry, saveBtn)
+	}
+	hostEntry.SetText("api.prod")
+	saveBtn.OnTapped()
+
+	env := s.ActiveEnvironment()
+	if env == nil {
+		t.Fatal("no active environment after save")
+	}
+	var tok, host *model.Variable
+	for i := range env.Variables {
+		if env.Variables[i].Value == envSecretMask {
+			t.Errorf("the secret mask was persisted as a value: %+v", env.Variables[i])
+		}
+		switch env.Variables[i].Key {
+		case "TOKEN":
+			tok = &env.Variables[i]
+		case "HOST":
+			host = &env.Variables[i]
 		}
 	}
-	t.Fatalf("variable %q not found in %+v", key, vs)
-	return model.Variable{}
+	if tok == nil || tok.Value != "s3cret-value" || !tok.Secret {
+		t.Errorf("un-revealed secret not preserved on save: %+v", tok)
+	}
+	if host == nil || host.Value != "api.prod" {
+		t.Errorf("non-secret edit not saved: %+v", host)
+	}
 }

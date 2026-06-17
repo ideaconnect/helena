@@ -72,10 +72,11 @@ walks up the folder → collection chain.
 
 `{{name}}` templates in URLs, headers, params, body, and auth resolve against
 the **active environment**. Manage environments with **Manage…** (create /
-rename / delete / switch) and edit variables with **Variables…**
-(`key = value` per line; prefix a line with `#` to disable it). Mark a variable
-**Secret** to mask its value in the editor (reveal with the checkbox).
-Variables compose — a variable's value may reference another `{{var}}`.
+rename / delete / switch) and edit variables with **Variables…** — an editable
+key/value list (one row per variable; **Add variable** to append, the row
+checkbox enables/disables a variable, the trash icon removes it). A **Secret**
+variable shows a masked, read-only value until you tick **Reveal secret
+values**. Variables compose — a variable's value may reference another `{{var}}`.
 
 ## Request chaining
 

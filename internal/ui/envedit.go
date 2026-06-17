@@ -1,13 +1,15 @@
 package ui
 
 import (
+	"slices"
+	"strings"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/idct/helena/internal/model"
-	"github.com/idct/helena/internal/session"
 )
 
 // onEnvChanged is the Environment dropdown's selection handler; it stores the
@@ -39,47 +41,85 @@ func (m *MainUI) refreshEnvironments() {
 	m.Environment.Refresh()
 }
 
-// editEnvironments opens a simple "key = value" editor for the active
-// collection's active environment, creating one if needed, and saves changes
-// back to the collection's YAML on disk.
-// envSecretMask is the placeholder shown in the environment editor in place of
-// a Secret variable's value until the user reveals it (#43). Left in place on
-// save, it means "keep the stored value" so editing other lines never clobbers
-// a hidden secret.
+// envSecretMask is the placeholder shown in a Secret variable's value field
+// until the user reveals it (#43). The editor keeps the real values in a working
+// copy and masks only the *display*; an un-revealed secret field is also
+// disabled, so editing other rows can never clobber the hidden value.
 const envSecretMask = "•••••••• (secret — reveal to edit)"
 
-// maskedEnvText renders env vars as `key = value` lines, replacing each Secret
-// variable's value with envSecretMask unless reveal is true.
-func maskedEnvText(vars []model.Variable, reveal bool) string {
-	if reveal {
-		return session.FormatEnvVars(vars)
+// varRowValue is the text shown in a variable row's value entry: the real value,
+// or the placeholder for a Secret variable that has not been revealed.
+func varRowValue(v model.Variable, reveal bool) string {
+	if v.Secret && !reveal {
+		return envSecretMask
 	}
-	masked := make([]model.Variable, len(vars))
-	copy(masked, vars)
-	for i := range masked {
-		if masked[i].Secret {
-			masked[i].Value = envSecretMask
-		}
-	}
-	return session.FormatEnvVars(masked)
+	return v.Value
 }
 
-// restoreEnvSecrets re-marks parsed env vars whose key was a known secret as
-// Secret, and restores the stored value wherever the user left envSecretMask in
-// place (so editing other lines without revealing never clobbers a secret). A
-// value that differs from the mask is taken as the user's new value.
-func restoreEnvSecrets(parsed []model.Variable, secretVals map[string]string) []model.Variable {
-	for i := range parsed {
-		if storedVal, ok := secretVals[parsed[i].Key]; ok {
-			parsed[i].Secret = true
-			if parsed[i].Value == envSecretMask {
-				parsed[i].Value = storedVal
-			}
+// pruneEmptyVars drops rows whose key trims to empty — blank "Add variable" rows
+// the user never filled in — so they don't reach storage.
+func pruneEmptyVars(vars []model.Variable) []model.Variable {
+	out := vars[:0]
+	for _, v := range vars {
+		if strings.TrimSpace(v.Key) != "" {
+			out = append(out, v)
 		}
 	}
-	return parsed
+	return out
 }
 
+// buildVarRow renders one editable variable row (enable check, key, value,
+// delete) writing back into vars by index — mirroring the headers key/value
+// editor (buildKVRow). A Secret value shows the mask and stays disabled until
+// reveal, so it can't be edited or cleared blind (#43). refresh rebuilds the
+// row list after a delete.
+func (m *MainUI) buildVarRow(vars *[]model.Variable, idx int, reveal bool, refresh func()) fyne.CanvasObject {
+	v := (*vars)[idx]
+	// OnChanged handlers are assigned AFTER SetText/SetChecked so seeding the
+	// widgets during a rebuild doesn't fire write-backs.
+	check := widget.NewCheck("", nil)
+	check.SetChecked(v.Enabled)
+	check.OnChanged = func(b bool) {
+		if idx < len(*vars) {
+			(*vars)[idx].Enabled = b
+		}
+	}
+	keyEntry := widget.NewEntry()
+	keyEntry.SetPlaceHolder("key")
+	keyEntry.SetText(v.Key)
+	keyEntry.OnChanged = func(s string) {
+		if idx < len(*vars) {
+			(*vars)[idx].Key = s
+		}
+	}
+	valEntry := widget.NewEntry()
+	valEntry.SetPlaceHolder("value")
+	valEntry.SetText(varRowValue(v, reveal))
+	if v.Secret && !reveal {
+		valEntry.Disable()
+	}
+	valEntry.OnChanged = func(s string) {
+		if idx < len(*vars) {
+			(*vars)[idx].Value = s
+		}
+	}
+	// Same affordance as the headers editor: a low-importance circle-xmark.
+	delBtn := widget.NewButtonWithIcon("", themedIcon("circle-xmark"), func() {
+		if idx < len(*vars) {
+			*vars = slices.Delete(*vars, idx, idx+1)
+		}
+		refresh()
+	})
+	delBtn.Importance = widget.LowImportance
+	return container.NewBorder(nil, nil, check, delBtn,
+		container.NewGridWithColumns(2, keyEntry, valEntry))
+}
+
+// editEnvironments opens a key/value list editor (like the Headers tab) for the
+// active collection's active environment, creating one if needed, and saves
+// changes back to the collection's YAML. Unchecked rows are kept but marked
+// disabled (replacing the old `# key = value` syntax); Secret values are masked
+// until revealed (#43).
 func (m *MainUI) editEnvironments() {
 	if m.win == nil {
 		return
@@ -102,38 +142,50 @@ func (m *MainUI) editEnvironments() {
 		return
 	}
 
-	// Stored secret values, keyed by var key — used to restore an unrevealed
-	// secret on save and to reveal real values on toggle.
-	secretVals := map[string]string{}
-	for _, v := range env.Variables {
+	// Working copy holds the real values; the list masks secrets in the display.
+	vars := append([]model.Variable(nil), env.Variables...)
+	hasSecret := false
+	for _, v := range vars {
 		if v.Secret {
-			secretVals[v.Key] = v.Value
+			hasSecret = true
+			break
 		}
 	}
 
-	entry := widget.NewMultiLineEntry()
-	entry.SetText(maskedEnvText(env.Variables, false))
-	entry.SetMinRowsVisible(10)
-
-	label := widget.NewLabel("One per line:  key = value   (prefix with # to disable)")
-	var top fyne.CanvasObject = label
-	if len(secretVals) > 0 {
-		// Reveal re-renders from the saved variables (masked vs. cleartext);
-		// in-textarea edits made before toggling are reloaded from saved state.
-		reveal := widget.NewCheck("Reveal secret values", func(on bool) {
-			entry.SetText(maskedEnvText(env.Variables, on))
-		})
-		top = container.NewVBox(label, reveal)
+	reveal := false
+	rows := container.NewVBox()
+	var rebuild func()
+	rebuild = func() {
+		rows.RemoveAll()
+		for i := range vars {
+			rows.Add(m.buildVarRow(&vars, i, reveal, rebuild))
+		}
+		rows.Refresh()
 	}
-	content := container.NewBorder(top, nil, nil, nil, entry)
+	rebuild()
+
+	addBtn := widget.NewButtonWithIcon("Add variable", themedIcon("square-plus"), func() {
+		vars = append(vars, model.Variable{Enabled: true})
+		rebuild()
+	})
+
+	var top fyne.CanvasObject = container.NewHBox(addBtn)
+	if hasSecret {
+		// Reveal re-renders secret rows with their real (editable) values.
+		revealCheck := widget.NewCheck("Reveal secret values", func(on bool) {
+			reveal = on
+			rebuild()
+		})
+		top = container.NewVBox(container.NewHBox(addBtn), revealCheck)
+	}
+	content := container.NewBorder(top, nil, nil, nil, container.NewVScroll(rows))
 
 	d := dialog.NewCustomConfirm("Environment: "+env.Name, "Save", "Cancel", content, func(ok bool) {
 		if !ok {
 			return
 		}
 		m.guard("Save environment", func() {
-			parsed := restoreEnvSecrets(session.ParseEnvVars(entry.Text), secretVals)
-			m.sess.SetActiveEnvironmentVariables(parsed)
+			m.sess.SetActiveEnvironmentVariables(pruneEmptyVars(vars))
 			if err := m.sess.SaveActiveCollection(); err != nil {
 				dialog.ShowError(err, m.win)
 				return
@@ -143,6 +195,6 @@ func (m *MainUI) editEnvironments() {
 			m.Status.SetText("Saved environment: " + env.Name)
 		})
 	}, m.win)
-	d.Resize(fyne.NewSize(540, 400))
+	d.Resize(fyne.NewSize(560, 440))
 	d.Show()
 }

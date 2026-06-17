@@ -25,7 +25,13 @@ func enableButton(b *ttwidget.Button, on bool) {
 // icon) with a hover tooltip, since icon-only buttons need a label affordance
 // (Fyne core has no tooltips — this uses the fyne-tooltip add-on).
 func tipButton(icon, tip string, tapped func()) *ttwidget.Button {
-	b := ttwidget.NewButtonWithIcon("", themedIcon(icon), tapped)
+	return tipButtonRes(themedIcon(icon), tip, tapped)
+}
+
+// tipButtonRes is tipButton for a pre-built icon resource (e.g. a Fyne theme
+// icon like theme.SettingsIcon()) rather than a named bundled SVG.
+func tipButtonRes(icon fyne.Resource, tip string, tapped func()) *ttwidget.Button {
+	b := ttwidget.NewButtonWithIcon("", icon, tapped)
 	b.SetToolTip(tip)
 	return b
 }

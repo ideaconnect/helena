@@ -100,8 +100,8 @@ type MainUI struct {
 	// is loaded, offering starter actions (#58). refreshEmptyState toggles it.
 	emptyState *fyne.Container
 
-	helpBtn    *widget.Button // anchors the Help popup menu (#61)
-	appVersion string         // build version for the About entry; set via SetVersion
+	helpBtn    *ttwidget.Button // anchors the Help popup menu (#61)
+	appVersion string           // build version for the About entry; set via SetVersion
 
 	currentRequest     *model.Request
 	currentRequestID   string
@@ -291,13 +291,26 @@ func NewMainUI(sess *session.Session) *MainUI {
 	wsBtn := widget.NewButton("Workspaces…", m.editWorkspaces)
 	envBtn := widget.NewButton("Variables…", m.editEnvironments)
 	envMgrBtn := widget.NewButton("Manage…", m.manageEnvironments)
-	settingsBtn := widget.NewButton("Settings…", m.editSettings)
-	m.helpBtn = widget.NewButton("?", m.showHelpMenu)
-	helpBtn := m.helpBtn
-	toolbar := container.NewHBox(
-		widget.NewLabel("Workspace:"), m.Workspace, wsBtn,
-		widget.NewLabel("Environment:"), m.Environment, envBtn, envMgrBtn,
-		settingsBtn, helpBtn,
+	// Settings (cog) and Help (question mark) are icon buttons (#127/#128).
+	settingsBtn := tipButtonRes(theme.SettingsIcon(), "Settings", m.editSettings)
+	m.helpBtn = tipButtonRes(theme.HelpIcon(), "Help", m.showHelpMenu)
+	// Leading controls: the workspace + environment pickers. The text labels are
+	// wrapped in Center so they line up vertically with the combo boxes — an HBox
+	// stretches children to the row height and a bare Label top-aligns its text
+	// (#125).
+	leading := container.NewHBox(
+		container.NewCenter(widget.NewLabel("Workspace:")), m.Workspace, wsBtn,
+		container.NewCenter(widget.NewLabel("Environment:")), m.Environment, envBtn, envMgrBtn,
+	)
+	// Settings + Help are pushed to the trailing edge (#129).
+	trailing := container.NewHBox(settingsBtn, m.helpBtn)
+	// A small top/bottom margin so the bar isn't cramped and its controls keep
+	// their natural height (#126); Border keeps leading at the left and trailing
+	// at the right.
+	topBarVPad := theme.InnerPadding()
+	toolbar := container.New(
+		layout.NewCustomPaddedLayout(topBarVPad, topBarVPad, 0, 0),
+		container.NewBorder(nil, nil, leading, trailing, nil),
 	)
 	exportBtn := tipButton("file-export", "Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)
@@ -450,6 +463,30 @@ func (m *MainUI) Root() fyne.CanvasObject { return m.root }
 func (m *MainUI) SetWindow(w fyne.Window) {
 	m.win = w
 	m.registerShortcuts()
+	m.updateWindowTitle()
+}
+
+// windowTitleFor composes the window title from the build version and the
+// active workspace, e.g. "Helena — Default" (dev) or "Helena 1.2.0 — Default"
+// for a released build. The version suffix mirrors cmd/helena's windowTitle.
+func (m *MainUI) windowTitleFor() string {
+	title := "Helena"
+	if m.appVersion != "" && m.appVersion != "dev" {
+		title += " " + m.appVersion
+	}
+	names := m.sess.WorkspaceNames()
+	if i := m.sess.ActiveIndex(); i >= 0 && i < len(names) {
+		title += " — " + names[i]
+	}
+	return title
+}
+
+// updateWindowTitle refreshes the window title so it reflects the active
+// workspace. A no-op until SetWindow has supplied the window.
+func (m *MainUI) updateWindowTitle() {
+	if m.win != nil {
+		m.win.SetTitle(m.windowTitleFor())
+	}
 }
 
 // loadErrorReport formats the active workspace's collection load failures into
@@ -699,6 +736,7 @@ func (m *MainUI) onWorkspaceChanged(name string) {
 	}
 	m.refreshEnvironments()
 	m.refreshEmptyState()
+	m.updateWindowTitle()
 }
 
 // openCollection shows a folder picker and asks the session to load whatever

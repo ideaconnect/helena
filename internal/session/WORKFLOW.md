@@ -183,16 +183,18 @@ UI Send calls `EffectiveAuth(m.currentRequestID)` on a copy of the
 request right before handing it to `httpclient.Do`, so the engine sees
 the flattened auth and never has to know the tree.
 
-## Plain-text environment editing
+## Plain-text environment encoding
 
-`ParseEnvVars` / `FormatEnvVars` ([env.go](env.go)) back the environment-edit
-text area in the UI. The format is one variable per line:
+`ParseEnvVars` / `FormatEnvVars` ([env.go](env.go)) convert between
+`[]model.Variable` and a one-variable-per-line text form:
 
 ```
 key = value          # enabled
 # disabled = value   # disabled (#-prefix)
 ```
 
-Blank lines and lines without `=` are skipped. The Secret flag has no text
-form and is preserved only when the underlying `model.Variable` is edited
-through structured UI rather than the text area.
+Blank lines and lines without `=` are skipped; the Secret flag has no text form.
+These backed the old multi-line text-area environment editor; the UI now uses a
+structured key/value list instead (`editEnvironments` in
+[internal/ui/envedit.go](../ui/envedit.go), #123), so they are no longer wired
+into the UI — they remain the canonical text encoding and keep their own tests.
