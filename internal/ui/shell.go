@@ -309,10 +309,19 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// groups read as clearly distinct.
 	sepMargin := theme.Padding() * 2
 	groupSep := container.New(layout.NewCustomPaddedLayout(0, 0, sepMargin, sepMargin), widget.NewSeparator())
+	// Widen the environment dropdown so "No Environment" shows in full — the
+	// Select's own min-width plus the 24px toolbar arrow + padding otherwise
+	// truncates it. A transparent min-size backing sets the floor; the Select
+	// fills the stack.
+	envMinW := fyne.MeasureText(noEnv, theme.TextSize(), fyne.TextStyle{}).Width +
+		theme.Size(theme.SizeNameInlineIcon) + theme.InnerPadding()*2 + theme.Padding()*4
+	envFloor := canvas.NewRectangle(color.Transparent)
+	envFloor.SetMinSize(fyne.NewSize(envMinW, 1))
+	envBox := container.NewStack(envFloor, m.Environment)
 	leading := container.NewHBox(
 		indicator("cubes", "Workspace"), m.Workspace, wsBtn,
 		groupSep,
-		indicator("folder-tree", "Environment"), m.Environment, varsBtn, envMgrBtn,
+		indicator("folder-tree", "Environment"), envBox, varsBtn, envMgrBtn,
 	)
 	// Settings + Help are pushed to the trailing edge (#129).
 	trailing := container.NewHBox(settingsBtn, m.helpBtn)
