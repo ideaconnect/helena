@@ -5,7 +5,6 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
-	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -26,13 +25,12 @@ import (
 // callbacks act on the right node.
 type treeRow struct {
 	widget.BaseWidget
-	id         string
-	method     *canvas.Text
-	methodSlot *fyne.Container // left-pads the chip to align with the name label's text inset (#tree-align)
-	name       *widget.Label
-	onDrag     func(id string, e *fyne.DragEvent)
-	onDragEnd  func(id string)
-	dragging   func() bool // reports whether a tree drag is currently in flight
+	id        string
+	method    *canvas.Text
+	name      *widget.Label
+	onDrag    func(id string, e *fyne.DragEvent)
+	onDragEnd func(id string)
+	dragging  func() bool // reports whether a tree drag is currently in flight
 }
 
 func newTreeRow(onDrag func(string, *fyne.DragEvent), onDragEnd func(string), dragging func() bool) *treeRow {
@@ -68,23 +66,16 @@ func (r *treeRow) setRequest(id, method, name string) {
 	r.method.Text = method
 	r.method.Color = methodColor(method)
 	r.method.Show()
-	if r.methodSlot != nil {
-		r.methodSlot.Show()
-	}
 	r.method.Refresh()
 	r.name.SetText(name)
 }
 
 // setBranch configures the row as a folder or collection: just a label.
-// The whole method slot (not just the chip) is hidden so the Border drops its
-// left object and the name reflows flush — see CreateRenderer.
+// Hiding the chip flips treeRowLayout to flush-name mode (see CreateRenderer).
 func (r *treeRow) setBranch(id, label string) {
 	r.id = id
 	r.method.Text = ""
 	r.method.Hide()
-	if r.methodSlot != nil {
-		r.methodSlot.Hide()
-	}
 	r.name.SetText(label)
 }
 
@@ -103,24 +94,58 @@ func (r *treeRow) DragEnd() {
 }
 
 func (r *treeRow) CreateRenderer() fyne.WidgetRenderer {
-	// Method chip on the left, name filling the rest (it truncates to the row
-	// width). No background of its own — the tree node paints hover/selection.
-	//
-	// The chip is left-padded by SizeNameInnerPadding so its glyph starts at the
-	// same x as the name Label's text (a widget.Label/RichText insets its glyph
-	// by innerPadding on the left). Without this a request's method chip sits
-	// innerPadding to the LEFT of a same-depth folder's name (the bug). The whole
-	// slot — not just the chip — is hidden for branches: a hidden chip inside a
-	// *visible* wrapper would still reserve the wrapper's LeftPadding
-	// (CustomPaddedLayout.MinSize adds it even when its child is hidden, and
-	// Border checks the wrapper's visibility, not the child's), pushing the
-	// folder name right. Hiding the wrapper makes Border ignore the left slot so
-	// folder names stay flush. Top/bottom pad stay 0 so the chip keeps the full
-	// row height and canvas.Text self-centers vertically as before.
-	pad := theme.SizeForWidget(theme.SizeNameInnerPadding, r)
-	r.methodSlot = container.New(layout.NewCustomPaddedLayout(0, 0, pad, 0), r.method)
-	if !r.method.Visible() {
-		r.methodSlot.Hide()
+	// treeRowLayout (below) arranges the chip + name. The chip is pulled left
+	// into the disclosure-arrow column so a request lines up with same-depth
+	// folders' arrows; for a branch the chip is hidden and the name renders at
+	// the content origin. No background of its own — the tree node paints
+	// hover/selection.
+	return widget.NewSimpleRenderer(container.New(&treeRowLayout{row: r}, r.method, r.name))
+}
+
+// treeRowLayout positions a recycled tree row's chip + name.
+//
+// widget.Tree lays every node's content out at x = pad + Indent() + iconSize +
+// pad and paints a branch's disclosure arrow at x = pad + Indent() (see
+// treeNode.Layout / treeNode.Indent in Fyne). The gap from the content origin
+// back to the arrow column is therefore iconSize + pad. A request has no arrow,
+// so we pull its method chip left by that gap — putting the chip in the arrow
+// column, vertically aligned with sibling folders' arrows (the requested
+// behaviour). The chip overhangs the content container's left edge, which is
+// fine: the node's full-width background sits under it and the tree's scroll
+// clip is far to the left. The name then flows after the chip.
+//
+// For a branch the chip is hidden and the name sits at the content origin
+// (glyph inset by the Label's own innerPadding), so folder names are unchanged.
+type treeRowLayout struct{ row *treeRow }
+
+// arrowGap is iconSize + pad: the distance from the content origin back to the
+// disclosure-arrow column, resolved against the row's (sidebar-scoped) theme.
+func (l *treeRowLayout) arrowGap() float32 {
+	return theme.SizeForWidget(theme.SizeNameInlineIcon, l.row) +
+		theme.SizeForWidget(theme.SizeNamePadding, l.row)
+}
+
+func (l *treeRowLayout) MinSize([]fyne.CanvasObject) fyne.Size {
+	m := l.row.name.MinSize()
+	if h := l.row.method.MinSize().Height; h > m.Height {
+		m.Height = h
 	}
-	return widget.NewSimpleRenderer(container.NewBorder(nil, nil, r.methodSlot, nil, r.name))
+	return fyne.NewSize(0, m.Height)
+}
+
+func (l *treeRowLayout) Layout(_ []fyne.CanvasObject, size fyne.Size) {
+	name := l.row.name
+	if !l.row.method.Visible() { // branch: name flush at the content origin
+		name.Move(fyne.NewPos(0, 0))
+		name.Resize(size)
+		return
+	}
+	gap := l.arrowGap()
+	mw := l.row.method.MinSize().Width
+	// Full height + y=0 keeps canvas.Text vertically centred as before.
+	l.row.method.Resize(fyne.NewSize(mw, size.Height))
+	l.row.method.Move(fyne.NewPos(-gap, 0))
+	nameX := -gap + mw + theme.SizeForWidget(theme.SizeNameInnerPadding, l.row)
+	name.Move(fyne.NewPos(nameX, 0))
+	name.Resize(fyne.NewSize(size.Width-nameX, size.Height))
 }

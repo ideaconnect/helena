@@ -8,6 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/session"
@@ -47,12 +48,12 @@ func firstGlyphAbsX(o fyne.CanvasObject) (float32, bool) {
 	return 0, false
 }
 
-// TestTreeRowFolderRequestSameDepthAlignment pins that a request's method chip
-// and a same-depth folder's name start at the same x (the #tree-align fix): the
-// chip is left-padded by the same inner padding a Label insets its text by, and
-// the padding wrapper is hidden for folders so it doesn't shift the folder name.
-// Fails before the fix (chip glyph ~innerPadding left of the folder name).
-func TestTreeRowFolderRequestSameDepthAlignment(t *testing.T) {
+// TestTreeRowChipInArrowColumn pins that a request's method chip sits in the
+// disclosure-arrow column — left of the content origin by iconSize+pad — so it
+// lines up with same-depth folders' arrows rather than their name text (the
+// requested behaviour). It also confirms the chip is clearly LEFT of a
+// same-depth folder's name glyph (i.e. not in the text column).
+func TestTreeRowChipInArrowColumn(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "c0")
 	col := model.Collection{
 		Name:     "C0",
@@ -63,7 +64,8 @@ func TestTreeRowFolderRequestSameDepthAlignment(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	test.NewApp()
+	a := test.NewApp()
+	ApplyTheme(a, model.ThemeDark) // install the real theme stack (sidebarTheme sizes)
 	s, _ := session.New(filepath.Join(t.TempDir(), "cfg.yml"))
 	if err := s.OpenCollection(dir); err != nil {
 		t.Fatal(err)
@@ -82,18 +84,33 @@ func TestTreeRowFolderRequestSameDepthAlignment(t *testing.T) {
 	}
 
 	drv := fyne.CurrentApp().Driver()
+	contentX := drv.AbsolutePositionForObject(reqRow).X
+	folderContentX := drv.AbsolutePositionForObject(folderRow).X
+	if math.Abs(float64(contentX-folderContentX)) > 0.5 {
+		t.Fatalf("rows not at same depth: req contentX=%v folder contentX=%v", contentX, folderContentX)
+	}
+
+	// The tree paints the disclosure arrow iconSize+pad to the left of the
+	// content origin; the chip must land in that same column.
+	arrowGap := theme.SizeForWidget(theme.SizeNameInlineIcon, reqRow) +
+		theme.SizeForWidget(theme.SizeNamePadding, reqRow)
 	chipX := drv.AbsolutePositionForObject(reqRow.method).X
-	folderX, ok := firstGlyphAbsX(folderRow.name)
+	if want := contentX - arrowGap; math.Abs(float64(chipX-want)) > 0.5 {
+		t.Errorf("chip X=%v; want arrow column %v (contentX %v - arrowGap %v)", chipX, want, contentX, arrowGap)
+	}
+
+	// Sanity: the chip is clearly LEFT of the folder's name glyph (the text
+	// column), i.e. not re-aligned with the name like the previous behaviour.
+	folderNameX, ok := firstGlyphAbsX(folderRow.name)
 	if !ok {
 		t.Fatal("folder name glyph not found")
 	}
-
-	if math.Abs(float64(chipX-folderX)) > 0.5 {
-		t.Errorf("method chip glyph X=%v misaligned with folder name glyph X=%v (want equal)", chipX, folderX)
+	if chipX >= folderNameX {
+		t.Errorf("chip X=%v not left of folder name glyph X=%v (chip should be in the arrow column)", chipX, folderNameX)
 	}
 
 	// Vertical-centering guard: the chip box keeps the full row height at y=0, so
-	// canvas.Text self-centers exactly as before the fix.
+	// canvas.Text self-centers exactly as before.
 	if got := reqRow.method.Position().Y; got != 0 {
 		t.Errorf("chip Y=%v; want 0 (full-height box, vertical centering preserved)", got)
 	}
