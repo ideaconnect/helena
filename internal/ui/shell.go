@@ -314,12 +314,13 @@ func NewMainUI(sess *session.Session) *MainUI {
 	)
 	// Settings + Help are pushed to the trailing edge (#129).
 	trailing := container.NewHBox(settingsBtn, m.helpBtn)
-	// paneTheme restores normal theme padding (the root theme zeroes it) so the
-	// HBox spaces its controls; NewPadded gives the bar a margin — matching the
-	// sidebar toolbar.
+	// toolbarTheme restores normal theme padding (the root theme zeroes it) so
+	// the HBox spaces its controls AND bumps inline icons to 24px, so the top
+	// bar's icon buttons + indicators match the sidebar action toolbar; NewPadded
+	// gives the bar a margin.
 	toolbar := container.NewThemeOverride(
 		container.NewPadded(container.NewBorder(nil, nil, leading, trailing, nil)),
-		paneTheme{},
+		toolbarTheme{},
 	)
 	exportBtn := tipButton("file-export", "Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)

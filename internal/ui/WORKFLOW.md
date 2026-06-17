@@ -485,8 +485,9 @@ previously open request may have been in the deleted workspace).
 The workspace and environment pickers are introduced by `cubes` and
 `folder-tree` icon indicators (replacing the old "Workspace:" / "Environment:"
 text labels); the Variables (`table-list`) and Manage-environments (`gears`)
-buttons are icon buttons. The whole top bar is wrapped in `paneTheme` +
-`NewPadded` so it gets the same control spacing and margin as the sidebar.
+buttons are icon buttons. The whole top bar is wrapped in `toolbarTheme` +
+`NewPadded` so it gets the same control spacing, margin, and 24px icon size as
+the sidebar action toolbar.
 
 ## Switching environments
 
