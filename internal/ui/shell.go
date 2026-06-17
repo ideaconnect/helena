@@ -304,12 +304,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 		ic.SetToolTip(tip)
 		return container.NewCenter(ic)
 	}
-	// A gap separates the workspace group from the environment group.
-	grpGap := canvas.NewRectangle(color.Transparent)
-	grpGap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
+	// A vertical separator divides the workspace group from the environment
+	// group; the HBox padding gives it breathing room on each side.
 	leading := container.NewHBox(
 		indicator("cubes", "Workspace"), m.Workspace, wsBtn,
-		grpGap,
+		widget.NewSeparator(),
 		indicator("folder-tree", "Environment"), m.Environment, varsBtn, envMgrBtn,
 	)
 	// Settings + Help are pushed to the trailing edge (#129).
