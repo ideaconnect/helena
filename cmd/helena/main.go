@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"runtime/debug"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -130,9 +131,28 @@ func main() {
 	// renders against an already-shown window.
 	a.Lifecycle().SetOnStarted(mainUI.SurfaceLoadErrors)
 
-	a.Lifecycle().SetOnStopped(func() {
+	saveWindowState := func() {
 		size := w.Canvas().Size()
 		sess.SetWindowSize(int(size.Width), int(size.Height))
+	}
+	// app.Quit() paths (menu / Ctrl-Q) tear down through here; the window close
+	// button is handled by the faster intercept below.
+	a.Lifecycle().SetOnStopped(saveWindowState)
+
+	// Window close button: exit immediately after persisting state. Fyne tears
+	// the OpenGL context down (glfw.Terminate) on the UI thread *before*
+	// OnStopped, and on WSLg that teardown can stall for seconds — making the
+	// whole process appear to hang on close. SetCloseIntercept fires *before*
+	// that teardown, so saving here and calling os.Exit skips the stall and lets
+	// the OS reclaim the GL resources. Safe because the only shutdown-time state
+	// is the window size (collections/config are written on edit), so there is
+	// nothing else to flush.
+	w.SetCloseIntercept(func() {
+		t0 := time.Now()
+		saveWindowState()
+		logging.L().Info("window closed; exiting", "save", time.Since(t0))
+		_ = closeLog()
+		os.Exit(0)
 	})
 
 	w.ShowAndRun()
