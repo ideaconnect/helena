@@ -73,8 +73,9 @@ func (m *MainUI) showGettingStarted() {
 		"   OpenAPI/Swagger/WSDL spec, or Load the bundled sample.\n" +
 		"2. Pick a request in the sidebar, set the method + URL, and edit the\n" +
 		"   Query / Headers / Body / Auth tabs.\n" +
-		"3. Define {{variables}} per environment (Variables…); switch the active\n" +
-		"   environment from the dropdown.\n" +
+		"3. Define {{variables}} per environment (the Variables icon button next\n" +
+		"   to the environment dropdown); switch the active environment from the\n" +
+		"   dropdown.\n" +
 		"4. Send (Mod+Enter). The response shows body, headers, timing, and any\n" +
 		"   script console output.\n\n" +
 		"See the User guide (Help → User guide) for chaining, scripting, and more."

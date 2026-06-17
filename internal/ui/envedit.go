@@ -164,19 +164,21 @@ func (m *MainUI) editEnvironments() {
 	}
 	rebuild()
 
-	addBtn := widget.NewButtonWithIcon("Add variable", themedIcon("square-plus"), func() {
+	addBtn := tipButton("square-plus", "Add variable", func() {
 		vars = append(vars, model.Variable{Enabled: true})
 		rebuild()
 	})
 
-	var top fyne.CanvasObject = container.NewHBox(addBtn)
+	// Add button right-aligned (matching the workspaces dialog); the reveal
+	// toggle, when present, sits at the left of the same row.
+	var top fyne.CanvasObject = container.NewBorder(nil, nil, nil, addBtn, nil)
 	if hasSecret {
 		// Reveal re-renders secret rows with their real (editable) values.
 		revealCheck := widget.NewCheck("Reveal secret values", func(on bool) {
 			reveal = on
 			rebuild()
 		})
-		top = container.NewVBox(container.NewHBox(addBtn), revealCheck)
+		top = container.NewBorder(nil, nil, revealCheck, addBtn, nil)
 	}
 	content := container.NewBorder(top, nil, nil, nil, container.NewVScroll(rows))
 

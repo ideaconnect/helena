@@ -289,28 +289,37 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.Send.OnTapped = m.sendOrAbort
 
 	wsBtn := widget.NewButton("Workspaces…", m.editWorkspaces)
-	envBtn := widget.NewButton("Variables…", m.editEnvironments)
-	envMgrBtn := widget.NewButton("Manage…", m.manageEnvironments)
+	// Variables (table-list) and Manage-environments (gears) are icon buttons.
+	varsBtn := tipButton("table-list", "Variables", m.editEnvironments)
+	envMgrBtn := tipButton("gears", "Manage environments", m.manageEnvironments)
 	// Settings (cog) and Help (question mark) are icon buttons (#127/#128).
 	settingsBtn := tipButtonRes(theme.SettingsIcon(), "Settings", m.editSettings)
 	m.helpBtn = tipButtonRes(theme.HelpIcon(), "Help", m.showHelpMenu)
-	// Leading controls: the workspace + environment pickers. The text labels are
-	// wrapped in Center so they line up vertically with the combo boxes — an HBox
-	// stretches children to the row height and a bare Label top-aligns its text
-	// (#125).
+
+	// Group indicators replace the "Workspace:" / "Environment:" text labels:
+	// cubes for the workspace picker, folder-tree for the environment picker
+	// (icon-only with tooltips, centred against the combo boxes).
+	indicator := func(icon, tip string) fyne.CanvasObject {
+		ic := ttwidget.NewIcon(themedIcon(icon))
+		ic.SetToolTip(tip)
+		return container.NewCenter(ic)
+	}
+	// A gap separates the workspace group from the environment group.
+	grpGap := canvas.NewRectangle(color.Transparent)
+	grpGap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
 	leading := container.NewHBox(
-		container.NewCenter(widget.NewLabel("Workspace:")), m.Workspace, wsBtn,
-		container.NewCenter(widget.NewLabel("Environment:")), m.Environment, envBtn, envMgrBtn,
+		indicator("cubes", "Workspace"), m.Workspace, wsBtn,
+		grpGap,
+		indicator("folder-tree", "Environment"), m.Environment, varsBtn, envMgrBtn,
 	)
 	// Settings + Help are pushed to the trailing edge (#129).
 	trailing := container.NewHBox(settingsBtn, m.helpBtn)
-	// A small top/bottom margin so the bar isn't cramped and its controls keep
-	// their natural height (#126); Border keeps leading at the left and trailing
-	// at the right.
-	topBarVPad := theme.InnerPadding()
-	toolbar := container.New(
-		layout.NewCustomPaddedLayout(topBarVPad, topBarVPad, 0, 0),
-		container.NewBorder(nil, nil, leading, trailing, nil),
+	// paneTheme restores normal theme padding (the root theme zeroes it) so the
+	// HBox spaces its controls; NewPadded gives the bar a margin — matching the
+	// sidebar toolbar.
+	toolbar := container.NewThemeOverride(
+		container.NewPadded(container.NewBorder(nil, nil, leading, trailing, nil)),
+		paneTheme{},
 	)
 	exportBtn := tipButton("file-export", "Export…", m.actionExport)
 	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)

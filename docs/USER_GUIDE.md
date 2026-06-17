@@ -71,12 +71,14 @@ walks up the folder → collection chain.
 ## Environments & variables
 
 `{{name}}` templates in URLs, headers, params, body, and auth resolve against
-the **active environment**. Manage environments with **Manage…** (create /
-rename / delete / switch) and edit variables with **Variables…** — an editable
-key/value list (one row per variable; **Add variable** to append, the row
-checkbox enables/disables a variable, the trash icon removes it). A **Secret**
-variable shows a masked, read-only value until you tick **Reveal secret
-values**. Variables compose — a variable's value may reference another `{{var}}`.
+the **active environment**. Use the toolbar icon buttons next to the
+environment dropdown: the **gears** button manages environments (create /
+rename / delete / switch) and the **table-list** button edits the active
+environment's variables — an editable key/value list (one row per variable;
+the **+** button appends a row, the row checkbox enables/disables a variable,
+the trash icon removes it). A **Secret** variable shows a masked, read-only
+value until you tick **Reveal secret values**. Variables compose — a variable's
+value may reference another `{{var}}`.
 
 ## Request chaining
 

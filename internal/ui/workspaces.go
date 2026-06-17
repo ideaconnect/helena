@@ -6,6 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 )
@@ -87,8 +88,9 @@ func (m *MainUI) editWorkspaces() {
 	})
 	selectionChanged() // nothing selected yet → Rename/Delete start disabled
 
-	actions := container.NewHBox(addBtn, renameBtn, deleteBtn)
-	content := container.NewBorder(nil, actions, nil, nil, list)
+	// Action buttons on top, right-aligned (the spacer pushes them right).
+	actions := container.NewHBox(layout.NewSpacer(), addBtn, renameBtn, deleteBtn)
+	content := container.NewBorder(actions, nil, nil, nil, list)
 	d := dialog.NewCustom("Workspaces", "Done", content, m.win)
 	d.Resize(fyne.NewSize(440, 320))
 	d.Show()

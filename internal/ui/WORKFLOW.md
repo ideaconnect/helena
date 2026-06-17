@@ -476,11 +476,17 @@ User picks a workspace in the toolbar Select:
 
 The Workspaces… button opens `editWorkspaces`
 ([workspaces.go:14](workspaces.go#L14)), a list-style dialog with icon buttons
-for Add / Rename / Delete (#122); Rename and Delete stay disabled until a
-workspace row is selected (#130). After mutation, `refreshWorkspaceDropdown`
-reseeds the toolbar Select (and refreshes the title). Delete also calls
-`loadRequest(nil, "")` to clear the editor (the previously open request may have
-been in the deleted workspace).
+for Add / Rename / Delete (#122) on top of the list and right-aligned; Rename
+and Delete stay disabled until a workspace row is selected (#130). After
+mutation, `refreshWorkspaceDropdown` reseeds the toolbar Select (and refreshes
+the title). Delete also calls `loadRequest(nil, "")` to clear the editor (the
+previously open request may have been in the deleted workspace).
+
+The workspace and environment pickers are introduced by `cubes` and
+`folder-tree` icon indicators (replacing the old "Workspace:" / "Environment:"
+text labels); the Variables (`table-list`) and Manage-environments (`gears`)
+buttons are icon buttons. The whole top bar is wrapped in `paneTheme` +
+`NewPadded` so it gets the same control spacing and margin as the sidebar.
 
 ## Switching environments
 
@@ -515,13 +521,15 @@ The Variables… button opens `editEnvironments` in
    editor** and round-trips through storage; it is **not** encryption at rest —
    values are still stored as plaintext YAML (tracked separately).
 
-The **Manage…** button opens `manageEnvironments` ([environments.go](environments.go)) —
-a list of the collection's environments with **+ New / Rename / Delete /
-Set active**. Each wires to the session's `AddEnvironment` /
-`RenameEnvironment` / `DeleteEnvironment` / `SetActiveEnv` (which persist to
-the collection YAML), then refreshes the toolbar dropdown + URL preview.
-"Variables…" still edits the active environment's key/value pairs; "Manage…"
-is the multi-environment lifecycle surface.
+The Manage-environments (`gears`) button opens `manageEnvironments`
+([environments.go](environments.go)) — a list of the collection's environments
+with icon buttons for **New / Rename / Delete / Set active** on top of the list
+and right-aligned; Rename/Delete/Set-active stay disabled until a row is
+selected. Each wires to the session's `AddEnvironment` / `RenameEnvironment` /
+`DeleteEnvironment` / `SetActiveEnv` (which persist to the collection YAML),
+then refreshes the toolbar dropdown + URL preview. The Variables (`table-list`)
+button edits the active environment's key/value pairs; Manage is the
+multi-environment lifecycle surface.
 
 ## Changing theme
 

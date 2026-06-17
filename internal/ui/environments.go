@@ -6,12 +6,15 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
+	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 )
 
 // manageEnvironments opens a manager for the active collection's named
 // environments: create, rename, delete, and set-active. Per-environment
-// variable editing stays in editEnvironments ("Variables…"). Every mutation
+// variable editing stays in editEnvironments (the Variables icon button). Every mutation
 // round-trips through the session, which persists to the collection's YAML.
 func (m *MainUI) manageEnvironments() {
 	if m.win == nil {
@@ -39,8 +42,18 @@ func (m *MainUI) manageEnvironments() {
 			o.(*widget.Label).SetText(label)
 		},
 	)
-	list.OnSelected = func(i widget.ListItemID) { selectedIdx = i }
-	list.OnUnselected = func(widget.ListItemID) { selectedIdx = -1 }
+
+	// Rename / Delete / Set-active act on the selected row, so they stay disabled
+	// until one is selected (matching the Workspaces dialog).
+	var renameBtn, deleteBtn, activateBtn *ttwidget.Button
+	selectionChanged := func() {
+		on := selectedIdx >= 0
+		enableButton(renameBtn, on)
+		enableButton(deleteBtn, on)
+		enableButton(activateBtn, on)
+	}
+	list.OnSelected = func(i widget.ListItemID) { selectedIdx = i; selectionChanged() }
+	list.OnUnselected = func(widget.ListItemID) { selectedIdx = -1; selectionChanged() }
 
 	after := func() {
 		list.Refresh()
@@ -55,7 +68,7 @@ func (m *MainUI) manageEnvironments() {
 		return n[selectedIdx], true
 	}
 
-	addBtn := widget.NewButton("+ New", func() {
+	addBtn := tipButton("square-plus", "New environment", func() {
 		m.promptName("New environment", "Name", "", func(name string) {
 			if err := m.sess.AddEnvironment(name); err != nil {
 				dialog.ShowError(err, m.win)
@@ -64,7 +77,7 @@ func (m *MainUI) manageEnvironments() {
 			after()
 		})
 	})
-	renameBtn := widget.NewButton("Rename", func() {
+	renameBtn = tipButton("pen-to-square", "Rename environment", func() {
 		old, ok := selected()
 		if !ok {
 			return
@@ -77,7 +90,7 @@ func (m *MainUI) manageEnvironments() {
 			after()
 		})
 	})
-	deleteBtn := widget.NewButton("Delete", func() {
+	deleteBtn = tipButton("trash-can", "Delete environment", func() {
 		name, ok := selected()
 		if !ok {
 			return
@@ -94,10 +107,11 @@ func (m *MainUI) manageEnvironments() {
 				}
 				selectedIdx = -1
 				list.UnselectAll()
+				selectionChanged()
 				after()
 			}, m.win)
 	})
-	activateBtn := widget.NewButton("Set active", func() {
+	activateBtn = tipButtonRes(theme.ConfirmIcon(), "Set active", func() {
 		name, ok := selected()
 		if !ok {
 			return
@@ -105,9 +119,11 @@ func (m *MainUI) manageEnvironments() {
 		m.sess.SetActiveEnv(name)
 		after()
 	})
+	selectionChanged() // nothing selected yet → Rename/Delete/Set-active disabled
 
-	buttons := container.NewHBox(addBtn, renameBtn, deleteBtn, activateBtn)
-	content := container.NewBorder(nil, buttons, nil, nil, list)
+	// Action buttons on top, right-aligned (the spacer pushes them right).
+	buttons := container.NewHBox(layout.NewSpacer(), addBtn, renameBtn, deleteBtn, activateBtn)
+	content := container.NewBorder(buttons, nil, nil, nil, list)
 	d := dialog.NewCustom("Environments", "Close", content, m.win)
 	d.Resize(fyne.NewSize(440, 380))
 	d.Show()
