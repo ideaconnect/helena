@@ -305,10 +305,13 @@ func NewMainUI(sess *session.Session) *MainUI {
 		return container.NewCenter(ic)
 	}
 	// A vertical separator divides the workspace group from the environment
-	// group; the HBox padding gives it breathing room on each side.
+	// group, with extra margin on each side (beyond the HBox spacing) so the two
+	// groups read as clearly distinct.
+	sepMargin := theme.Padding() * 2
+	groupSep := container.New(layout.NewCustomPaddedLayout(0, 0, sepMargin, sepMargin), widget.NewSeparator())
 	leading := container.NewHBox(
 		indicator("cubes", "Workspace"), m.Workspace, wsBtn,
-		widget.NewSeparator(),
+		groupSep,
 		indicator("folder-tree", "Environment"), m.Environment, varsBtn, envMgrBtn,
 	)
 	// Settings + Help are pushed to the trailing edge (#129).
