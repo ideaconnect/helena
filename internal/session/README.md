@@ -89,7 +89,7 @@ when displaying or sending requests.
 - `Session.DeleteEnvironment(name string) error` — remove + persist; the active
   selection moves to the first remaining env (or clears) when the active one goes.
 - `Session.SetActiveEnvironmentVariables(variables []model.Variable)`
-- `Session.Resolver() *vars.Resolver` — enabled env variables only.
+- `Session.Resolver() *vars.Resolver` — ordered scopes (collection variables < active environment < script overlay) plus the dynamic-variable fallback (`{{$guid}}` etc.). `SnapshotActiveCollectionVars` / `SnapshotActiveEnvVars` capture the lower scopes for the Send worker.
 - `ParseEnvVars(text string) []model.Variable` — `"key = value"` line text
   to variables; `#`-prefixed lines are disabled.
 - `FormatEnvVars(vs []model.Variable) string` — inverse of `ParseEnvVars`.

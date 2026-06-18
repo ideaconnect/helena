@@ -142,8 +142,25 @@ func (m *MainUI) editEnvironments() {
 		return
 	}
 
+	m.showVariablesEditor("Environment: "+env.Name, "Save environment", env.Variables, func(vars []model.Variable) {
+		m.sess.SetActiveEnvironmentVariables(vars)
+		if err := m.sess.SaveActiveCollection(); err != nil {
+			dialog.ShowError(err, m.win)
+			return
+		}
+		m.refreshEnvironments()
+		m.updateURLPreview()
+		m.Status.SetText("Saved environment: " + env.Name)
+	})
+}
+
+// showVariablesEditor opens the shared key/value variables editor used by both
+// the environment editor and the collection-variables editor (#80). It works on
+// a copy of initial — masking Secret values until the reveal toggle — and calls
+// onSave with the pruned result (blank-key rows dropped) when the user saves.
+func (m *MainUI) showVariablesEditor(title, guardLabel string, initial []model.Variable, onSave func([]model.Variable)) {
 	// Working copy holds the real values; the list masks secrets in the display.
-	vars := append([]model.Variable(nil), env.Variables...)
+	vars := append([]model.Variable(nil), initial...)
 	hasSecret := false
 	for _, v := range vars {
 		if v.Secret {
@@ -182,20 +199,11 @@ func (m *MainUI) editEnvironments() {
 	}
 	content := container.NewBorder(top, nil, nil, nil, container.NewVScroll(rows))
 
-	d := dialog.NewCustomConfirm("Environment: "+env.Name, "Save", "Cancel", content, func(ok bool) {
+	d := dialog.NewCustomConfirm(title, "Save", "Cancel", content, func(ok bool) {
 		if !ok {
 			return
 		}
-		m.guard("Save environment", func() {
-			m.sess.SetActiveEnvironmentVariables(pruneEmptyVars(vars))
-			if err := m.sess.SaveActiveCollection(); err != nil {
-				dialog.ShowError(err, m.win)
-				return
-			}
-			m.refreshEnvironments()
-			m.updateURLPreview()
-			m.Status.SetText("Saved environment: " + env.Name)
-		})
+		m.guard(guardLabel, func() { onSave(pruneEmptyVars(vars)) })
 	}, m.win)
 	d.Resize(fyne.NewSize(560, 440))
 	d.Show()

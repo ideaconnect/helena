@@ -189,6 +189,7 @@ func (m *MainUI) send() {
 	// slice fields are detached above; chain step targets come from the
 	// SnapshotChainFinder copy below, so nothing the worker touches is shared.
 	envSnap := m.sess.SnapshotActiveEnvVars()
+	colSnap := m.sess.SnapshotActiveCollectionVars()
 
 	client := httpclient.NewWithTransport(m.sess.Settings(), m.sessionTransport())
 	// If auth puts a key in a custom header, strip it on a host-changing
@@ -205,7 +206,7 @@ func (m *MainUI) send() {
 		newAuthCodeStarter(),
 	))
 	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
-	exec := chainExecutor{rt: rt, client: client, envSnap: envSnap, sess: m.sess}
+	exec := chainExecutor{rt: rt, client: client, colSnap: colSnap, envSnap: envSnap, sess: m.sess}
 	// Snapshot the active collection on the UI goroutine so the
 	// chain runner reads from a frozen-at-Send-entry copy with
 	// pre-flattened Auth — never races against UI-thread tree edits

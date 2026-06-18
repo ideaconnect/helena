@@ -120,6 +120,7 @@ func saveInPlace(c model.Collection, dir string) error {
 	root := ocCollectionFile{
 		Info: ocInfo{Name: c.Name, Type: "collection"},
 		Auth: authToFile(c.Auth),
+		Vars: varsToFile(c.Variables),
 	}
 	if existing, err := readCollectionFile(filepath.Join(dir, collectionFile)); err == nil {
 		root.Extra = existing.Extra
@@ -434,6 +435,7 @@ func Load(dir string) (model.Collection, error) {
 		return c, fmt.Errorf("parse %s: %w", collectionFile, err)
 	}
 	c.Name = root.Info.Name
+	c.Variables = fileToVars(root.Vars)
 	if root.Auth != nil {
 		c.Auth = fileToAuth(root.Auth)
 	} else {

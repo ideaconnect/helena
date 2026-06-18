@@ -62,6 +62,7 @@ func (nilFinder) FindRequestByID(string) (model.Request, bool) {
 type chainExecutor struct {
 	rt      *scripting.Runtime
 	client  *httpclient.Client
+	colSnap map[string]string // collection-level variables (#80), below env
 	envSnap map[string]string
 	sess    *session.Session
 }
@@ -86,7 +87,7 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	// auth use {{chain.<alias>.response.json.token}}-style templates, scoped to
 	// this request's own chain aliases (same map the pre-script saw); Dynamic
 	// adds Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
-	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay()).
+	resolver := vars.New(e.colSnap, e.envSnap, e.sess.SnapshotEnvOverlay()).
 		WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {

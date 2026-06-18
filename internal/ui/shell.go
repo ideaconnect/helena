@@ -382,6 +382,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	newColBtn := tipButton("square-plus", "New collection", m.actionNewCollection)
 	openBtn := tipButton("folder-open", "Open collection", m.openCollection)
 	importBtn := tipButton("download", "Import", m.actionImport)
+	colVarsBtn := tipButton("sliders", "Collection variables", m.editCollectionVariables)
 
 	// Node-action buttons operating on the selected tree node. Enable state is
 	// reconciled by refreshSidebarActions (rename/delete need any selection;
@@ -409,7 +410,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	fileIndicator := container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), fileIcon)
 	gap := canvas.NewRectangle(color.Transparent)
 	gap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
-	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn)
+	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn, colVarsBtn)
 	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename)
 	actionToolbar := container.NewThemeOverride(
 		container.NewBorder(nil, nil, leftGroup, rightGroup),

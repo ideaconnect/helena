@@ -94,6 +94,7 @@ type ocFolderFile struct {
 type ocCollectionFile struct {
 	Info  ocInfo               `yaml:"info"`
 	Auth  *ocAuth              `yaml:"auth,omitempty"`
+	Vars  []ocEnvVar           `yaml:"vars,omitempty"` // collection-scoped variables (#80)
 	Extra map[string]yaml.Node `yaml:",inline"`
 }
 
@@ -268,23 +269,36 @@ func fileToRequest(f ocRequestFile) model.Request {
 	return r
 }
 
+// varsToFile / fileToVars map between a model.Variable slice and the on-disk
+// ocEnvVar slice. Shared by environments and collection-level variables (#80).
+func varsToFile(vars []model.Variable) []ocEnvVar {
+	var out []ocEnvVar
+	for _, v := range vars {
+		out = append(out, ocEnvVar{Name: v.Key, Value: v.Value, Disabled: !v.Enabled, Secret: v.Secret})
+	}
+	return out
+}
+
+func fileToVars(ocs []ocEnvVar) []model.Variable {
+	var out []model.Variable
+	for _, v := range ocs {
+		out = append(out, model.Variable{Enabled: !v.Disabled, Key: v.Name, Value: v.Value, Secret: v.Secret})
+	}
+	return out
+}
+
 // envToFile maps a model.Environment to its on-disk DTO at sequence position seq.
 func envToFile(e model.Environment, seq int) ocEnvironmentFile {
-	f := ocEnvironmentFile{Info: ocInfo{Name: e.Name, Type: "environment", Seq: seq}}
-	for _, v := range e.Variables {
-		f.Vars = append(f.Vars, ocEnvVar{Name: v.Key, Value: v.Value, Disabled: !v.Enabled, Secret: v.Secret})
+	return ocEnvironmentFile{
+		Info: ocInfo{Name: e.Name, Type: "environment", Seq: seq},
+		Vars: varsToFile(e.Variables),
 	}
-	return f
 }
 
 // fileToEnv maps an on-disk environment DTO back into the domain model,
 // assigning a fresh ID.
 func fileToEnv(f ocEnvironmentFile) model.Environment {
-	e := model.Environment{ID: model.NewID(), Name: f.Info.Name}
-	for _, v := range f.Vars {
-		e.Variables = append(e.Variables, model.Variable{Enabled: !v.Disabled, Key: v.Name, Value: v.Value, Secret: v.Secret})
-	}
-	return e
+	return model.Environment{ID: model.NewID(), Name: f.Info.Name, Variables: fileToVars(f.Vars)}
 }
 
 // authToFile maps a model.Auth to its on-disk DTO. Returns nil for the

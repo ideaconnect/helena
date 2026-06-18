@@ -422,7 +422,7 @@ func (s *Session) SetActiveEnvironmentVariables(variables []model.Variable) {
 // SnapshotActiveEnvVars + SnapshotEnvOverlay pair instead so the env
 // can't shift mid-Send.
 func (s *Session) Resolver() *vars.Resolver {
-	return vars.New(s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+	return vars.New(s.activeCollectionVars(), s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
 
 // SetEnvOverlay records a script-set environment variable for the lifetime
@@ -512,6 +512,29 @@ func (s *Session) activeEnvVars() map[string]string {
 // returned map is owned by the caller.
 func (s *Session) SnapshotActiveEnvVars() map[string]string {
 	return s.activeEnvVars()
+}
+
+// activeCollectionVars returns the active collection's enabled collection-level
+// variables (#80). They form the resolver scope BELOW the environment, so an
+// environment value of the same name overrides a collection value.
+func (s *Session) activeCollectionVars() map[string]string {
+	m := map[string]string{}
+	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
+		return m
+	}
+	for _, v := range s.cols[s.activeCol].Variables {
+		if v.Enabled {
+			m[v.Key] = v.Value
+		}
+	}
+	return m
+}
+
+// SnapshotActiveCollectionVars returns a copy of the active collection's
+// enabled collection-level variables, for the worker goroutine on Send entry
+// (same rationale as SnapshotActiveEnvVars). The map is owned by the caller.
+func (s *Session) SnapshotActiveCollectionVars() map[string]string {
+	return s.activeCollectionVars()
 }
 
 // FindRequestByPath walks the active collection for a request whose

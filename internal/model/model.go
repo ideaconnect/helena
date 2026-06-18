@@ -180,7 +180,11 @@ type Collection struct {
 	Folders      []Folder      `json:"folders,omitempty"`
 	Requests     []Request     `json:"requests,omitempty"`
 	Environments []Environment `json:"environments,omitempty"`
-	Auth         Auth          `json:"auth,omitempty"`
+	// Variables are collection-scoped variables — a resolver scope BELOW the
+	// environment (an environment value of the same name wins). Unlike
+	// Environments they are not selectable; they always apply to the collection.
+	Variables []Variable `json:"variables,omitempty"`
+	Auth      Auth       `json:"auth,omitempty"`
 }
 
 // Workspace groups collections under a single roof.

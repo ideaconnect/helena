@@ -146,6 +146,12 @@ func eachSecret(c *model.Collection, fn func(key string, val *string)) {
 			}
 		}
 	}
+	for j := range c.Variables {
+		v := &c.Variables[j]
+		if v.Secret {
+			fn(fmt.Sprintf("cv%d", j), &v.Value)
+		}
+	}
 }
 
 func eachFolderSecret(prefix string, folders []model.Folder, fn func(string, *string)) {
@@ -182,6 +188,11 @@ func cloneForSecretSplit(c model.Collection) model.Collection {
 	c.Folders = cloneFolders(c.Folders)
 	c.Requests = cloneRequests(c.Requests)
 	c.Environments = cloneEnvs(c.Environments)
+	if c.Variables != nil {
+		vs := make([]model.Variable, len(c.Variables))
+		copy(vs, c.Variables)
+		c.Variables = vs
+	}
 	return c
 }
 

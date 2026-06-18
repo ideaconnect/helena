@@ -59,6 +59,7 @@ A named set of variables (e.g. `Local`, `Staging`, `Prod`) selectable per collec
 A root tree.
 - `Folders` / `Requests` — children at the top level.
 - `Environments` — environments scoped to this collection.
+- `Variables` — collection-level variables (#80): a resolver scope below the environment (an environment value of the same name wins). Always applied, unlike the selectable `Environments`.
 - `Auth` — outermost ancestor in the auth-inheritance walk; collection roots default to `None` rather than `Inherit` (no parent to inherit from).
 
 ### `Auth` — [auth.go](auth.go)

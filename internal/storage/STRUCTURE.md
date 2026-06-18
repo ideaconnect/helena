@@ -5,9 +5,9 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level doc comment. |
-| [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. |
-| [store.go](store.go) | The `Save`/`Load` entry points and the directory walker, including the Extra round-trip and orphan sweep. |
-| [secrets.go](secrets.go) | Secret externalization (#42): split secret fields out of the collection YAML into a config-dir store on Save, merge back on Load. |
+| [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. `ocCollectionFile.Vars` carries collection-level variables (#80); `varsToFile`/`fileToVars` map `[]model.Variable` ↔ `[]ocEnvVar`, shared by environments and the collection root. |
+| [store.go](store.go) | The `Save`/`Load` entry points and the directory walker, including the Extra round-trip, the collection-variables round-trip (#80), and the orphan sweep. |
+| [secrets.go](secrets.go) | Secret externalization (#42): split secret fields out of the collection YAML into a config-dir store on Save, merge back on Load. Covers request/folder/collection auth, environment variables, and Secret-flagged collection variables (#80). |
 | [storage_test.go](storage_test.go) | Round-trip, key-naming and docs-key tests. |
 | [storage_extras_test.go](storage_extras_test.go) | Extra round-trip and orphan sweep tests against hand-written YAML. |
 | [storage_scripts_test.go](storage_scripts_test.go) | Scripts round-trip — on-disk key names, empty-Scripts omission, `scripts.Extra` survival, and Extra preservation when the user clears both hooks. |
