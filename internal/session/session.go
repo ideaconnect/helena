@@ -422,7 +422,7 @@ func (s *Session) SetActiveEnvironmentVariables(variables []model.Variable) {
 // SnapshotActiveEnvVars + SnapshotEnvOverlay pair instead so the env
 // can't shift mid-Send.
 func (s *Session) Resolver() *vars.Resolver {
-	return vars.New(s.activeEnvVars(), s.SnapshotEnvOverlay())
+	return vars.New(s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
 
 // SetEnvOverlay records a script-set environment variable for the lifetime

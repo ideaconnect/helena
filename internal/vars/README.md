@@ -14,6 +14,8 @@ A `Resolver` is built from one or more named scopes ordered lowest precedence fi
 - `(*Resolver).WithFallback(fn func(name string) (string, bool)) *Resolver` — attaches a dynamic lookup consulted for any name no scope resolves, so callers can inject namespaced values (e.g. `{{chain.<alias>.response.json.token}}` backed by `chain.VarLookup`) without the resolver knowing their source. Returns the resolver for chaining; `nil` clears it.
 - `(*Resolver).Lookup(name string) (string, bool)` — returns the highest-precedence value for `name` (scopes first, then the fallback).
 - `(*Resolver).Resolve(s string) (string, []string)` — substitutes every `{{name}}`, expanding scope values recursively and freezing fallback values, and returns the result plus the names that are unresolvable or cyclic (deduped, first-seen order).
+- `Dynamic(name string) (string, bool)` — a fallback that resolves Postman-style dynamic ("magic") variables (`{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`, `{{$randomFloat}}`, `{{$randomBoolean}}`, `{{$randomFirstName}}`/`LastName`/`FullName`/`Email`, `{{$randomColor}}`). Only `$`-prefixed names are claimed; an unknown `$name` returns `("", false)` so it is still reported missing. Each call generates a fresh value (and, being a fallback, is frozen — never re-expanded).
+- `Compose(lookups ...func(string) (string, bool)) func(string) (string, bool)` — combines several fallbacks into one, returning the first match (nil lookups skipped). Used to attach `Dynamic` alongside `chain.VarLookup`.
 
 ## Dependencies
 

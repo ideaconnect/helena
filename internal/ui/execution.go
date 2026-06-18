@@ -84,8 +84,10 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 
 	// The chain fallback lets this request's URL / params / headers / body /
 	// auth use {{chain.<alias>.response.json.token}}-style templates, scoped to
-	// this request's own chain aliases (same map the pre-script saw).
-	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay()).WithFallback(chain.VarLookup(chainMap))
+	// this request's own chain aliases (same map the pre-script saw); Dynamic
+	// adds Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
+	resolver := vars.New(e.envSnap, e.sess.SnapshotEnvOverlay()).
+		WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {
 		return chain.View{}, console, err
