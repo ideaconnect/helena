@@ -112,6 +112,9 @@ func FromCurl(command string) (model.Request, error) {
 			}
 		case "-d", "--data", "--data-raw", "--data-ascii", "--data-binary", "--data-urlencode":
 			if v, ok := value(&i, flag, inline, attached); ok {
+				if flag == "--data-urlencode" {
+					v = urlencodeData(v) // curl percent-encodes --data-urlencode
+				}
 				dataParts = append(dataParts, v)
 				hasData = true
 			}
@@ -140,6 +143,9 @@ func FromCurl(command string) (model.Request, error) {
 	switch {
 	case len(formParts) > 0:
 		req.Body = model.Body{Type: model.BodyMultipart, Form: formParts}
+		// Drop any pasted multipart Content-Type: its boundary won't match the
+		// one the send path generates, so let httpclient supply a fresh header.
+		req.Headers = dropMultipartContentType(req.Headers)
 		if !methodSet {
 			req.Method = model.POST
 		}
@@ -163,6 +169,29 @@ func FromCurl(command string) (model.Request, error) {
 	req.URL = urlStr
 	req.Name = curlName(req.Method, urlStr)
 	return req, nil
+}
+
+// urlencodeData percent-encodes a --data-urlencode value the way curl does:
+// "name=content" encodes only content; "=content" or a bare value encodes the
+// whole thing.
+func urlencodeData(s string) string {
+	if name, content, found := strings.Cut(s, "="); found && name != "" {
+		return name + "=" + url.QueryEscape(content)
+	}
+	return url.QueryEscape(strings.TrimPrefix(s, "="))
+}
+
+// dropMultipartContentType removes a Content-Type: multipart/form-data header so
+// the send path can generate a fresh boundary that matches the body.
+func dropMultipartContentType(headers []model.KeyValue) []model.KeyValue {
+	out := headers[:0]
+	for _, h := range headers {
+		if strings.EqualFold(h.Key, "Content-Type") && strings.Contains(strings.ToLower(h.Value), "multipart/form-data") {
+			continue
+		}
+		out = append(out, h)
+	}
+	return out
 }
 
 // splitFlag breaks a flag token into (flag, inlineValue, attachedShort). A long

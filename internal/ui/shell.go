@@ -105,7 +105,7 @@ type MainUI struct {
 
 	currentRequest     *model.Request
 	currentRequestID   string
-	urlBaseline        urlBaseline // stored vs folded URL/Params, for the open→save no-op (#101)
+	urlBaselines       map[string]urlBaseline // per-request stored vs folded URL/Params for the open→save no-op (#101)
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
 	syncing            bool // suppress re-entrant URL<->Query sync (see query.go)
@@ -143,7 +143,7 @@ type MainUI struct {
 // NewMainUI builds the main layout bound to sess and returns it ready to place
 // in a window. Call SetWindow before showing so dialogs have a parent.
 func NewMainUI(sess *session.Session) *MainUI {
-	m := &MainUI{sess: sess}
+	m := &MainUI{sess: sess, urlBaselines: map[string]urlBaseline{}}
 
 	m.Workspace = widget.NewSelect(sess.WorkspaceNames(), m.onWorkspaceChanged)
 	if names := sess.WorkspaceNames(); len(names) > 0 {
@@ -267,7 +267,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	})
 	// Save-to-file sits at the trailing edge of the response toolbar row, for
 	// large or binary bodies that copy can't handle (#66).
-	saveRespBtn := tipButton("download", "Save response to file", m.saveResponseToFile)
+	saveRespBtn := tipButton("file-export", "Save response to file", m.saveResponseToFile)
 	respHeader := container.NewBorder(nil, nil, nil, saveRespBtn, pvToolbar)
 	respBody := container.NewBorder(respHeader, nil, nil, nil, m.pv)
 	m.headersText = widget.NewMultiLineEntry()
@@ -649,17 +649,22 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	// base + the params query in the field. (SetText here is under m.loading, so
 	// its OnChanged won't re-run applyURLEdit.)
 	//
-	// The fold is a *display* convenience: snapshot the stored URL/Params and the
-	// post-fold pair so an unedited save can write the byte-identical original
-	// back instead of the normalized fold (#101) — see saveRequest.
-	m.urlBaseline.origURL = req.URL
-	m.urlBaseline.origParams = append([]model.KeyValue(nil), req.Params...)
+	// The fold is a *display* convenience that mutates the live node, so it must
+	// run only when there is an inline query to fold. Snapshot the stored URL +
+	// the post-fold pair, keyed by request id, so an unedited save writes the
+	// byte-identical original back (#101) — and a RE-load of an already-folded
+	// node reuses the original baseline instead of re-snapshotting the fold (a
+	// second open→save stays byte-identical). A request whose stored URL has no
+	// inline query (the common Helena-saved form: base URL + Params) needs no
+	// baseline — its in-memory form already equals the on-disk form.
 	if base, urlQuery, frag := splitURLQuery(req.URL); urlQuery != "" {
+		bl := urlBaseline{origURL: req.URL, origParams: append([]model.KeyValue(nil), req.Params...)}
 		req.URL = withFragment(base, frag)
 		req.Params = append(parseQueryParams(urlQuery), req.Params...)
+		bl.foldURL = req.URL
+		bl.foldParams = append([]model.KeyValue(nil), req.Params...)
+		m.urlBaselines[id] = bl
 	}
-	m.urlBaseline.foldURL = req.URL
-	m.urlBaseline.foldParams = append([]model.KeyValue(nil), req.Params...)
 	m.URL.SetText(displayURL(req.URL, req.Params))
 	m.rebuildParamsRows()
 	m.rebuildHeadersRows()
@@ -702,17 +707,20 @@ func (m *MainUI) saveRequest() {
 	cleanedChain, halfFilledChain := pruneEmptyChain(m.currentRequest.Chain)
 	m.currentRequest.Chain = cleanedChain
 
-	// If the URL + Params are untouched since load, persist the exact stored form
-	// so opening then saving a request is byte-identical (#101); otherwise write
-	// the normalized fold. The check is a value comparison (not an edited-flag),
-	// so no missed edit path can ever discard the user's changes.
-	pristineURL := m.currentRequest.URL == m.urlBaseline.foldURL &&
-		slices.Equal(m.currentRequest.Params, m.urlBaseline.foldParams)
+	// If this request's stored URL carried an inline query (so loadRequest folded
+	// it) and the URL + Params are still that fold, persist the exact stored form
+	// so opening then saving is byte-identical (#101); otherwise write the
+	// (pruned) current form. The check is a value comparison against the
+	// id-keyed baseline — not an edited-flag — so no missed edit path can discard
+	// changes, and a re-loaded already-folded node still restores its original.
+	bl, hasBaseline := m.urlBaselines[m.currentRequestID]
+	pristineURL := hasBaseline && m.currentRequest.URL == bl.foldURL &&
+		slices.Equal(m.currentRequest.Params, bl.foldParams)
 	var restoreURL func()
 	if pristineURL {
 		fURL, fParams := m.currentRequest.URL, m.currentRequest.Params
-		m.currentRequest.URL = m.urlBaseline.origURL
-		m.currentRequest.Params = m.urlBaseline.origParams
+		m.currentRequest.URL = bl.origURL
+		m.currentRequest.Params = bl.origParams
 		restoreURL = func() { m.currentRequest.URL, m.currentRequest.Params = fURL, fParams }
 	} else {
 		m.currentRequest.Params = pruneEmptyKV(m.currentRequest.Params)

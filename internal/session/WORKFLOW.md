@@ -31,9 +31,12 @@ The active environment determines which variables `Resolver()` exposes for
    the persisted `cfg.UI.ActiveEnv[dir]` (path-keyed) so reordering
    collections later doesn't lose the choice. Empty name removes the entry.
 3. `persist()` writes the config.
-4. The next `Resolver()` call walks `ActiveEnvironment().Variables`, filters
-   to `Enabled` ones, and wraps them into a `vars.Resolver` — along with
-   a snapshot of the env overlay layered on top (see "Env overlay" below).
+4. The next `Resolver()` call layers ordered scopes — the active collection's
+   `Variables` (#80), then `ActiveEnvironment().Variables`, then the env overlay
+   (highest precedence) — each filtered to `Enabled` entries, and attaches the
+   `vars.Dynamic` fallback for `{{$guid}}`/`{{$timestamp}}`/… (#85). So an
+   environment value overrides a collection value of the same name; the overlay
+   overrides both (see "Env overlay" below).
 
 `ActiveEnvironment()` resolves by name (not index) into the active
 collection's `Environments`, so editing an environment's name through the

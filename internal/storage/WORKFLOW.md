@@ -44,9 +44,10 @@ of the keys Helena knows).
 `Save(c model.Collection, dir string)` is **atomic at the tree level** (#109)
 and **externalizes secrets** (#42). Before staging, `splitSecrets` produces a
 sanitized deep copy of `c` with every secret field blanked (Basic password,
-Bearer token, API-key value, OAuth2 client secret, Secret env-var values),
-collecting the real values into a map keyed positionally
-(`col/auth/bearer.token`, `f0/r1/auth/oauth2.clientSecret`, `e0/v1`, …).
+Bearer token, API-key value, OAuth2 client secret, Secret env-var values, and
+Secret collection-variable values, #80), collecting the real values into a map
+keyed positionally
+(`col/auth/bearer.token`, `f0/r1/auth/oauth2.clientSecret`, `e0/v1`, `cv0`, …).
 `writeSecrets` persists that map to a per-collection file under the OS config
 dir (`$HELENA_SECRETS_DIR` overrides; `secretsDirOverride` in tests), named by a
 hash of the absolute collection dir — outside any repo, so it can never be

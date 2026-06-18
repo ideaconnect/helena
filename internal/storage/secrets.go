@@ -131,7 +131,8 @@ func applySecrets(c *model.Collection, secrets map[string]string) {
 // eachSecret visits every secret-bearing field in c, passing a stable key and a
 // pointer to the field (so callers can read or rewrite it). Keys are positional:
 // collection root, then root requests, then folders (depth-first), then
-// environments — matching the seq order the files load in.
+// environment variables, then collection-level variables (#80) — matching the
+// seq order the files load in.
 func eachSecret(c *model.Collection, fn func(key string, val *string)) {
 	authSecrets("col", &c.Auth, fn)
 	for i := range c.Requests {

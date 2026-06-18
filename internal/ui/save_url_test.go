@@ -57,6 +57,32 @@ func TestOpenThenSaveURLByteIdentical(t *testing.T) {
 	}
 }
 
+// TestReopenThenSaveStaysByteIdentical pins the regression the batch review
+// caught: a SECOND open→save of the same (already-folded) node must still be
+// byte-identical. The baseline is keyed by request id, so the reload reuses the
+// original rather than re-snapshotting the folded node.
+func TestReopenThenSaveStaysByteIdentical(t *testing.T) {
+	const orig = "https://api.test/path?b=2&a=1&b=3"
+	m, req, dir := openSavedRequest(t, model.Request{Name: "R", Method: model.GET, URL: orig})
+
+	m.loadRequest(req, "0/r0")
+	m.saveRequest()
+	m.loadRequest(req, "0/r0") // re-open the same, now-folded, node
+	m.saveRequest()
+
+	reloaded, err := storage.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := reloaded.Requests[0]
+	if got.URL != orig {
+		t.Errorf("second open+save mutated the URL:\n got  %q\n want %q", got.URL, orig)
+	}
+	if len(got.Params) != 0 {
+		t.Errorf("Params should stay empty after re-open+save; got %+v", got.Params)
+	}
+}
+
 // TestEditedURLPersistsNormalized pins the other side of #101: once the user
 // actually edits the URL, the normalized base+Params fold IS persisted.
 func TestEditedURLPersistsNormalized(t *testing.T) {

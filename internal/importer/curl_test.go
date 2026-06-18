@@ -1,6 +1,7 @@
 package importer
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/idct/helena/internal/model"
@@ -298,5 +299,33 @@ func TestTokenizeShellDoubleQuoteEscapes(t *testing.T) {
 func TestFromCurlEmptyIsError(t *testing.T) {
 	if _, err := FromCurl("   "); err == nil {
 		t.Error("expected error for empty command (no URL)")
+	}
+}
+
+func TestFromCurlDataUrlencodeEncodes(t *testing.T) {
+	// curl percent-encodes the content of --data-urlencode, keeping the name.
+	req, err := FromCurl(`curl -G https://api.test/s --data-urlencode 'q=a b&c'`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.URL != "https://api.test/s?q=a+b%26c" {
+		t.Errorf("url = %q; want the --data-urlencode content percent-encoded", req.URL)
+	}
+}
+
+func TestFromCurlMultipartDropsStaleContentType(t *testing.T) {
+	// A pasted multipart Content-Type carries a boundary the send path can't
+	// reuse, so it must be dropped (httpclient regenerates it).
+	req, err := FromCurl(`curl https://api.test/u -H 'Content-Type: multipart/form-data; boundary=XYZ' -F a=1`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req.Body.Type != model.BodyMultipart {
+		t.Fatalf("body type = %q; want multipart", req.Body.Type)
+	}
+	for _, h := range req.Headers {
+		if strings.EqualFold(h.Key, "Content-Type") {
+			t.Errorf("stale multipart Content-Type header should be dropped, got %q", h.Value)
+		}
 	}
 }
