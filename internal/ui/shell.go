@@ -265,7 +265,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 	pvToolbar := prettyview.NewToolbar(m.pv, prettyview.ToolbarConfig{
 		ShowFormat: true, ShowExpandCollapse: true, ShowWrap: true, ShowSearch: true,
 	})
-	respBody := container.NewBorder(pvToolbar, nil, nil, nil, m.pv)
+	// Save-to-file sits at the trailing edge of the response toolbar row, for
+	// large or binary bodies that copy can't handle (#66).
+	saveRespBtn := tipButton("download", "Save response to file", m.saveResponseToFile)
+	respHeader := container.NewBorder(nil, nil, nil, saveRespBtn, pvToolbar)
+	respBody := container.NewBorder(respHeader, nil, nil, nil, m.pv)
 	m.headersText = widget.NewMultiLineEntry()
 	m.headersText.Wrapping = fyne.TextWrapOff
 	m.headersText.SetPlaceHolder("Response headers appear here after you press Send.")
