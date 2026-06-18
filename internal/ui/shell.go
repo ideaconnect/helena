@@ -105,6 +105,7 @@ type MainUI struct {
 
 	currentRequest     *model.Request
 	currentRequestID   string
+	urlBaseline        urlBaseline // stored vs folded URL/Params, for the open→save no-op (#101)
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
 	syncing            bool // suppress re-entrant URL<->Query sync (see query.go)
@@ -592,6 +593,18 @@ func (m *MainUI) refreshSidebarActions() {
 
 // loadRequest populates every editor widget from req, with the loading flag set
 // so write-back callbacks don't fire during the bulk-update.
+// urlBaseline snapshots a loaded request's URL/Params so an unedited save can
+// restore the exact stored form instead of the normalized base+Params fold
+// (#101). origURL/origParams are the stored values; foldURL/foldParams are the
+// post-load fold. If currentRequest still equals the fold at save time the
+// URL/Params were untouched, so the original is written back byte-identically.
+type urlBaseline struct {
+	origURL    string
+	origParams []model.KeyValue
+	foldURL    string
+	foldParams []model.KeyValue
+}
+
 func (m *MainUI) loadRequest(req *model.Request, id string) {
 	m.loading = true
 	defer func() { m.loading = false }()
@@ -630,10 +643,18 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	// it shows in the table, keep currentRequest.URL as the bare base, and render
 	// base + the params query in the field. (SetText here is under m.loading, so
 	// its OnChanged won't re-run applyURLEdit.)
+	//
+	// The fold is a *display* convenience: snapshot the stored URL/Params and the
+	// post-fold pair so an unedited save can write the byte-identical original
+	// back instead of the normalized fold (#101) — see saveRequest.
+	m.urlBaseline.origURL = req.URL
+	m.urlBaseline.origParams = append([]model.KeyValue(nil), req.Params...)
 	if base, urlQuery, frag := splitURLQuery(req.URL); urlQuery != "" {
 		req.URL = withFragment(base, frag)
 		req.Params = append(parseQueryParams(urlQuery), req.Params...)
 	}
+	m.urlBaseline.foldURL = req.URL
+	m.urlBaseline.foldParams = append([]model.KeyValue(nil), req.Params...)
 	m.URL.SetText(displayURL(req.URL, req.Params))
 	m.rebuildParamsRows()
 	m.rebuildHeadersRows()
@@ -671,17 +692,36 @@ func (m *MainUI) saveRequest() {
 		return
 	}
 	// Drop incomplete (empty-key) rows on save so we don't write noise to YAML.
-	m.currentRequest.Params = pruneEmptyKV(m.currentRequest.Params)
 	m.currentRequest.Headers = pruneEmptyKV(m.currentRequest.Headers)
 	m.currentRequest.Body.Form = pruneEmptyKV(m.currentRequest.Body.Form)
 	cleanedChain, halfFilledChain := pruneEmptyChain(m.currentRequest.Chain)
 	m.currentRequest.Chain = cleanedChain
-	m.rebuildParamsRows()
+
+	// If the URL + Params are untouched since load, persist the exact stored form
+	// so opening then saving a request is byte-identical (#101); otherwise write
+	// the normalized fold. The check is a value comparison (not an edited-flag),
+	// so no missed edit path can ever discard the user's changes.
+	pristineURL := m.currentRequest.URL == m.urlBaseline.foldURL &&
+		slices.Equal(m.currentRequest.Params, m.urlBaseline.foldParams)
+	var restoreURL func()
+	if pristineURL {
+		fURL, fParams := m.currentRequest.URL, m.currentRequest.Params
+		m.currentRequest.URL = m.urlBaseline.origURL
+		m.currentRequest.Params = m.urlBaseline.origParams
+		restoreURL = func() { m.currentRequest.URL, m.currentRequest.Params = fURL, fParams }
+	} else {
+		m.currentRequest.Params = pruneEmptyKV(m.currentRequest.Params)
+	}
 	m.rebuildHeadersRows()
 	m.rebuildBodyFormRows()
 	m.rebuildChainRows()
 
-	if err := m.sess.SaveActiveCollection(); err != nil {
+	err := m.sess.SaveActiveCollection()
+	if restoreURL != nil {
+		restoreURL() // back to the working fold so the live editor stays consistent
+	}
+	m.rebuildParamsRows()
+	if err != nil {
 		m.Status.SetText("Save failed: " + err.Error())
 		if m.win != nil {
 			dialog.ShowError(err, m.win)

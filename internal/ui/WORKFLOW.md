@@ -115,6 +115,12 @@ no longer invoked directly from the tree handler):
    - Calls `rebuildParamsRows` and `rebuildHeadersRows` to drop the prior
      request's KV row widgets and create new ones bound to the new slice.
    - Calls `refreshDocsPreview` and `updateURLPreview`.
+   - Snapshots the stored vs post-fold URL/Params into `m.urlBaseline`. The
+     URL→Params fold (folding an inline query into the Params table) is a
+     *display* convenience; `saveRequest` compares the current URL/Params to the
+     fold and, when untouched, writes the byte-identical stored form back so an
+     open→save is a no-op (#101). The comparison is by value, so no missed edit
+     path can discard real changes.
    The deferred `m.loading = false` re-arms widget write-back.
 
    The status line (`"Loaded: <name>"`), the cached-response restore, and tab
