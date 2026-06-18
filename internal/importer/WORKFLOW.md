@@ -35,6 +35,21 @@ Sorting the media-type keys gives deterministic output — without it, the choic
 
 Parameters are handled separately from bodies: `query` params -> `r.Params`, `header` params -> `r.Headers`, `path` params remain embedded in the URL as `{name}` placeholders. Optional params are imported disabled, required params are imported enabled.
 
+## curl command → request
+
+`FromCurl` ([curl.go](curl.go)) tokenizes the command with `tokenizeShell`
+(single/double quotes, `\` escapes, `\`-newline continuations), drops a leading
+`curl`, then walks the flags: `-X/--request` → method, `-H/--header` →
+headers (also noting `Content-Type`), `-d/--data*`/`--data-urlencode` →
+accumulated data, `-F/--form` → multipart fields, `-u/--user` → basic auth,
+`-A/-e/-b` → User-Agent/Referer/Cookie headers, `--url` + a positional arg →
+URL, `-G/--get` → fold the data into the query. A trailing body is mapped by
+`bodyFromData` (Content-Type wins; otherwise JSON `{`/`[` and `k=v&…` form
+shapes are sniffed). Method defaults to POST when data/form is present, else
+GET. Unknown flags are skipped, consuming a value for the common value-taking
+ones (`-o`, `--max-time`, …) so they don't swallow the URL. Returns a single
+`model.Request`; the UI opens it in a scratch tab.
+
 ## WSDL operation → SOAP envelope template
 
 `FromWSDL` ([wsdl.go:17](wsdl.go#L17)) walks `definitions -> services -> ports -> bindings.operations`, deduplicating by `service.port.operation`. For each operation, `buildSOAPRequest` ([wsdl.go:75](wsdl.go#L75)) emits:

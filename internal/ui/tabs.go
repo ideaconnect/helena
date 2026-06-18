@@ -110,6 +110,19 @@ func (m *MainUI) newScratchTab() {
 	m.activateTab(len(m.tabs) - 1)
 }
 
+// openScratchWith opens req in a new unsaved (scratch) tab — used by the
+// "Paste cURL" import so the parsed request lands in the editor ready to be
+// reviewed and saved into a collection.
+func (m *MainUI) openScratchWith(req model.Request) {
+	r := req
+	m.tabs = append(m.tabs, &openTab{
+		requestID:  model.NewID(),
+		scratch:    true,
+		scratchReq: &r,
+	})
+	m.activateTab(len(m.tabs) - 1)
+}
+
 // activateTab makes the tab at index i active: re-derives its live node ID and
 // request pointer (closing it if the request has vanished), binds the editor
 // via loadRequest, restores the tab's cached response, and re-renders the

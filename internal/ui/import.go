@@ -95,6 +95,11 @@ func (m *MainUI) actionImport() {
 		m.importFromFile()
 	})
 
+	curlBtn := widget.NewButton("Paste cURL…", func() {
+		d.Hide()
+		m.importFromCurl()
+	})
+
 	content := container.NewVBox(
 		widget.NewLabelWithStyle("Import an OpenAPI / Swagger / WSDL spec",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -104,9 +109,42 @@ func (m *MainUI) actionImport() {
 		widget.NewSeparator(),
 		widget.NewLabel("Or:"),
 		pickBtn,
+		widget.NewSeparator(),
+		widget.NewLabel("Or build a request from a curl command:"),
+		curlBtn,
 	)
 	d = dialog.NewCustom("Import", "Cancel", content, m.win)
-	d.Resize(fyne.NewSize(480, 320))
+	d.Resize(fyne.NewSize(480, 400))
+	d.Show()
+}
+
+// importFromCurl prompts for a curl command and opens the parsed request in a
+// new scratch tab (the user then saves it into a collection). The parse is
+// guarded since pasted input is arbitrary (#48).
+func (m *MainUI) importFromCurl() {
+	if m.win == nil {
+		return
+	}
+	entry := widget.NewMultiLineEntry()
+	entry.SetPlaceHolder("curl https://api.example.com/v1/things -H 'Accept: application/json'")
+	entry.SetMinRowsVisible(6)
+	content := container.NewBorder(
+		widget.NewLabel("Paste a curl command:"), nil, nil, nil, entry)
+	d := dialog.NewCustomConfirm("Paste cURL", "Create request", "Cancel", content, func(ok bool) {
+		if !ok {
+			return
+		}
+		m.guard("Import cURL", func() {
+			req, err := importer.FromCurl(entry.Text)
+			if err != nil {
+				dialog.ShowError(err, m.win)
+				return
+			}
+			m.openScratchWith(req)
+			m.Status.SetText("Created request from cURL: " + req.Name)
+		})
+	}, m.win)
+	d.Resize(fyne.NewSize(560, 320))
 	d.Show()
 }
 

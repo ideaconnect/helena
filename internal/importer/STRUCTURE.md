@@ -6,6 +6,8 @@
 | --- | --- |
 | [doc.go](doc.go) | Package-level doc comment. |
 | [from.go](from.go) | `From` dispatcher and the one-byte `looksLikeXML` sniffer. |
+| [curl.go](curl.go) | `FromCurl` — parses a `curl` command line into a single `model.Request`; `tokenizeShell` (quote/escape/continuation-aware tokenizer), `splitFlag`, `bodyFromData` (Content-Type → body type, with JSON/form sniffing), `parseFormData`, `appendQuery`, `curlName`, and the `curlValueShorts`/`curlValueFlags` skip tables. |
+| [curl_test.go](curl_test.go) | `FromCurl` + `tokenizeShell` tests: method/URL/headers/data variants, multipart, basic auth, `-G`, quoting, line continuations, noise-flag skipping, and error paths. |
 | [openapi.go](openapi.go) | OpenAPI 3 / Swagger 2 parsing: `FromOpenAPI`, YAML→JSON normalization, OAS3-to-collection conversion. |
 | [openapi_test.go](openapi_test.go) | OpenAPI tests with embedded `oas3Sample` / `swagger2Sample` fixtures (also reused by url_test.go and wsdl_test.go). |
 | [wsdl.go](wsdl.go) | `FromWSDL`, the `wsdl*` XML structs, and the SOAP envelope template builder. |

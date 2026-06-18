@@ -12,6 +12,7 @@ OpenAPI servers, tags, parameters and request bodies are mapped to Helena's URL/
 - `FromOpenAPI(data []byte) (model.Collection, error)` — parses OpenAPI 3 or Swagger 2 (auto-detected by `openapi`/`swagger` key); accepts JSON or YAML bytes.
 - `FromWSDL(data []byte) (model.Collection, error)` — parses a WSDL 1.1 document into one POST per binding operation.
 - `FromURL(url string, settings model.Settings) (model.Collection, error)` — fetches a spec over HTTP(S), honoring `InsecureSkipVerify` and `TimeoutSeconds`, then forwards the body through `From`.
+- `FromCurl(command string) (model.Request, error)` — parses a copy-pasted `curl` command line into a single `model.Request` (method, URL, headers, query, body, basic auth). It returns a `Request`, not a `Collection`, since a curl command is one request; the UI opens it in a scratch tab. Handles `-X/-H/-d/--data*/-F/-u/-b/-A/-e/-G/--url` + a positional URL, shell quoting, and `\` line continuations; unknown flags are skipped.
 
 ## Dependencies
 
