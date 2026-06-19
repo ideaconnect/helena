@@ -100,6 +100,96 @@ func TestIPHostCookiesAreHostOnly(t *testing.T) {
 	}
 }
 
+func TestSingleLabelHostCookiesAreHostOnly(t *testing.T) {
+	j := New()
+	// A single-label host (localhost/intranet) setting Domain=itself must be
+	// host-only — not a domain cookie that would leak to evil.localhost.
+	j.SetCookies(mustURL(t, "http://localhost/"), []*http.Cookie{{Name: "a", Value: "1", Domain: "localhost"}})
+	if got := j.Cookies(mustURL(t, "http://evil.localhost/")); len(got) != 0 {
+		t.Fatalf("single-label domain cookie leaked to subdomain: %v", names(got))
+	}
+	if got := j.Cookies(mustURL(t, "http://localhost/")); len(got) != 1 {
+		t.Fatalf("single-label cookie not returned to its own host: %v", names(got))
+	}
+	// A dotted DNS Domain still produces a normal domain cookie (reaches subs).
+	j.SetCookies(mustURL(t, "https://example.com/"), []*http.Cookie{{Name: "b", Value: "1", Domain: "example.com"}})
+	if got := j.Cookies(mustURL(t, "https://api.example.com/")); len(got) != 1 {
+		t.Fatalf("dotted domain cookie should still reach subdomains: %v", names(got))
+	}
+}
+
+func TestZonedIPv6HostStaysHostOnly(t *testing.T) {
+	j := New()
+	// A zoned IPv6 host (fe80::1%eth0) must be detected as an IP despite the
+	// %zone, so a Domain attribute is accepted only as the exact host and the
+	// cookie stays host-only.
+	u := mustURL(t, "http://[fe80::1%25eth0]/")
+	j.SetCookies(u, []*http.Cookie{{Name: "a", Value: "1", Domain: "fe80::1%eth0"}})
+	all := j.All()
+	if len(all) != 1 || !all[0].HostOnly {
+		t.Fatalf("zoned IPv6 cookie should be stored host-only: %+v", all)
+	}
+	if got := j.Cookies(u); len(got) != 1 {
+		t.Fatalf("zoned IPv6 cookie not returned to its own host: %v", names(got))
+	}
+}
+
+func TestSetForcesIPHostOnlyAndRejectsNUL(t *testing.T) {
+	j := New()
+	// Manual Set with an IP domain must be forced host-only so the editor can't
+	// recreate the IP leak the wire path guards against.
+	j.Set(Cookie{Domain: "10.0.0.1", Name: "x", Value: "1"})
+	all := j.All()
+	if len(all) != 1 || !all[0].HostOnly {
+		t.Fatalf("Set with IP domain should be host-only: %+v", all)
+	}
+	if got := j.Cookies(mustURL(t, "http://evil.10.0.0.1/")); len(got) != 0 {
+		t.Fatalf("IP cookie set via Set leaked to a suffixed host: %v", names(got))
+	}
+	// A NUL in name or path is rejected — it would corrupt the key separator and
+	// could alias a different slot.
+	j.Set(Cookie{Domain: "x.com", Name: "a\x00b", Value: "1"})
+	j.Set(Cookie{Domain: "x.com", Name: "a", Path: "/p\x00q", Value: "1"})
+	if j.Len() != 1 {
+		t.Fatalf("NUL-bearing Set should be a no-op, Len=%d", j.Len())
+	}
+}
+
+func TestReplacePreservesOrderAndIdentity(t *testing.T) {
+	j := New()
+	u := mustURL(t, "https://example.com/")
+	j.Set(Cookie{Domain: "example.com", Path: "/", Name: "a", Value: "1"})
+	j.Set(Cookie{Domain: "example.com", Path: "/", Name: "b", Value: "1"})
+
+	// A value-only edit (identity unchanged) must keep send-order position.
+	j.Replace("example.com", "/", "a", Cookie{Domain: "example.com", Path: "/", Name: "a", Value: "2"})
+	if got := names(j.Cookies(u)); len(got) != 2 || got[0] != "a" || got[1] != "b" {
+		t.Fatalf("value-only edit reordered cookies: %v", got)
+	}
+	for _, c := range j.Cookies(u) {
+		if c.Name == "a" && c.Value != "2" {
+			t.Fatalf("value-only edit lost the new value: %+v", c)
+		}
+	}
+
+	// An identity change (rename a→c) drops the old slot (no orphan).
+	j.Replace("example.com", "/", "a", Cookie{Domain: "example.com", Path: "/", Name: "c", Value: "2"})
+	if j.Len() != 2 {
+		t.Fatalf("rename via Replace orphaned a slot, Len=%d", j.Len())
+	}
+	for _, n := range names(j.Cookies(u)) {
+		if n == "a" {
+			t.Fatal("old name 'a' still present after rename")
+		}
+	}
+
+	// Replace with an invalid cookie (no name) is a no-op.
+	j.Replace("example.com", "/", "b", Cookie{Domain: "example.com", Path: "/", Name: ""})
+	if j.Len() != 2 {
+		t.Fatalf("invalid Replace should be a no-op, Len=%d", j.Len())
+	}
+}
+
 func TestSecureCookieOnlyOverHTTPS(t *testing.T) {
 	j := New()
 	j.SetCookies(mustURL(t, "https://example.com/"), []*http.Cookie{{Name: "s", Value: "1", Secure: true}})

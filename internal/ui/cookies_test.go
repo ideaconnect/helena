@@ -161,6 +161,11 @@ func TestCookiesAddThroughDialog(t *testing.T) {
 	if len(all) != 1 || all[0].Name != "token" || all[0].Domain != "api.example.com" || all[0].Value != "xyz" {
 		t.Fatalf("Add did not store the cookie in the jar: %+v", all)
 	}
+	// A manually-added cookie defaults to host-only (the "Send to subdomains"
+	// check is off by default), matching a Set-Cookie with no Domain attribute.
+	if !all[0].HostOnly {
+		t.Fatalf("Add should default to host-only, got %+v", all[0])
+	}
 }
 
 // TestCookiesEditThroughDialog drives the real Edit path and pins three behaviours
@@ -186,11 +191,12 @@ func TestCookiesEditThroughDialog(t *testing.T) {
 	es := entriesIn(form)
 	es[2].SetText("new") // rename (changes the (domain,path,name) identity)
 	cs := checksIn(form)
-	if len(cs) < 2 {
-		t.Fatalf("form should expose Secure + HttpOnly checks, got %d", len(cs))
+	if len(cs) < 3 {
+		t.Fatalf("form should expose Secure + HttpOnly + Send-to-subdomains checks, got %d", len(cs))
 	}
-	cs[0].SetChecked(true) // Secure
-	cs[1].SetChecked(true) // HttpOnly
+	cs[0].SetChecked(true)  // Secure
+	cs[1].SetChecked(true)  // HttpOnly
+	cs[2].SetChecked(false) // Send to subdomains OFF ⇒ host-only
 	test.Tap(buttonByText(form, "Save"))
 
 	all := jar.All()
@@ -203,6 +209,9 @@ func TestCookiesEditThroughDialog(t *testing.T) {
 	}
 	if !got.Secure || !got.HTTPOnly {
 		t.Fatalf("Secure/HttpOnly checkboxes not applied: %+v", got)
+	}
+	if !got.HostOnly {
+		t.Fatalf("unchecking 'Send to subdomains' should make it host-only: %+v", got)
 	}
 	if !got.Expires.Equal(expiry) {
 		t.Fatalf("Expires not carried through edit: got %v want %v", got.Expires, expiry)

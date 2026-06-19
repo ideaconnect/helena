@@ -54,7 +54,10 @@ func (m *MainUI) showCookies() {
 	}
 
 	addBtn := tipButton("square-plus", "Add cookie", func() {
-		m.editCookie(cookiejar.Cookie{Path: "/"}, func(c cookiejar.Cookie) {
+		// A manually-added cookie defaults to host-only (HostOnly: true), matching
+		// a Set-Cookie with no Domain attribute — so it isn't silently replayed to
+		// sub-domains unless the user opts in via "Send to subdomains".
+		m.editCookie(cookiejar.Cookie{Path: "/", HostOnly: true}, func(c cookiejar.Cookie) {
 			jar.Set(c)
 			reload()
 		})
@@ -65,10 +68,10 @@ func (m *MainUI) showCookies() {
 		}
 		orig := cookies[selectedIdx]
 		m.editCookie(orig, func(c cookiejar.Cookie) {
-			// The (domain, path, name) identity may have changed, so drop the old
-			// slot before upserting the new one rather than orphaning a duplicate.
-			jar.Remove(orig.Domain, orig.Path, orig.Name)
-			jar.Set(c)
+			// Replace handles the (domain, path, name) identity: it drops the old
+			// slot only when the identity changed (no orphan) and otherwise keeps
+			// the cookie's send-order position for a value/flag-only edit.
+			jar.Replace(orig.Domain, orig.Path, orig.Name, c)
 			reload()
 		})
 	})
@@ -106,8 +109,9 @@ func (m *MainUI) showCookies() {
 }
 
 // editCookie shows a form to add or edit a single cookie. Domain and Name are
-// required; the cookie's Expires / HostOnly are carried through unchanged (the
-// form doesn't expose them — a manually added cookie is a session cookie).
+// required. The "Send to subdomains" check controls scope (HostOnly inverted);
+// Expires is carried through unchanged since the form has no expiry input (so an
+// edited persistent cookie keeps its expiry).
 func (m *MainUI) editCookie(initial cookiejar.Cookie, onSave func(cookiejar.Cookie)) {
 	domain := widget.NewEntry()
 	domain.SetText(initial.Domain)
@@ -123,6 +127,11 @@ func (m *MainUI) editCookie(initial cookiejar.Cookie, onSave func(cookiejar.Cook
 	secure.SetChecked(initial.Secure)
 	httpOnly := widget.NewCheck("HttpOnly", nil)
 	httpOnly.SetChecked(initial.HTTPOnly)
+	// HostOnly is the stored flag; the user-facing control is its inverse so the
+	// label reads naturally. Unchecked ⇒ host-only (exact host); checked ⇒ also
+	// sent to sub-domains.
+	subdomains := widget.NewCheck("Send to subdomains", nil)
+	subdomains.SetChecked(!initial.HostOnly)
 
 	items := []*widget.FormItem{
 		widget.NewFormItem("Domain", domain),
@@ -131,6 +140,7 @@ func (m *MainUI) editCookie(initial cookiejar.Cookie, onSave func(cookiejar.Cook
 		widget.NewFormItem("Value", value),
 		widget.NewFormItem("", secure),
 		widget.NewFormItem("", httpOnly),
+		widget.NewFormItem("", subdomains),
 	}
 	if !initial.Expires.IsZero() {
 		items = append(items, widget.NewFormItem("Expires", widget.NewLabel(initial.Expires.Format(time.RFC1123))))
@@ -153,21 +163,26 @@ func (m *MainUI) editCookie(initial cookiejar.Cookie, onSave func(cookiejar.Cook
 			Expires:  initial.Expires,
 			Secure:   secure.Checked,
 			HTTPOnly: httpOnly.Checked,
-			HostOnly: initial.HostOnly,
+			HostOnly: !subdomains.Checked,
 		})
 	}, m.win)
-	d.Resize(fyne.NewSize(440, 340))
+	d.Resize(fyne.NewSize(440, 360))
 	d.Show()
 }
 
 // cookieSummary renders a one-line view of a cookie for the list: the scope,
-// the name=value, and a bracketed flag list (path when non-root, secure /
-// httpOnly, and the session/expiry state).
+// the name=value, and a bracketed flag list (path when non-root, host-only vs
+// +subdomains, secure / httpOnly, and the session/expiry state).
 func cookieSummary(c cookiejar.Cookie) string {
 	s := fmt.Sprintf("%s  %s=%s", c.Domain, c.Name, c.Value)
 	var flags []string
 	if c.Path != "" && c.Path != "/" {
 		flags = append(flags, "path "+c.Path)
+	}
+	if c.HostOnly {
+		flags = append(flags, "host-only")
+	} else {
+		flags = append(flags, "+subdomains")
 	}
 	if c.Secure {
 		flags = append(flags, "secure")

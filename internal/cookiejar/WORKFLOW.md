@@ -48,14 +48,19 @@ then oldest** (RFC 6265 §5.4) and returned as bare `name=value` cookies.
 The UI ([internal/ui/cookies.go](../ui/cookies.go)) reads `All()` (a sorted live
 snapshot) to populate its list, and mutates the live jar directly:
 
-- **Add / Edit** → `Set(c)`. Edit removes the old `(domain, path, name)` slot
-  first, because changing any of those three is an identity change, not an
-  in-place update.
+- **Add** → `Set(c)`. A manually-added cookie defaults to host-only (the "Send to
+  subdomains" check is off), matching a `Set-Cookie` with no `Domain` attribute.
+- **Edit** → `Replace(oldDomain, oldPath, oldName, c)`. Replace keeps the
+  cookie's send-order position for a value/flag-only edit and drops the old slot
+  only when the `(domain, path, name)` identity changed (so a rename can't leave
+  an orphan, and a flag edit can't reorder it).
 - **Delete** → `Remove(domain, path, name)`.
 - **Clear all** → `Clear()`.
 
-Every edit hits the same jar the next Send will read, so changes take effect
-immediately with no save step.
+Both `Set` and `Replace` run the cookie through `normalize`, so an editor-added
+cookie obeys the same scope rules as a wire cookie (canonical domain, IP domains
+forced host-only). Every edit hits the same jar the next Send will read, so
+changes take effect immediately with no save step.
 
 ## Expiry & purging
 

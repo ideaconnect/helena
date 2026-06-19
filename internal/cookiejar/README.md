@@ -29,10 +29,15 @@ ordered longest-path-first then oldest (RFC 6265 §5.4). `SetCookies` honours th
 derived from the request URL when absent), `Secure`, `HttpOnly`, and
 `Max-Age`/`Expires` (Max-Age wins; a negative Max-Age or past Expires deletes).
 
-IP-literal hosts are handled like the stdlib jar: a `Domain` attribute is
-honoured only when it equals the host, and the cookie is always host-only, so a
-crafted dotted-suffix `Domain` (e.g. `10.0.0.1` setting `Domain=0.0.1`) can't
-leak to sibling IPs.
+IP-literal hosts (including zoned IPv6 like `fe80::1%eth0`) are handled like the
+stdlib jar: a `Domain` attribute is honoured only when it equals the host, and
+the cookie is always host-only, so a crafted dotted-suffix `Domain` (e.g.
+`10.0.0.1` setting `Domain=0.0.1`) can't leak to sibling IPs. The same host-only
+rule applies to a **single-label** host (`localhost`, an intranet `myserver`):
+`Domain=localhost` is stored host-only, never as a domain cookie that would reach
+`evil.localhost`. These normalisations run on the editor's `Set`/`Replace` paths
+too, so a manually added cookie can't widen its own scope past what a wire cookie
+could.
 
 **Not implemented:** public-suffix-list checking. The jar rejects an obvious
 super-cookie (a dotless `Domain` that isn't the exact host, e.g. `com`) but
@@ -58,8 +63,15 @@ model already runs collection scripts with the user's network identity (see
 - `(*Jar).All() []Cookie` — a sorted snapshot (domain, path, name) of every live
   cookie, for the viewer.
 - `(*Jar).Len() int` — count of live cookies.
-- `(*Jar).Set(c Cookie)` — upsert a cookie directly (the editor's add/edit).
-  Domain and Name are required; an empty Path defaults to `/`.
+- `(*Jar).Set(c Cookie)` — upsert a cookie directly (the editor's add). Domain
+  and Name are required; an empty Path defaults to `/`. The cookie is normalised
+  exactly as a wire cookie would be (canonical domain, IP-literal domains forced
+  host-only, NUL-bearing names/paths rejected), so the editor can't create a
+  scope the wire path wouldn't.
+- `(*Jar).Replace(oldDomain, oldPath, oldName string, c Cookie)` — the editor's
+  edit: update the cookie at the old identity to `c`, preserving its send-order
+  position on a value/flag-only edit and dropping the old slot (no orphan) when
+  the `(domain, path, name)` identity changed.
 - `(*Jar).Remove(domain, path, name string)` — delete one cookie.
 - `(*Jar).Clear()` — empty the jar.
 

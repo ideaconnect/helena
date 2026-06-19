@@ -106,8 +106,10 @@ open. Cookies match by domain, path, and the `Secure` flag, exactly as a browser
 would.
 
 Open the jar with the **cookie** button in the top bar to view, add, edit, or
-delete cookies, or clear them all. Cookies set explicitly via a `Cookie` request
-header are still sent — jar cookies are added alongside them.
+delete cookies, or clear them all. A cookie you add by hand defaults to its exact
+host; tick **Send to subdomains** to widen it to sub-domains. Cookies set
+explicitly via a `Cookie` request header are still sent — jar cookies are added
+alongside them.
 
 The jar is **in-memory only**: it is never written to disk (so session tokens
 can't leak into a file) and is emptied when you quit Helena.

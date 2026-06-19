@@ -185,20 +185,67 @@ func (j *Jar) Len() int {
 	return len(j.All())
 }
 
-// Set upserts a cookie directly — the path the viewer's add/edit uses. Domain
-// and Name are required (anything else is a no-op); an empty Path defaults to
-// "/". The domain is canonicalised so it keys identically to a wire cookie.
+// Set upserts a cookie directly — the path the viewer's add uses. Domain and
+// Name are required (anything else is a no-op); an empty Path defaults to "/".
+// The cookie is normalised exactly as a wire cookie would be (canonical domain,
+// IP domains forced host-only), so the editor can't create a scope the wire path
+// wouldn't.
 func (j *Jar) Set(c Cookie) {
+	nc, ok := normalize(c)
+	if !ok {
+		return
+	}
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.store(key(nc.Domain, nc.Path, nc.Name), entry{Cookie: nc}, j.now())
+}
+
+// Replace updates the cookie identified by (oldDomain, oldPath, oldName) to c.
+// When the new identity is unchanged it preserves the cookie's send-order
+// position (a value- or flag-only edit must not reorder it relative to its
+// equal-path-length peers, RFC 6265 §5.4); when the identity changed the old
+// slot is removed so an edit can't leave an orphan duplicate. This is the path
+// the viewer's edit uses.
+func (j *Jar) Replace(oldDomain, oldPath, oldName string, c Cookie) {
+	nc, ok := normalize(c)
+	if !ok {
+		return
+	}
+	if oldPath == "" {
+		oldPath = "/"
+	}
+	oldKey := key(canonicalHost(strings.TrimPrefix(oldDomain, ".")), oldPath, oldName)
+	newKey := key(nc.Domain, nc.Path, nc.Name)
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	if oldKey != newKey {
+		delete(j.m, oldKey) // identity changed → drop the old slot (no orphan)
+	}
+	// store preserves created/seq when newKey already exists, so a same-identity
+	// edit keeps its position; a changed identity gets a fresh seq.
+	j.store(newKey, entry{Cookie: nc}, j.now())
+}
+
+// normalize canonicalises and validates a cookie for storage, shared by Set and
+// Replace so every editor entry path enforces the same rules as the wire path:
+// required Domain+Name, default Path, no NUL (it would corrupt the key
+// separator), and IP-literal domains forced host-only (an IP has no
+// sub-domains, so a domain-scoped IP cookie would leak across sibling IPs).
+func normalize(c Cookie) (Cookie, bool) {
 	c.Domain = canonicalHost(strings.TrimPrefix(c.Domain, "."))
 	if c.Domain == "" || c.Name == "" {
-		return
+		return c, false
+	}
+	if strings.ContainsRune(c.Name, 0) || strings.ContainsRune(c.Path, 0) || strings.ContainsRune(c.Domain, 0) {
+		return c, false
 	}
 	if c.Path == "" {
 		c.Path = "/"
 	}
-	j.mu.Lock()
-	defer j.mu.Unlock()
-	j.store(key(c.Domain, c.Path, c.Name), entry{Cookie: c}, j.now())
+	if isIP(c.Domain) {
+		c.HostOnly = true
+	}
+	return c, true
 }
 
 // Remove deletes the cookie identified by (domain, path, name); an empty path
@@ -286,7 +333,7 @@ func domainAttr(host, attr string) (domain string, hostOnly, ok bool) {
 	// net/http/cookiejar). Without this, a dotted IP like 10.0.0.1 would treat
 	// Domain=0.0.1 as a valid suffix (it ends in ".0.0.1" and contains a dot, so
 	// the guards below pass) and leak the cookie to every x.0.0.1 host.
-	if net.ParseIP(host) != nil {
+	if isIP(host) {
 		if d != host {
 			return "", false, false
 		}
@@ -295,10 +342,29 @@ func domainAttr(host, attr string) (domain string, hostOnly, ok bool) {
 	if host != d && !strings.HasSuffix(host, "."+d) {
 		return "", false, false // not the host or a parent of it
 	}
-	if host != d && !strings.Contains(d, ".") {
-		return "", false, false // dotless registry-ish domain used as a suffix
+	// A dotless Domain has no registrable parent: a "com"-style super-cookie
+	// (host != d) is rejected, and a single-label host (e.g. "localhost",
+	// "intranet") setting Domain=itself is accepted only as host-only — never as
+	// a domain cookie, which would otherwise leak to sibling sub-domains like
+	// "evil.localhost" (mirrors net/http/cookiejar).
+	if !strings.Contains(d, ".") {
+		if host != d {
+			return "", false, false
+		}
+		return d, true, true
 	}
 	return d, false, true
+}
+
+// isIP reports whether host is an IP literal, tolerating an IPv6 zone id
+// (e.g. "fe80::1%eth0", which url.Hostname returns unbracketed). net.ParseIP
+// alone returns nil for a zoned address, which would let it slip through the
+// IP-host guard in domainAttr as a DNS name.
+func isIP(host string) bool {
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		host = host[:i]
+	}
+	return net.ParseIP(host) != nil
 }
 
 // domainMatch reports whether a request to host should receive a cookie scoped

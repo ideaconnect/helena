@@ -4,7 +4,7 @@
 
 | File | Responsibility |
 | --- | --- |
-| [cookiejar.go](cookiejar.go) | Everything: the `Jar` and `Cookie` types, the `http.CookieJar` methods (`SetCookies`/`Cookies`), the management API (`All`/`Len`/`Set`/`Remove`/`Clear`), and the RFC-6265 matching helpers. The package godoc lives at the top of this file. |
+| [cookiejar.go](cookiejar.go) | Everything: the `Jar` and `Cookie` types, the `http.CookieJar` methods (`SetCookies`/`Cookies`), the management API (`All`/`Len`/`Set`/`Replace`/`Remove`/`Clear`), and the RFC-6265 matching helpers. The package godoc lives at the top of this file. |
 | [cookiejar_test.go](cookiejar_test.go) | Set/send, host-only vs domain scoping, foreign/super-cookie rejection, Secure gating, path scoping + ordering, Max-Age/Expires + purge, slot-preserving updates, manual Set/Remove/Clear, `All` sort stability, input guards, the matching-helper unit tests, and a `-race` concurrency hammer. |
 
 ## Type catalog
@@ -38,13 +38,26 @@ don't reorder. `liveEntries` is the shared filtered-iteration helper used by
 `Cookies` and `All`: it deletes expired entries as it walks and returns those
 matching an optional predicate. Both run under the caller's lock.
 
+### `normalize` (shared by `Set` and `Replace`)
+Canonicalises and validates an editor-supplied cookie so every entry path
+enforces the same rules as the wire path: required Domain+Name, default Path,
+no NUL (it would corrupt the `key` separator), and IP-literal domains forced
+host-only. `Replace` additionally diffs the old vs new key so a same-identity
+edit keeps its `seq` (via `store`) while an identity change drops the old slot.
+
 ### `domainAttr`
 Resolves a `Set-Cookie` `Domain` against the response host: empty ⇒ host-only;
-otherwise canonicalises, requires the host to be the domain or a sub-domain of
-it, and rejects a dotless super-cookie domain (`com`) used as a suffix. An
-IP-literal host (detected via `net.ParseIP`) is special-cased: a `Domain`
-attribute is accepted only when it equals the host and the cookie is forced
-host-only, so a crafted dotted suffix can't leak across sibling IPs.
+otherwise canonicalises and requires the host to be the domain or a sub-domain
+of it. A **dotless** `Domain` (a `com`-style super-cookie, or a single-label
+host like `localhost` setting `Domain=localhost`) is accepted only as the exact
+host and forced host-only — never a domain cookie that would leak to sibling
+sub-domains. An **IP-literal** host (via `isIP`) is likewise host-only with an
+exact-`Domain`-only rule.
+
+### `isIP`
+Reports whether a host is an IP literal, stripping an IPv6 zone id
+(`fe80::1%eth0`) before `net.ParseIP` — `ParseIP` returns nil for a zoned
+address, which would otherwise slip through the IP-host guard as a DNS name.
 
 ### `domainMatch` / `pathMatch` / `defaultPath` / `canonicalHost` / `expiry`
 The RFC-6265 §5.1.3/§5.1.4/§5.3 matching primitives — domain-match (host-only =
