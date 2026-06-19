@@ -297,6 +297,8 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// Variables (table-list) and Manage-environments (gears) are icon buttons.
 	varsBtn := tipButton("table-list", "Variables", m.editEnvironments)
 	envMgrBtn := tipButton("gears", "Manage environments", m.manageEnvironments)
+	// Cookies (cookie-bite) opens the session cookie-jar viewer/editor (#91).
+	cookiesBtn := tipButton("cookie-bite", "Cookies", m.showCookies)
 	// Settings (cog) and Help (question mark) are icon buttons (#127/#128).
 	settingsBtn := tipButtonRes(theme.SettingsIcon(), "Settings", m.editSettings)
 	m.helpBtn = tipButtonRes(theme.HelpIcon(), "Help", m.showHelpMenu)
@@ -328,8 +330,8 @@ func NewMainUI(sess *session.Session) *MainUI {
 		groupSep,
 		indicator("folder-tree", "Environment"), envBox, varsBtn, envMgrBtn,
 	)
-	// Settings + Help are pushed to the trailing edge (#129).
-	trailing := container.NewHBox(settingsBtn, m.helpBtn)
+	// Cookies + Settings + Help are pushed to the trailing edge (#129).
+	trailing := container.NewHBox(cookiesBtn, settingsBtn, m.helpBtn)
 	// toolbarTheme restores normal theme padding (the root theme zeroes it) so
 	// the HBox spaces its controls AND bumps inline icons to 24px, so the top
 	// bar's icon buttons + indicators match the sidebar action toolbar; NewPadded

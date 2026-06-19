@@ -13,6 +13,7 @@ import (
 
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/config"
+	"github.com/idct/helena/internal/cookiejar"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/storage"
 	"github.com/idct/helena/internal/vars"
@@ -30,6 +31,7 @@ type Session struct {
 	loadErrs  []LoadError        // collections of the active workspace that failed to load
 	overlayMu sync.RWMutex
 	overlay   map[string]string // script-set env; in-memory only, never persisted
+	jar       *cookiejar.Jar    // session-lifetime cookie jar (#91); in-memory only
 }
 
 // LoadError records a collection directory in the active workspace that failed
@@ -48,10 +50,17 @@ func New(cfgPath string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	s := &Session{cfgPath: cfgPath, cfg: cfg, tokens: auth.NewTokenCache(), overlay: map[string]string{}}
+	s := &Session{cfgPath: cfgPath, cfg: cfg, tokens: auth.NewTokenCache(), overlay: map[string]string{}, jar: cookiejar.New()}
 	s.reload()
 	return s, nil
 }
+
+// CookieJar returns the session-scoped cookie jar. It is installed on every
+// per-send Client so Set-Cookie responses persist and matching cookies are
+// replayed on later sends within the running app (#91). The jar is in-memory
+// and process-lifetime only — never written to disk — so it survives workspace
+// and collection switches but not a restart.
+func (s *Session) CookieJar() *cookiejar.Jar { return s.jar }
 
 // TokenCache returns the OAuth2 token cache owned by this session. Tokens
 // are keyed by collection-dir + auth config so two collections that

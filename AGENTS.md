@@ -30,6 +30,7 @@ Top-level orientation:
 | [internal/storage/](internal/storage/) | Open Collection YAML load/save. |
 | [internal/vars/](internal/vars/) | `{{variable}}` resolver. |
 | [internal/httpclient/](internal/httpclient/) | Request execution, CORS advisory. |
+| [internal/cookiejar/](internal/cookiejar/) | Observable, editable `http.CookieJar` (session-scoped, in-memory) for cookie persistence + the viewer/editor. |
 | [internal/auth/](internal/auth/) | Auth inheritance resolution + Apply on outgoing requests. |
 | [internal/scripting/](internal/scripting/) | goja JS runtime for per-request pre/post hooks. Mutable `request` in pre, read-only `request` + parsed `response` in post, `helena.env.*` overlay writes, `chain.<alias>` predecessor views. |
 | [internal/chain/](internal/chain/) | Per-request before-hooks runner. Recursive resolution with per-request alias scope, cycle detection, and an Executor/RequestFinder seam so the package stays free of httpclient/scripting/session deps. |

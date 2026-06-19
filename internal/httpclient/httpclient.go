@@ -91,6 +91,17 @@ func (c *Client) SetOAuth2Resolver(r auth.OAuth2Resolver) {
 	c.oauth2Resolver = r
 }
 
+// SetCookieJar installs the cookie jar the underlying *http.Client uses, so
+// Do stores every Set-Cookie response and replays matching cookies on later
+// requests — automatically across redirect hops. The caller holds the jar at
+// session scope (like the cached transport, #52/#91), so cookies persist across
+// the throwaway per-send Clients the UI builds. Nil disables the jar. Cookies
+// the user set explicitly via a Cookie header are preserved: net/http appends
+// jar cookies to it rather than replacing it.
+func (c *Client) SetCookieJar(jar http.CookieJar) {
+	c.http.Jar = jar
+}
+
 // New builds a Client honoring the given settings: invalid-TLS tolerance,
 // redirect policy, and request timeout.
 // NewTransport builds the *http.Transport for the given settings (proxy from

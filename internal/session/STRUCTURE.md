@@ -37,6 +37,7 @@ Defined in [session.go](session.go):
 | `activeEnv` | `map[int]string` | Active environment name per collection (keyed by index). Populated from `cfg.UI.ActiveEnv` (path-keyed) on reload. |
 | `overlayMu` | `sync.RWMutex` | Guards `overlay` against concurrent script-thread writes and UI-thread reads. |
 | `overlay` | `map[string]string` | Script-set env overlay. Highest-precedence resolver scope. **In-memory only** — never persisted (AGENTS invariant 9). |
+| `jar` | `*cookiejar.Jar` | Session-lifetime cookie jar (#91) returned by `CookieJar()` and installed on every per-send Client. **In-memory only** — never persisted. Constructed in `New`, untouched by `reload`. |
 
 The pair `(cols, dirs)` is the bridge between the index-keyed in-memory model
 and the path-keyed persisted UI state. The map is rebuilt on every `reload`

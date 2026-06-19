@@ -113,6 +113,14 @@ when displaying or sending requests.
 - `Session.ActiveCollectionDir() string` — the active collection's on-disk
   directory, used as the cache namespace prefix.
 
+### Cookie jar
+
+- `Session.CookieJar() *cookiejar.Jar` — the session-scoped cookie jar (#91),
+  installed on every per-send Client so `Set-Cookie` responses persist and
+  matching cookies are replayed on later sends. In-memory and process-lifetime
+  only (never persisted), so it survives workspace/collection switches but not a
+  restart. See [`internal/cookiejar`](../cookiejar).
+
 ### Types
 
 - `Session` — the in-memory application state for the active workspace.

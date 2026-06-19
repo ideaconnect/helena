@@ -192,6 +192,10 @@ func (m *MainUI) send() {
 	colSnap := m.sess.SnapshotActiveCollectionVars()
 
 	client := httpclient.NewWithTransport(m.sess.Settings(), m.sessionTransport())
+	// Share the session cookie jar so Set-Cookie responses persist and matching
+	// cookies are replayed on later sends — within a chain run and across runs
+	// while the app is open (#91).
+	client.SetCookieJar(m.sess.CookieJar())
 	// If auth puts a key in a custom header, strip it on a host-changing
 	// redirect so the credential doesn't leak to the new host (Go already
 	// handles Authorization/Cookie).

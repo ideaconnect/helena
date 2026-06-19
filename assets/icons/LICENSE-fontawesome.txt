@@ -3,8 +3,8 @@ https://fontawesome.com
 Copyright 2024-2025 Fonticons, Inc.
 
 Most icons are from Font Awesome Free 6.7.2; the cubes / gears / table-list /
-folder-tree / sliders icons are from Font Awesome Free 7.2.0. Each SVG records
-its own version in its leading comment.
+folder-tree / sliders / cookie-bite icons are from Font Awesome Free 7.2.0. Each
+SVG records its own version in its leading comment.
 
 The .svg files in this directory that carry the "Font Awesome Free" header
 comment are part of Font Awesome Free and are used as Helena's UI icons. Per

@@ -14,6 +14,7 @@ day-to-day workflow. For building from source, see the
 - [Environments & variables](#environments--variables)
 - [Request chaining](#request-chaining)
 - [Scripting (pre/post)](#scripting-prepost)
+- [Cookies](#cookies)
 - [Import & export](#import--export)
 - [Settings](#settings)
 - [Privacy & secrets](#privacy--secrets)
@@ -94,6 +95,22 @@ Each request can carry a **pre-request** script (mutates method / URL / headers
 / params / body before the request is built) and a **post-response** script
 (reads the parsed response, writes values into the environment overlay via
 `helena.env.set`). Scripts run in a sandboxed JS runtime with a short timeout.
+
+## Cookies
+
+Helena keeps a **cookie jar** for the running session. When a response sends
+`Set-Cookie`, the cookie is stored and automatically replayed on later matching
+requests — so a login request followed by a call to a protected endpoint just
+works, including within a chain run and across separate sends while the app is
+open. Cookies match by domain, path, and the `Secure` flag, exactly as a browser
+would.
+
+Open the jar with the **cookie** button in the top bar to view, add, edit, or
+delete cookies, or clear them all. Cookies set explicitly via a `Cookie` request
+header are still sent — jar cookies are added alongside them.
+
+The jar is **in-memory only**: it is never written to disk (so session tokens
+can't leak into a file) and is emptied when you quit Helena.
 
 ## Import & export
 
