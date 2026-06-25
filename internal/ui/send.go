@@ -190,6 +190,7 @@ func (m *MainUI) send() {
 	// SnapshotChainFinder copy below, so nothing the worker touches is shared.
 	envSnap := m.sess.SnapshotActiveEnvVars()
 	colSnap := m.sess.SnapshotActiveCollectionVars()
+	dotEnvSnap := m.sess.SnapshotActiveDotEnvVars()
 
 	client := httpclient.NewWithTransport(m.sess.Settings(), m.sessionTransport())
 	// Share the session cookie jar so Set-Cookie responses persist and matching
@@ -210,7 +211,7 @@ func (m *MainUI) send() {
 		newAuthCodeStarter(),
 	))
 	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
-	exec := chainExecutor{rt: rt, client: client, colSnap: colSnap, envSnap: envSnap, sess: m.sess}
+	exec := chainExecutor{rt: rt, client: client, dotEnvSnap: dotEnvSnap, colSnap: colSnap, envSnap: envSnap, sess: m.sess}
 	// Snapshot the active collection on the UI goroutine so the
 	// chain runner reads from a frozen-at-Send-entry copy with
 	// pre-flattened Auth — never races against UI-thread tree edits

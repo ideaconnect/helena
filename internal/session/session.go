@@ -32,6 +32,8 @@ type Session struct {
 	overlayMu sync.RWMutex
 	overlay   map[string]string // script-set env; in-memory only, never persisted
 	jar       *cookiejar.Jar    // session-lifetime cookie jar (#91); in-memory only
+
+	dotEnv map[string]map[string]string // collection dir -> parsed .env vars (#84); lazy, UI-goroutine only
 }
 
 // LoadError records a collection directory in the active workspace that failed
@@ -110,6 +112,7 @@ func (s *Session) reload() {
 	s.cols = nil
 	s.dirs = nil
 	s.loadErrs = nil
+	s.dotEnv = nil // drop the .env cache so reopened collections re-read from disk
 	for _, dir := range s.activeWorkspace().Collections {
 		c, err := storage.Load(dir)
 		if err != nil {
@@ -421,17 +424,17 @@ func (s *Session) SetActiveEnvironmentVariables(variables []model.Variable) {
 	}
 }
 
-// Resolver builds a variable resolver from the active collection's active
-// environment (enabled variables only). The script-set env overlay is
-// layered on top as the highest-precedence scope so a `helena.env.set(...)`
+// Resolver builds a variable resolver over the active collection's ordered
+// scopes (enabled variables only), lowest precedence first: collection-root
+// .env (#84) < collection variables (#80) < active environment < script
+// overlay. The script-set env overlay is highest so a `helena.env.set(...)`
 // during a pre-request or post-response hook is visible to the next Send
 // without ever touching disk.
 //
-// Call from the UI goroutine. Workers should use the
-// SnapshotActiveEnvVars + SnapshotEnvOverlay pair instead so the env
-// can't shift mid-Send.
+// Call from the UI goroutine. Workers should use the SnapshotActive*Vars +
+// SnapshotEnvOverlay snapshots instead so the scopes can't shift mid-Send.
 func (s *Session) Resolver() *vars.Resolver {
-	return vars.New(s.activeCollectionVars(), s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+	return vars.New(s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
 
 // ResolverForRequest is Resolver plus the given request's own variables (#82)
@@ -443,7 +446,7 @@ func (s *Session) ResolverForRequest(r *model.Request) *vars.Resolver {
 	if r == nil {
 		return s.Resolver()
 	}
-	return vars.New(s.activeCollectionVars(), s.activeEnvVars(), enabledVars(r.Variables), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+	return vars.New(s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), enabledVars(r.Variables), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
 
 // SetEnvOverlay records a script-set environment variable for the lifetime
