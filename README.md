@@ -179,6 +179,22 @@ For diagnostics, `helena --verbose` raises the log level and `--log-file PATH`
 Credentials are redacted from logs (Authorization/API-key headers and any
 URL userinfo/query), so a log is safe to attach.
 
+## Headless runs (`helena run`)
+
+For CI and automation, `helena run <collection-dir> [--env NAME]` executes every
+request in a collection without the GUI — running each request's chain, scripts,
+and assertions — and prints a per-request report:
+
+```sh
+helena run ./my-collection --env Staging
+```
+
+Each request shows `ok`/`FAIL`, its status, and any `test()`/`expect()` (#87) or
+declarative-assertion (#88) checks. The process exits non-zero if any request
+errored or any check failed, so a CI job can gate on it. `{{var}}` references
+resolve from the same scopes as a GUI Send; interactive prompt variables
+(`{{?Name}}`) stay unresolved since a headless run can't ask.
+
 App identity/version for packaging lives in [`FyneApp.toml`](FyneApp.toml) at
 the repo root, consumed by Fyne's native tooling (`go run fyne.io/tools/cmd/fyne
 package`) so bundles carry a consistent ID/icon/version without manual flags.

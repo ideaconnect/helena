@@ -60,6 +60,13 @@ func windowTitle(version string) string {
 }
 
 func main() {
+	// `helena run <collection-dir>` is a headless subcommand (#90): execute a
+	// collection's requests and exit, never starting the GUI. Dispatched before
+	// flag.Parse so the subcommand's own flags don't clash with the GUI flags.
+	if len(os.Args) > 1 && os.Args[1] == "run" {
+		os.Exit(runCommand(os.Args[2:]))
+	}
+
 	var (
 		showVersion = flag.Bool("version", false, "print version and exit")
 		verbose     = flag.Bool("verbose", false, "verbose (debug) diagnostic logging")

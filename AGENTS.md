@@ -41,6 +41,7 @@ Top-level orientation:
 | [internal/config/](internal/config/) | Persisted settings + UI state. |
 | [internal/logging/](internal/logging/) | Diagnostic `slog` logger + credential redaction (`--verbose`/`--log-file`). |
 | [internal/session/](internal/session/) | Runtime workspace state, tree, env. |
+| [internal/runner/](internal/runner/) | Headless collection runner behind `helena run` (#90). |
 | [internal/ui/](internal/ui/) | Fyne views and actions. |
 | [examples/](examples/) | Bundled sample collection + smoke test; `sample.go` embeds it (`//go:embed httpbin`) and `WriteSample` materializes it for the in-app Load-sample action. |
 | [assets/](assets/) | `go:embed`-ed app icon. |
