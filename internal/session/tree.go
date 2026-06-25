@@ -39,6 +39,56 @@ func (t *Tree) ChildIDs(id string) []string {
 	return ids
 }
 
+// Search returns the set of node IDs that should stay visible for a sidebar
+// filter (#67): every node whose label contains query (case-insensitive),
+// each of their ancestors so the path to a match stays reachable, and — when a
+// container matches — its whole subtree. Matching spans every loaded
+// collection. An empty or whitespace query returns nil, which callers treat as
+// "no filter" (show everything).
+func (t *Tree) Search(query string) map[string]bool {
+	q := strings.ToLower(strings.TrimSpace(query))
+	if q == "" {
+		return nil
+	}
+	visible := map[string]bool{}
+	var dfs func(id string)
+	dfs = func(id string) {
+		for _, child := range t.ChildIDs(id) {
+			if strings.Contains(strings.ToLower(t.Label(child)), q) {
+				t.markMatch(child, visible)
+			}
+			dfs(child)
+		}
+	}
+	dfs("")
+	return visible
+}
+
+// markMatch marks id plus its ancestors (so the match is reachable) and, when
+// id is a branch, its whole subtree (so a matched folder shows its contents).
+func (t *Tree) markMatch(id string, visible map[string]bool) {
+	for p := id; p != "" && !visible[p]; {
+		visible[p] = true
+		if parent := parentID(p); parent != p {
+			p = parent
+		} else {
+			break // reached a collection root; its parent is the virtual root
+		}
+	}
+	t.markSubtree(id, visible)
+}
+
+// markSubtree marks every descendant of id visible.
+func (t *Tree) markSubtree(id string, visible map[string]bool) {
+	if !t.IsBranch(id) {
+		return
+	}
+	for _, child := range t.ChildIDs(id) {
+		visible[child] = true
+		t.markSubtree(child, visible)
+	}
+}
+
 // IsBranch reports whether id is a collection or folder (request nodes are leaves).
 func (t *Tree) IsBranch(id string) bool {
 	if id == "" {

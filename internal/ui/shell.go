@@ -48,6 +48,8 @@ type MainUI struct {
 	sbDelete    *ttwidget.Button
 	// Drag-and-drop reordering of the collections tree (see treedrag.go).
 	treeRows      map[*treeRow]string // live row → bound node id, for drop hit-testing
+	treeSearch    *widget.Entry       // sidebar cross-collection search box (#67)
+	treeFilter    map[string]bool     // visible node IDs when a search is active; nil = show all
 	dragActive    bool
 	dragSrcID     string
 	dragLastAbs   fyne.Position
@@ -454,7 +456,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 		dropLayer,
 		m.emptyState,
 	)
-	sidebar := container.NewBorder(container.NewPadded(actionToolbar), nil, nil, nil, treeArea)
+	m.treeSearch = widget.NewEntry()
+	m.treeSearch.SetPlaceHolder("Search requests…")
+	m.treeSearch.OnChanged = m.applyTreeFilter
+	sidebarTop := container.NewVBox(container.NewPadded(actionToolbar), container.NewPadded(m.treeSearch))
+	sidebar := container.NewBorder(sidebarTop, nil, nil, nil, treeArea)
 
 	// The CORS banner sits above the response tabs (hidden until a warning
 	// fires). Copy is handled in-widget: PrettyView has Ctrl+C / right-click
@@ -547,9 +553,39 @@ func (m *MainUI) SurfaceLoadErrors() {
 	dialog.ShowInformation("Some collections could not be loaded", report, m.win)
 }
 
+// applyTreeFilter recomputes the sidebar's visible-node set for the given
+// search query (#67) and refreshes the tree, expanding every visible branch so
+// matches buried in folders are revealed. An empty query clears the filter.
+func (m *MainUI) applyTreeFilter(query string) {
+	m.treeFilter = m.sess.Tree().Search(query)
+	if m.Tree == nil {
+		return
+	}
+	m.Tree.Refresh()
+	if m.treeFilter != nil {
+		for id := range m.treeFilter {
+			if m.sess.Tree().IsBranch(id) {
+				m.Tree.OpenBranch(id)
+			}
+		}
+	}
+}
+
 func (m *MainUI) buildTree() *widget.Tree {
 	t := widget.NewTree(
-		func(id widget.TreeNodeID) []widget.TreeNodeID { return m.sess.Tree().ChildIDs(id) },
+		func(id widget.TreeNodeID) []widget.TreeNodeID {
+			ids := m.sess.Tree().ChildIDs(id)
+			if m.treeFilter == nil {
+				return ids
+			}
+			out := ids[:0:0]
+			for _, c := range ids {
+				if m.treeFilter[c] {
+					out = append(out, c)
+				}
+			}
+			return out
+		},
 		func(id widget.TreeNodeID) bool { return m.sess.Tree().IsBranch(id) },
 		func(bool) fyne.CanvasObject {
 			return newTreeRow(m.dragTreeNode, m.dropTreeNode, func() bool { return m.dragActive })
