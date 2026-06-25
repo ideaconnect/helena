@@ -40,6 +40,7 @@ A request body.
 - `Content` — raw text used for `json`/`xml`/`text` bodies.
 - `Form` — field list used for `form-urlencoded` and `multipart-form` bodies.
 - `FilePath` / `ContentType` — back the `file` body type (#24): the request sends the exact bytes of the file at `FilePath`, advertised as `ContentType` (defaulting to `application/octet-stream`). Empty for the other body types.
+- `GraphQLVariables` — backs the `graphql` body type (#70): `Content` holds the query and this holds the raw JSON variables object. At send time the two combine into a `{"query":…,"variables":…}` JSON envelope (the variables key is omitted when blank). Empty for the other body types.
 
 ### `KeyValue` — [model.go:80](model.go#L80)
 A toggleable key/value pair shared by headers, query params, and form fields.

@@ -46,11 +46,12 @@ const (
 	BodyText      BodyType = "text"
 	BodyForm      BodyType = "form-urlencoded"
 	BodyMultipart BodyType = "multipart-form"
-	BodyFile      BodyType = "file" // raw bytes of a file on disk (#24)
+	BodyFile      BodyType = "file"    // raw bytes of a file on disk (#24)
+	BodyGraphQL   BodyType = "graphql" // query + variables, sent as a JSON envelope (#70)
 )
 
 // BodyTypes lists supported body types in display order.
-var BodyTypes = []BodyType{BodyNone, BodyJSON, BodyXML, BodyText, BodyForm, BodyMultipart, BodyFile}
+var BodyTypes = []BodyType{BodyNone, BodyJSON, BodyXML, BodyText, BodyGraphQL, BodyForm, BodyMultipart, BodyFile}
 
 // Valid reports whether t is a recognized body type.
 func (t BodyType) Valid() bool {
@@ -67,7 +68,7 @@ func (t BodyType) Valid() bool {
 // boundary that is set when the request is sent.
 func (t BodyType) ContentType() string {
 	switch t {
-	case BodyJSON:
+	case BodyJSON, BodyGraphQL:
 		return "application/json"
 	case BodyXML:
 		return "application/xml"
@@ -98,6 +99,11 @@ type Body struct {
 	// application/octet-stream). Both are empty for the other body types.
 	FilePath    string `json:"filePath,omitempty"`
 	ContentType string `json:"contentType,omitempty"`
+	// GraphQLVariables backs BodyGraphQL (#70): the raw JSON object of GraphQL
+	// variables. Body.Content holds the query; at send time the two are combined
+	// into a {"query":…,"variables":…} JSON envelope. Empty for other body types
+	// (and the variables key is omitted when this is blank).
+	GraphQLVariables string `json:"graphqlVariables,omitempty"`
 }
 
 // Request is a single HTTP request definition.

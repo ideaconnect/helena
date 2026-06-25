@@ -25,7 +25,8 @@ func TestBodyTypeContentType(t *testing.T) {
 		BodyForm:      "application/x-www-form-urlencoded",
 		BodyNone:      "",
 		BodyMultipart: "",
-		BodyFile:      "", // dynamic; the chosen type is applied in httpclient.buildBody (#24)
+		BodyFile:      "",                 // dynamic; the chosen type is applied in httpclient.buildBody (#24)
+		BodyGraphQL:   "application/json", // GraphQL POSTs a JSON envelope (#70)
 	}
 	for bt, want := range cases {
 		if got := bt.ContentType(); got != want {

@@ -25,7 +25,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocInfo` | the `info:` block on every file (name, **id**, type, seq, tags + Extra) | the `Name`, `ID`, and `Type` discrimination on each model type. `id` is Helena's stable identifier; files without one get a fresh ID on Load that the next Save persists. |
 | `ocKV` | a header entry (name/value/disabled + Extra) | `model.KeyValue` (Key/Value/Enabled, with Disabled inverted) |
 | `ocParam` | a query/path parameter (name/value/type/disabled + Extra) | `model.KeyValue` used for `model.Request.Params` |
-| `ocBody` | a request body (`type`, `data`, `filePath`, `contentType` + Extra) | `model.Body` (`Type`, `Content`, `FilePath`, `ContentType` #24) |
+| `ocBody` | a request body (`type`, `data`, `filePath`, `contentType`, `graphqlVariables` + Extra) | `model.Body` (`Type`, `Content`, `FilePath`, `ContentType` #24, `GraphQLVariables` #70) |
 | `ocHTTP` | the `http:` block of a request (method, url, headers, params, body, auth + Extra) | the HTTP-level fields of `model.Request` |
 | `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + assertions + vars + Extra) | `model.Request` |
 | `ocAssertion` | one entry under `assertions:` (`source`, `op`, `expected`, `disabled`, + Extra) | `model.Assertion` (#88). `disabled` is the inverse of `Enabled`. |

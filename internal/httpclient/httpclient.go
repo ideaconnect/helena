@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -389,6 +390,24 @@ func buildBody(r model.Request, resolve func(string) string) (body []byte, conte
 			return nil, "", fmt.Errorf("multipart: %w", err)
 		}
 		return buf.Bytes(), w.FormDataContentType(), nil
+	case model.BodyGraphQL:
+		// Send a GraphQL-over-HTTP JSON envelope (#70): {"query":…,"variables":…}.
+		// Body.Content is the query; Body.GraphQLVariables is the raw JSON object
+		// of variables (omitted when blank). {{vars}} resolve in both. Invalid
+		// variables JSON is surfaced rather than sent as a broken body.
+		query, err := json.Marshal(resolve(r.Body.Content))
+		if err != nil {
+			return nil, "", fmt.Errorf("graphql query: %w", err)
+		}
+		envelope := `{"query":` + string(query)
+		if vars := strings.TrimSpace(resolve(r.Body.GraphQLVariables)); vars != "" {
+			if !json.Valid([]byte(vars)) {
+				return nil, "", fmt.Errorf("graphql variables are not valid JSON")
+			}
+			envelope += `,"variables":` + vars
+		}
+		envelope += `}`
+		return []byte(envelope), model.BodyGraphQL.ContentType(), nil
 	case model.BodyFile:
 		// Send the exact bytes of the chosen file (#24). No file path → no body
 		// (the user hasn't picked one yet). The advertised Content-Type comes

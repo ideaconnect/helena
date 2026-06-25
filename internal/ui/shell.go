@@ -71,6 +71,8 @@ type MainUI struct {
 	bodyFilePanel       *fyne.Container        // file-picker panel shown for BodyFile (#24)
 	bodyFilePathLabel   *widget.Label          // chosen file path (#24)
 	bodyFileContentType *widget.Entry          // BodyFile advertised Content-Type (#24)
+	bodyGraphQLVars     *prettyview.PrettyView // GraphQL variables JSON editor (#70)
+	bodyGraphQLPanel    *fyne.Container        // variables panel shown below the query for BodyGraphQL (#70)
 	docsEditor          *widget.Entry
 	docsPreview         *widget.RichText
 	preScriptEditor     *widget.Entry
@@ -264,7 +266,18 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewVScroll(m.bodyFormRows))
 	m.bodyFormPanel.Hide() // BodyNone default shows the text editor
 	bodyStack := container.NewStack(m.BodyContent, m.bodyFormPanel, m.buildBodyFilePanel())
-	bodyTab := container.NewBorder(bodyTopRow, nil, nil, nil, bodyStack)
+	// GraphQL variables editor (#70): a second JSON editor shown beneath the
+	// query (the query reuses BodyContent) only when the body type is graphql.
+	m.bodyGraphQLVars = prettyview.New(prettyview.WithEditable(), prettyview.WithLineNumbers())
+	m.bodyGraphQLVars.SetTheme(variantFor(sess.Settings().Theme), prettyview.Theme{})
+	m.bodyGraphQLVars.SetOnChanged(func(s string) {
+		if !m.loading && m.currentRequest != nil {
+			m.currentRequest.Body.GraphQLVariables = s
+		}
+	})
+	m.bodyGraphQLPanel = container.NewBorder(widget.NewLabel("Variables (JSON):"), nil, nil, nil, m.bodyGraphQLVars)
+	m.bodyGraphQLPanel.Hide()
+	bodyTab := container.NewBorder(bodyTopRow, m.bodyGraphQLPanel, nil, nil, bodyStack)
 
 	m.Request = container.NewAppTabs(
 		container.NewTabItem("Body", bodyTab),
@@ -683,6 +696,9 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.Save.Disable()
 		m.URL.SetText("")
 		m.BodyContent.SetText("")
+		if m.bodyGraphQLVars != nil {
+			m.bodyGraphQLVars.SetText("")
+		}
 		m.rebuildBodyFormRows()
 		m.loadBodyFilePanel(model.Body{})
 		m.refreshBodyEditorVisibility(model.BodyNone)
@@ -740,6 +756,9 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	}
 	m.BodyType.SetSelected(string(bt))
 	m.BodyContent.SetData([]byte(req.Body.Content), formatForBodyType(bt))
+	if m.bodyGraphQLVars != nil {
+		m.bodyGraphQLVars.SetData([]byte(req.Body.GraphQLVariables), prettyview.FormatJSON)
+	}
 	m.rebuildBodyFormRows()
 	m.loadBodyFilePanel(req.Body)
 	m.refreshBodyEditorVisibility(bt)

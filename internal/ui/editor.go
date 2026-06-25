@@ -36,6 +36,10 @@ func (m *MainUI) syncBodyFromEditor() {
 	if m.currentRequest != nil && m.BodyContent != nil {
 		m.currentRequest.Body.Content = string(m.BodyContent.Source())
 	}
+	// The GraphQL variables editor is debounced the same way (#70).
+	if m.currentRequest != nil && m.bodyGraphQLVars != nil {
+		m.currentRequest.Body.GraphQLVariables = string(m.bodyGraphQLVars.Source())
+	}
 }
 
 func (m *MainUI) validateBody() {
@@ -145,12 +149,22 @@ func (m *MainUI) refreshBodyEditorVisibility(bt model.BodyType) {
 	if m.bodyFilePanel != nil {
 		m.bodyFilePanel.Hide()
 	}
+	if m.bodyGraphQLPanel != nil {
+		m.bodyGraphQLPanel.Hide()
+	}
 	switch bt {
 	case model.BodyForm, model.BodyMultipart:
 		m.bodyFormPanel.Show()
 	case model.BodyFile:
 		if m.bodyFilePanel != nil {
 			m.bodyFilePanel.Show()
+		}
+	case model.BodyGraphQL:
+		// GraphQL edits the query in BodyContent and the variables in the
+		// dedicated panel beneath it — both visible at once (#70).
+		m.BodyContent.Show()
+		if m.bodyGraphQLPanel != nil {
+			m.bodyGraphQLPanel.Show()
 		}
 	default:
 		m.BodyContent.Show()
