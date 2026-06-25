@@ -5,8 +5,10 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level doc comment. |
-| [exporter.go](exporter.go) | Both public renderers (`ToCurl`, `ToWget`), the per-tool internal renderers (`renderCurl`, `renderWget`), the body re-reader (`readBodyBytes`), and the three shell-quoting helpers. |
-| [exporter_test.go](exporter_test.go) | End-to-end tests for both renderers — simple GET, JSON POST with headers, var/param resolution, settings-flag mapping, wget-specific behavior, error propagation, and shell-quoting edge cases. |
+| [exporter.go](exporter.go) | The `ToCurl` / `ToWget` renderers (`renderCurl`, `renderWget`), the body re-reader (`readBodyBytes`), the header sorter, and the three shell-quoting helpers. |
+| [codegen.go](codegen.go) | The language-snippet renderers `ToFetch` / `ToPython` / `ToGo` (#95) and helpers `exportHeaders` (ordered headers incl. a synthesized Host) and `jsLit` (JSON/JS/Python string literal). All reuse `httpclient.Build` + `readBodyBytes` like the shell renderers. |
+| [exporter_test.go](exporter_test.go) | End-to-end tests for both shell renderers — simple GET, JSON POST with headers, var/param resolution, settings-flag mapping, wget-specific behavior, error propagation, and shell-quoting edge cases. |
+| [codegen_test.go](codegen_test.go) | Exact-output tests pinning each language generator (fetch, python, go simple / custom-client) plus a shared var-resolution check. |
 
 ## Public renderers
 

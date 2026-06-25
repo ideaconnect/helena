@@ -1,5 +1,6 @@
-// Package exporter renders a request as runnable snippets for other tools
-// (cURL and WGET today; more languages later). It reuses httpclient.Build so
+// Package exporter renders a request as runnable snippets for other tools:
+// cURL, wget, JavaScript fetch, Python requests, and Go net/http. It reuses
+// httpclient.Build so
 // the exported command matches what Helena would actually send: same variable
 // resolution, same query/header/body construction, same auto Content-Type.
 package exporter

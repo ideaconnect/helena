@@ -33,24 +33,23 @@ func (m *MainUI) actionExport() {
 	res := m.sess.ResolverForRequest(&req)
 	settings := m.sess.Settings()
 
-	curlEntry := newSnippetEntry(exporter.ToCurl(req, res, settings))
-	wgetEntry := newSnippetEntry(exporter.ToWget(req, res, settings))
-
-	copyCurl := widget.NewButton("Copy", func() {
-		fyne.CurrentApp().Clipboard().SetContent(curlEntry.Text)
-		m.Status.SetText("Copied cURL command")
-	})
-	copyWget := widget.NewButton("Copy", func() {
-		fyne.CurrentApp().Clipboard().SetContent(wgetEntry.Text)
-		m.Status.SetText("Copied wget command")
-	})
-
-	curlPane := container.NewBorder(nil, copyCurl, nil, nil, container.NewScroll(curlEntry))
-	wgetPane := container.NewBorder(nil, copyWget, nil, nil, container.NewScroll(wgetEntry))
+	// mkTab builds one read-only snippet tab with its own Copy button, so adding
+	// a codegen target is a single line (#95).
+	mkTab := func(label, copyMsg string, gen func() (string, error)) *container.TabItem {
+		entry := newSnippetEntry(gen())
+		copyBtn := widget.NewButton("Copy", func() {
+			fyne.CurrentApp().Clipboard().SetContent(entry.Text)
+			m.Status.SetText("Copied " + copyMsg)
+		})
+		return container.NewTabItem(label, container.NewBorder(nil, copyBtn, nil, nil, container.NewScroll(entry)))
+	}
 
 	tabs := container.NewAppTabs(
-		container.NewTabItem("cURL", curlPane),
-		container.NewTabItem("wget", wgetPane),
+		mkTab("cURL", "cURL command", func() (string, error) { return exporter.ToCurl(req, res, settings) }),
+		mkTab("wget", "wget command", func() (string, error) { return exporter.ToWget(req, res, settings) }),
+		mkTab("JavaScript", "fetch snippet", func() (string, error) { return exporter.ToFetch(req, res, settings) }),
+		mkTab("Python", "Python snippet", func() (string, error) { return exporter.ToPython(req, res, settings) }),
+		mkTab("Go", "Go snippet", func() (string, error) { return exporter.ToGo(req, res, settings) }),
 	)
 
 	d := dialog.NewCustom("Export request", "Close", tabs, m.win)
