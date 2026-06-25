@@ -8,7 +8,7 @@ the request.
 ## Credential storage (git-safety)
 
 The auth credential fields — Basic `password`, Bearer `token`, API-key `value`,
-OAuth2 `clientSecret`, and WSSE `password` — are **not written into the
+OAuth2 `clientSecret`, WSSE `password`, and OAuth1 `consumerSecret`/`tokenSecret` — are **not written into the
 git-tracked collection YAML**. On save, [internal/storage](../storage/) externalizes them to a
 per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR`), outside
 any repository, and blanks the fields in the collection file (#42); they are

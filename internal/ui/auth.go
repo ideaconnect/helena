@@ -12,7 +12,7 @@ import (
 
 // authTypeLabels keeps a stable display order for the auth Type dropdown
 // and maps human-friendly labels to model.AuthType values.
-var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 2.0", "WS-Security"}
+var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security"}
 
 var authTypeByLabel = map[string]model.AuthType{
 	"None":                model.AuthNone,
@@ -20,6 +20,7 @@ var authTypeByLabel = map[string]model.AuthType{
 	"Basic Auth":          model.AuthBasic,
 	"Bearer Token":        model.AuthBearer,
 	"API Key":             model.AuthAPIKey,
+	"OAuth 1.0a":          model.AuthOAuth1,
 	"OAuth 2.0":           model.AuthOAuth2,
 	"WS-Security":         model.AuthWSSE,
 }
@@ -30,6 +31,7 @@ var authLabelByType = map[model.AuthType]string{
 	model.AuthBasic:   "Basic Auth",
 	model.AuthBearer:  "Bearer Token",
 	model.AuthAPIKey:  "API Key",
+	model.AuthOAuth1:  "OAuth 1.0a",
 	model.AuthOAuth2:  "OAuth 2.0",
 	model.AuthWSSE:    "WS-Security",
 }
@@ -88,6 +90,21 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.ensureWSSE().Password = s
 	})
 	m.authWSSEPassword.Password = true
+
+	m.authOAuth1ConsumerKey = m.newAuthEntry("consumer key", func(s string) {
+		m.ensureOAuth1().ConsumerKey = s
+	})
+	m.authOAuth1ConsumerSecret = m.newAuthEntry("consumer secret", func(s string) {
+		m.ensureOAuth1().ConsumerSecret = s
+	})
+	m.authOAuth1ConsumerSecret.Password = true
+	m.authOAuth1Token = m.newAuthEntry("token (optional)", func(s string) {
+		m.ensureOAuth1().Token = s
+	})
+	m.authOAuth1TokenSecret = m.newAuthEntry("token secret (optional)", func(s string) {
+		m.ensureOAuth1().TokenSecret = s
+	})
+	m.authOAuth1TokenSecret.Password = true
 
 	m.authAPIKeyName = m.newAuthEntry("key name (e.g. X-API-Key)", func(s string) {
 		m.ensureAPIKey().Name = s
@@ -173,11 +190,17 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		widget.NewFormItem("Username", m.authWSSEUsername),
 		widget.NewFormItem("Password", m.authWSSEPassword),
 	)
+	m.authOAuth1Panel = widget.NewForm(
+		widget.NewFormItem("Consumer Key", m.authOAuth1ConsumerKey),
+		widget.NewFormItem("Consumer Secret", m.authOAuth1ConsumerSecret),
+		widget.NewFormItem("Token", m.authOAuth1Token),
+		widget.NewFormItem("Token Secret", m.authOAuth1TokenSecret),
+	)
 
 	m.authFormsStack = container.NewStack(
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
-		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel,
+		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel,
 	)
 
 	top := container.NewBorder(nil, nil, widget.NewLabel("Type:"), nil, m.authType)
@@ -220,6 +243,13 @@ func (m *MainUI) ensureWSSE() *model.WSSEAuth {
 	return m.currentRequest.Auth.WSSE
 }
 
+func (m *MainUI) ensureOAuth1() *model.OAuth1Auth {
+	if m.currentRequest.Auth.OAuth1 == nil {
+		m.currentRequest.Auth.OAuth1 = &model.OAuth1Auth{}
+	}
+	return m.currentRequest.Auth.OAuth1
+}
+
 func (m *MainUI) ensureAPIKey() *model.APIKeyAuth {
 	if m.currentRequest.Auth.APIKey == nil {
 		m.currentRequest.Auth.APIKey = &model.APIKeyAuth{Placement: model.APIKeyHeader}
@@ -244,7 +274,7 @@ func (m *MainUI) refreshAuthVisibility() {
 	panels := []fyne.CanvasObject{
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
-		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel,
+		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel,
 	}
 	for _, p := range panels {
 		p.Hide()
@@ -261,6 +291,8 @@ func (m *MainUI) refreshAuthVisibility() {
 		active = m.authBearerPanel
 	case model.AuthAPIKey:
 		active = m.authAPIKeyPanel
+	case model.AuthOAuth1:
+		active = m.authOAuth1Panel
 	case model.AuthOAuth2:
 		active = m.authOAuth2Panel
 	case model.AuthWSSE:
@@ -309,6 +341,10 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authBearerToken.SetText("")
 		m.authWSSEUsername.SetText("")
 		m.authWSSEPassword.SetText("")
+		m.authOAuth1ConsumerKey.SetText("")
+		m.authOAuth1ConsumerSecret.SetText("")
+		m.authOAuth1Token.SetText("")
+		m.authOAuth1TokenSecret.SetText("")
 		m.authAPIKeyName.SetText("")
 		m.authAPIKeyValue.SetText("")
 		m.authAPIKeyPlacement.SetSelected("Header")
@@ -352,6 +388,17 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 	} else {
 		m.authWSSEUsername.SetText("")
 		m.authWSSEPassword.SetText("")
+	}
+	if o := req.Auth.OAuth1; o != nil {
+		m.authOAuth1ConsumerKey.SetText(o.ConsumerKey)
+		m.authOAuth1ConsumerSecret.SetText(o.ConsumerSecret)
+		m.authOAuth1Token.SetText(o.Token)
+		m.authOAuth1TokenSecret.SetText(o.TokenSecret)
+	} else {
+		m.authOAuth1ConsumerKey.SetText("")
+		m.authOAuth1ConsumerSecret.SetText("")
+		m.authOAuth1Token.SetText("")
+		m.authOAuth1TokenSecret.SetText("")
 	}
 	if k := req.Auth.APIKey; k != nil {
 		m.authAPIKeyName.SetText(k.Name)

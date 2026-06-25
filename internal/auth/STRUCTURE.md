@@ -5,6 +5,7 @@
 | File | Responsibility |
 | --- | --- |
 | [auth.go](auth.go) | `Resolve`, `ResolveValues`, `Apply`, `ErrOAuth2NotImplemented`. The synchronous core. |
+| [oauth1.go](oauth1.go) | OAuth 1.0a HMAC-SHA1 signing (#77): `oauth1Header` (builds the `Authorization: OAuth` header), `oauth1Sign` (RFC 5849 §3.4 base string + HMAC), `oauth1BaseURL`, `oauth1FormBody`, `oauthEncode`. |
 | [oauth2.go](oauth2.go) | `OAuth2Resolver` interface, `TokenCache`, `TokenEntry`, `CacheKey`, `NewOAuth2Resolver`, `NewClientCredentialsResolver`, `FetchClientCredentialsToken`, and the unexported `cachingResolver` (with grant-dispatch in `Token`), `tokenResponse`, `parseTokenResponse`. |
 | [oauth2_authcode.go](oauth2_authcode.go) | `AuthCodeStarter` interface, `cachingResolver.authorizationCodeToken` (listener + state + PKCE + callback waiting), `exchangeAuthorizationCode`, `buildAuthCodeURL`, `pickListenAddr`, `randomURLToken`, and the `authCodeFlowTimeout` constant. |
 | [auth_test.go](auth_test.go) | Unit tests covering inheritance resolution, var substitution, each Apply branch, header-conflict short-circuits, and the OAuth2-without-resolver path. |

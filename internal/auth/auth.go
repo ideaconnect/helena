@@ -17,10 +17,12 @@ import (
 	"crypto/rand"
 	"crypto/sha1"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/idct/helena/internal/model"
@@ -97,6 +99,15 @@ func ResolveValues(a model.Auth, resolve func(string) string) model.Auth {
 			cp.Username = resolve(cp.Username)
 			cp.Password = resolve(cp.Password)
 			out.WSSE = &cp
+		}
+	case model.AuthOAuth1:
+		if a.OAuth1 != nil {
+			cp := *a.OAuth1
+			cp.ConsumerKey = resolve(cp.ConsumerKey)
+			cp.ConsumerSecret = resolve(cp.ConsumerSecret)
+			cp.Token = resolve(cp.Token)
+			cp.TokenSecret = resolve(cp.TokenSecret)
+			out.OAuth1 = &cp
 		}
 	}
 	return out
@@ -192,6 +203,23 @@ func Apply(ctx context.Context, req *http.Request, a model.Auth, resolver OAuth2
 		if req.Header.Get("Authorization") == "" {
 			req.Header.Set("Authorization", `WSSE profile="UsernameToken"`)
 		}
+		return nil
+	case model.AuthOAuth1:
+		if a.OAuth1 == nil {
+			return nil
+		}
+		if req.Header.Get("Authorization") != "" {
+			return nil
+		}
+		nonce := make([]byte, 16)
+		if _, err := rand.Read(nonce); err != nil {
+			return fmt.Errorf("auth.Apply: oauth1 nonce: %w", err)
+		}
+		header, err := oauth1Header(req, a.OAuth1, hex.EncodeToString(nonce), strconv.FormatInt(time.Now().Unix(), 10))
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", header)
 		return nil
 	default:
 		return fmt.Errorf("auth.Apply: unknown auth type %q", a.Type)

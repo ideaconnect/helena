@@ -16,7 +16,8 @@ const (
 	AuthBearer  AuthType = "bearer"
 	AuthAPIKey  AuthType = "apikey"
 	AuthOAuth2  AuthType = "oauth2"
-	AuthWSSE    AuthType = "wsse" // WS-Security UsernameToken (#79)
+	AuthWSSE    AuthType = "wsse"   // WS-Security UsernameToken (#79)
+	AuthOAuth1  AuthType = "oauth1" // OAuth 1.0a, HMAC-SHA1 (#77)
 )
 
 // APIKeyPlacement chooses whether the API-Key credential rides on a request
@@ -51,6 +52,18 @@ type Auth struct {
 	APIKey *APIKeyAuth `json:"apiKey,omitempty"`
 	OAuth2 *OAuth2Auth `json:"oauth2,omitempty"`
 	WSSE   *WSSEAuth   `json:"wsse,omitempty"`
+	OAuth1 *OAuth1Auth `json:"oauth1,omitempty"`
+}
+
+// OAuth1Auth carries OAuth 1.0a credentials (#77). On each send the request is
+// signed with HMAC-SHA1 (RFC 5849) and an `Authorization: OAuth …` header is
+// emitted. Token / TokenSecret are optional (two-legged OAuth omits them). All
+// fields run through the variable resolver before signing.
+type OAuth1Auth struct {
+	ConsumerKey    string `json:"consumerKey"`
+	ConsumerSecret string `json:"consumerSecret"`
+	Token          string `json:"token,omitempty"`
+	TokenSecret    string `json:"tokenSecret,omitempty"`
 }
 
 // WSSEAuth carries WS-Security UsernameToken credentials (#79). On each send a

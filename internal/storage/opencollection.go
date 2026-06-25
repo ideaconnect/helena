@@ -119,7 +119,8 @@ type ocAuth struct {
 	Bearer *ocAuthBearer        `yaml:"bearer,omitempty"`
 	APIKey *ocAuthAPIKey        `yaml:"apikey,omitempty"`
 	OAuth2 *ocAuthOAuth2        `yaml:"oauth2,omitempty"`
-	WSSE   *ocAuthWSSE          `yaml:"wsse,omitempty"` // WS-Security UsernameToken (#79)
+	WSSE   *ocAuthWSSE          `yaml:"wsse,omitempty"`   // WS-Security UsernameToken (#79)
+	OAuth1 *ocAuthOAuth1        `yaml:"oauth1,omitempty"` // OAuth 1.0a HMAC-SHA1 (#77)
 	Extra  map[string]yaml.Node `yaml:",inline"`
 }
 
@@ -127,6 +128,14 @@ type ocAuthWSSE struct {
 	Username string               `yaml:"username"`
 	Password string               `yaml:"password"`
 	Extra    map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthOAuth1 struct {
+	ConsumerKey    string               `yaml:"consumerKey"`
+	ConsumerSecret string               `yaml:"consumerSecret"`
+	Token          string               `yaml:"token,omitempty"`
+	TokenSecret    string               `yaml:"tokenSecret,omitempty"`
+	Extra          map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocAuthBasic struct {
@@ -397,6 +406,15 @@ func authToFile(a model.Auth) *ocAuth {
 		if a.WSSE != nil {
 			out.WSSE = &ocAuthWSSE{Username: a.WSSE.Username, Password: a.WSSE.Password}
 		}
+	case model.AuthOAuth1:
+		if a.OAuth1 != nil {
+			out.OAuth1 = &ocAuthOAuth1{
+				ConsumerKey:    a.OAuth1.ConsumerKey,
+				ConsumerSecret: a.OAuth1.ConsumerSecret,
+				Token:          a.OAuth1.Token,
+				TokenSecret:    a.OAuth1.TokenSecret,
+			}
+		}
 	}
 	return out
 }
@@ -437,6 +455,14 @@ func fileToAuth(f *ocAuth) model.Auth {
 	}
 	if f.WSSE != nil {
 		a.WSSE = &model.WSSEAuth{Username: f.WSSE.Username, Password: f.WSSE.Password}
+	}
+	if f.OAuth1 != nil {
+		a.OAuth1 = &model.OAuth1Auth{
+			ConsumerKey:    f.OAuth1.ConsumerKey,
+			ConsumerSecret: f.OAuth1.ConsumerSecret,
+			Token:          f.OAuth1.Token,
+			TokenSecret:    f.OAuth1.TokenSecret,
+		}
 	}
 	return a
 }

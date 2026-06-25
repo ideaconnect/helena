@@ -288,6 +288,9 @@ func mergeAuthExtras(next, prev *ocAuth) {
 	if next.WSSE != nil && prev.WSSE != nil {
 		next.WSSE.Extra = prev.WSSE.Extra
 	}
+	if next.OAuth1 != nil && prev.OAuth1 != nil {
+		next.OAuth1.Extra = prev.OAuth1.Extra
+	}
 }
 
 // mergeKVExtras pairs new and prev header rows by name and copies
