@@ -42,3 +42,14 @@
 1. `New(low, high)` stores `[low, high]` in `scopes`.
 2. `Lookup("x")` iterates `i = 1, 0` so it tries `high` first.
 3. The first map containing `x` wins; nothing else is consulted.
+
+## Prompt variables ({{?Name}}, #86)
+1. `PromptVars(texts...)` scans the request's template strings for `{{?Name}}`
+   references and returns the distinct prompt keys (`?Name`, marker included).
+2. Before a Send, the UI pops a dialog with one field per key, labeled via
+   `PromptLabel` (the name without `?`).
+3. The entered values become a one-shot resolver scope keyed by the prompt keys
+   (`{"?Name": "value"}`), layered just below the script overlay for that Send.
+4. Resolution needs no special support: `Resolve("{{?Name}}")` matches the
+   captured name `?Name`, finds it in the injected scope, and substitutes — the
+   `?` marker keeps the key from ever colliding with a normal `{{Name}}`.

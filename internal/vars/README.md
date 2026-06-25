@@ -16,6 +16,8 @@ A `Resolver` is built from one or more named scopes ordered lowest precedence fi
 - `(*Resolver).Resolve(s string) (string, []string)` — substitutes every `{{name}}`, expanding scope values recursively and freezing fallback values, and returns the result plus the names that are unresolvable or cyclic (deduped, first-seen order).
 - `Dynamic(name string) (string, bool)` — a fallback that resolves Postman-style dynamic ("magic") variables (`{{$guid}}`, `{{$randomUUID}}`, `{{$timestamp}}`, `{{$isoTimestamp}}`, `{{$randomInt}}`, `{{$randomFloat}}`, `{{$randomBoolean}}`, `{{$randomFirstName}}`/`LastName`/`FullName`/`Email`, `{{$randomColor}}`). Only `$`-prefixed names are claimed; an unknown `$name` returns `("", false)` so it is still reported missing. Each call generates a fresh value (and, being a fallback, is frozen — never re-expanded).
 - `Compose(lookups ...func(string) (string, bool)) func(string) (string, bool)` — combines several fallbacks into one, returning the first match (nil lookups skipped). Used to attach `Dynamic` alongside `chain.VarLookup`.
+- `PromptVars(texts ...string) []string` — finds `{{?Name}}` prompt-variable references (#86) and returns the distinct prompt keys (each the captured name *including* its `?` marker), first-seen order. The UI collects a value per key at Send time and injects a scope under that key; because the key carries the `?`, it only ever matches `{{?...}}` references and never collides with a normal `{{Name}}`.
+- `PromptLabel(key string) string` — strips the `?` marker from a prompt key for a human-facing prompt label.
 
 ## Dependencies
 

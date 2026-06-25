@@ -66,6 +66,7 @@ type chainExecutor struct {
 	dotEnvSnap map[string]string // collection-root .env variables (#84)
 	colSnap    map[string]string // collection-level variables (#80), below env
 	envSnap    map[string]string
+	promptSnap map[string]string // {{?Name}} prompt values (#86), keyed "?Name"
 	sess       *session.Session
 }
 
@@ -86,12 +87,14 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	}
 
 	// Scopes low->high: global (#83) < collection-root .env (#84) < collection
-	// (#80) < env < this request's own variables (#82, highest static) < script
-	// overlay. The chain fallback lets this request's URL / params / headers /
+	// (#80) < env < this request's own variables (#82) < {{?Name}} prompt
+	// values (#86, collected at Send time) < script overlay. The prompt scope's
+	// keys carry a '?' marker so they only ever match {{?...}} references.
+	// The chain fallback lets this request's URL / params / headers /
 	// body / auth use {{chain.<alias>.response.json.token}}-style templates,
 	// scoped to this request's own chain aliases (same map the pre-script saw);
 	// Dynamic adds Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
-	resolver := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.sess.SnapshotEnvOverlay()).
+	resolver := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.promptSnap, e.sess.SnapshotEnvOverlay()).
 		WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {

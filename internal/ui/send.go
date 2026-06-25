@@ -18,7 +18,72 @@ import (
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/responsefmt"
 	"github.com/idct/helena/internal/scripting"
+	"github.com/idct/helena/internal/vars"
 )
+
+// requestTemplateStrings collects every {{...}}-bearing string in a request so
+// PromptVars can find the {{?Name}} markers a Send must ask the user about
+// (#86): URL, body content, and the values of enabled headers / params / form
+// fields, plus the common auth credential fields.
+func requestTemplateStrings(r model.Request) []string {
+	out := []string{r.URL, r.Body.Content}
+	for _, h := range r.Headers {
+		if h.Enabled {
+			out = append(out, h.Value)
+		}
+	}
+	for _, p := range r.Params {
+		if p.Enabled {
+			out = append(out, p.Value)
+		}
+	}
+	for _, f := range r.Body.Form {
+		if f.Enabled {
+			out = append(out, f.Value)
+		}
+	}
+	if a := r.Auth.Basic; a != nil {
+		out = append(out, a.Username, a.Password)
+	}
+	if a := r.Auth.Bearer; a != nil {
+		out = append(out, a.Token)
+	}
+	if a := r.Auth.APIKey; a != nil {
+		out = append(out, a.Name, a.Value)
+	}
+	return out
+}
+
+// promptForVars asks the user for one value per {{?Name}} prompt key (#86),
+// then re-enters send() with the values stashed in m.promptSnap. Cancelling
+// aborts the Send.
+func (m *MainUI) promptForVars(keys []string) {
+	if m.win == nil {
+		return
+	}
+	entries := make(map[string]*widget.Entry, len(keys))
+	items := make([]*widget.FormItem, 0, len(keys))
+	for _, k := range keys {
+		e := widget.NewEntry()
+		entries[k] = e
+		items = append(items, widget.NewFormItem(vars.PromptLabel(k), e))
+	}
+	d := dialog.NewCustomConfirm("Enter request values", "Send", "Cancel",
+		widget.NewForm(items...), func(ok bool) {
+			if !ok {
+				m.Status.SetText("Send cancelled")
+				return
+			}
+			snap := make(map[string]string, len(keys))
+			for k, e := range entries {
+				snap[k] = e.Text
+			}
+			m.promptSnap = snap
+			m.send()
+		}, m.win)
+	d.Resize(fyne.NewSize(420, 100+float32(60*len(keys))))
+	d.Show()
+}
 
 // send executes the active edited request (or the bare method/URL if nothing is
 // selected) off the UI goroutine, resolving {{vars}} against the active env.
@@ -183,6 +248,17 @@ func (m *MainUI) send() {
 	} else {
 		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
 	}
+	// #86: if the request references {{?Name}} prompt variables and we have not
+	// yet collected them, pop a dialog and re-enter send() with the values
+	// stashed in m.promptSnap. promptSnap is consumed (cleared) on this pass.
+	promptSnap := m.promptSnap
+	m.promptSnap = nil
+	if promptSnap == nil {
+		if keys := vars.PromptVars(requestTemplateStrings(req)...); len(keys) > 0 {
+			m.promptForVars(keys)
+			return
+		}
+	}
 	// Snapshot env vars + auth state on the UI goroutine so the worker
 	// goroutine can run for ~ScriptTimeout without racing against UI
 	// mutations of s.cols / s.activeCol / Environment.Variables. The leaf's
@@ -212,7 +288,7 @@ func (m *MainUI) send() {
 		newAuthCodeStarter(),
 	))
 	rt := scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})
-	exec := chainExecutor{rt: rt, client: client, globalSnap: globalSnap, dotEnvSnap: dotEnvSnap, colSnap: colSnap, envSnap: envSnap, sess: m.sess}
+	exec := chainExecutor{rt: rt, client: client, promptSnap: promptSnap, globalSnap: globalSnap, dotEnvSnap: dotEnvSnap, colSnap: colSnap, envSnap: envSnap, sess: m.sess}
 	// Snapshot the active collection on the UI goroutine so the
 	// chain runner reads from a frozen-at-Send-entry copy with
 	// pre-flattened Auth — never races against UI-thread tree edits

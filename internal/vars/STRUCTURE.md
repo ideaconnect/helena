@@ -7,6 +7,8 @@
 | [doc.go](doc.go) | Package-level godoc only. |
 | [vars.go](vars.go) | The `Resolver` type, regex, recursive `expand`, and missing-name collector. |
 | [dynamic.go](dynamic.go) | `Dynamic` — Postman-style `{{$guid}}`/`{{$timestamp}}`/`{{$randomInt}}`/… magic-variable fallback; `Compose` (combine several fallbacks); `uuidV4` and the curated faker tables. |
+| [prompt.go](prompt.go) | `PromptVars` / `PromptLabel` — extract `{{?Name}}` ask-at-Send-time prompt-variable keys (#86) from template text. |
+| [prompt_test.go](prompt_test.go) | Prompt-key extraction (distinct, first-seen, `?`-marker), label stripping, and end-to-end resolution via an injected scope. |
 | [dynamic_test.go](dynamic_test.go) | Format/range/freshness tests for each generator, `Compose` ordering, and the resolver-with-Dynamic-fallback integration (unknown `$name` still reported missing). |
 | [vars_test.go](vars_test.go) | Tests for plain substitution, whitespace tolerance, precedence stacking, chained refs, missing-name reporting, cycle termination, frozen-fallback injection, deep-chain resolution, and empty templates. |
 | [fallback_test.go](fallback_test.go) | `WithFallback`: the dynamic lookup resolves names no scope has, scopes still win, and a nil fallback is unchanged behavior. |

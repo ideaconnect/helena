@@ -20,6 +20,7 @@ import (
 
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/session"
+	"github.com/idct/helena/internal/vars"
 )
 
 // noEnv is the option shown when no environment is selected.
@@ -130,6 +131,11 @@ type MainUI struct {
 	// Send button doubles as Abort in that state. Set + cleared on the
 	// UI thread only; the cancel func itself is goroutine-safe.
 	sendCancel context.CancelFunc
+
+	// promptSnap carries the {{?Name}} prompt-variable values (#86) collected
+	// by the Send-time dialog into the re-entered send(); keyed by the prompt
+	// token ("?Name"). Set on dialog-confirm, consumed at the top of send().
+	promptSnap map[string]string
 
 	// httpTransport is the per-session connection pool, reused across sends so
 	// repeated requests to one host skip TCP+TLS re-handshakes (#52). Rebuilt
@@ -802,18 +808,26 @@ func (m *MainUI) updateURLPreview() {
 		return
 	}
 	resolved, missing := m.sess.ResolverForRequest(m.currentRequest).Resolve(m.URL.Text)
-	// {{chain.<alias>...}} vars only resolve at Send time (from chained-request
-	// results), so don't flag them as unresolved in the live preview.
+	// {{chain.<alias>...}} vars resolve at Send time (from chained-request
+	// results) and {{?Name}} prompt vars (#86) are collected at Send time, so
+	// don't flag either as unresolved in the live preview.
+	var prompts []string
 	missing = slices.DeleteFunc(missing, func(n string) bool {
+		if strings.HasPrefix(n, "?") {
+			prompts = append(prompts, vars.PromptLabel(n))
+			return true
+		}
 		return strings.HasPrefix(n, "chain.")
 	})
-	if resolved == m.URL.Text {
+	switch {
+	case len(missing) > 0:
+		m.urlPreview.SetText("⚠ Unresolved: " + strings.Join(missing, ", "))
+	case len(prompts) > 0:
+		m.urlPreview.SetText("? Will prompt at send: " + strings.Join(prompts, ", "))
+	case resolved == m.URL.Text:
 		m.urlPreview.Hide()
 		return
-	}
-	if len(missing) > 0 {
-		m.urlPreview.SetText("⚠ Unresolved: " + strings.Join(missing, ", "))
-	} else {
+	default:
 		m.urlPreview.SetText("→ " + resolved)
 	}
 	m.urlPreview.Show()
