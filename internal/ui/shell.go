@@ -83,6 +83,8 @@ type MainUI struct {
 
 	authType                                                          *widget.Select
 	authBasicUsername, authBasicPassword                              *widget.Entry
+	authDigestUsername, authDigestPassword                            *widget.Entry
+	authDigestPanel                                                   *widget.Form
 	authWSSEUsername, authWSSEPassword                                *widget.Entry
 	authWSSEPanel                                                     *widget.Form
 	authOAuth1ConsumerKey, authOAuth1ConsumerSecret                   *widget.Entry

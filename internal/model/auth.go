@@ -19,6 +19,7 @@ const (
 	AuthWSSE    AuthType = "wsse"   // WS-Security UsernameToken (#79)
 	AuthOAuth1  AuthType = "oauth1" // OAuth 1.0a, HMAC-SHA1 (#77)
 	AuthAWSV4   AuthType = "awsv4"  // AWS Signature Version 4 (#76)
+	AuthDigest  AuthType = "digest" // HTTP Digest access auth, challenge/response (#75)
 )
 
 // APIKeyPlacement chooses whether the API-Key credential rides on a request
@@ -55,6 +56,18 @@ type Auth struct {
 	WSSE   *WSSEAuth   `json:"wsse,omitempty"`
 	OAuth1 *OAuth1Auth `json:"oauth1,omitempty"`
 	AWSV4  *AWSV4Auth  `json:"awsV4,omitempty"`
+	Digest *DigestAuth `json:"digest,omitempty"`
+}
+
+// DigestAuth carries HTTP Digest access-authentication credentials (#75). Unlike
+// the stateless schemes, Digest is challenge/response: the first request is sent
+// without credentials, the server replies 401 with a WWW-Authenticate: Digest
+// challenge (realm + nonce + qop + algorithm), and the request is re-sent with a
+// computed response hash. Username and Password run through the variable
+// resolver before use. The challenge round is driven by internal/httpclient.
+type DigestAuth struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // AWSV4Auth carries AWS Signature Version 4 credentials (#76). On each send the

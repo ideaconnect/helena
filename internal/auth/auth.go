@@ -119,6 +119,13 @@ func ResolveValues(a model.Auth, resolve func(string) string) model.Auth {
 			cp.SessionToken = resolve(cp.SessionToken)
 			out.AWSV4 = &cp
 		}
+	case model.AuthDigest:
+		if a.Digest != nil {
+			cp := *a.Digest
+			cp.Username = resolve(cp.Username)
+			cp.Password = resolve(cp.Password)
+			out.Digest = &cp
+		}
 	}
 	return out
 }
@@ -248,6 +255,12 @@ func Apply(ctx context.Context, req *http.Request, a model.Auth, resolver OAuth2
 			return err
 		}
 		req.Header.Set("Authorization", awsSigV4Header(req, a.AWSV4, amzDate, payloadHash))
+		return nil
+	case model.AuthDigest:
+		// Digest is challenge/response (#75): the first request carries no
+		// credentials so the server returns its 401 challenge. The retry with the
+		// computed response header is driven by internal/httpclient (DigestRespond).
+		// Apply is a deliberate no-op here.
 		return nil
 	default:
 		return fmt.Errorf("auth.Apply: unknown auth type %q", a.Type)

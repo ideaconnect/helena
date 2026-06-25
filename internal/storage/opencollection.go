@@ -123,7 +123,14 @@ type ocAuth struct {
 	WSSE   *ocAuthWSSE          `yaml:"wsse,omitempty"`   // WS-Security UsernameToken (#79)
 	OAuth1 *ocAuthOAuth1        `yaml:"oauth1,omitempty"` // OAuth 1.0a HMAC-SHA1 (#77)
 	AWSV4  *ocAuthAWSV4         `yaml:"awsv4,omitempty"`  // AWS Signature v4 (#76)
+	Digest *ocAuthDigest        `yaml:"digest,omitempty"` // HTTP Digest access auth (#75)
 	Extra  map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthDigest struct {
+	Username string               `yaml:"username"`
+	Password string               `yaml:"password"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocAuthAWSV4 struct {
@@ -437,6 +444,10 @@ func authToFile(a model.Auth) *ocAuth {
 				SessionToken:    a.AWSV4.SessionToken,
 			}
 		}
+	case model.AuthDigest:
+		if a.Digest != nil {
+			out.Digest = &ocAuthDigest{Username: a.Digest.Username, Password: a.Digest.Password}
+		}
 	}
 	return out
 }
@@ -494,6 +505,9 @@ func fileToAuth(f *ocAuth) model.Auth {
 			Service:         f.AWSV4.Service,
 			SessionToken:    f.AWSV4.SessionToken,
 		}
+	}
+	if f.Digest != nil {
+		a.Digest = &model.DigestAuth{Username: f.Digest.Username, Password: f.Digest.Password}
 	}
 	return a
 }

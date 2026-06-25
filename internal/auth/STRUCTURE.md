@@ -6,6 +6,7 @@
 | --- | --- |
 | [auth.go](auth.go) | `Resolve`, `ResolveValues`, `Apply`, `ErrOAuth2NotImplemented`. The synchronous core. |
 | [awssigv4.go](awssigv4.go) | AWS Signature v4 signing (#76): `awsSigV4Header` (canonical request + string-to-sign + AWS4-HMAC-SHA256), `awsCanonicalHeaders`/`awsCanonicalQuery`/`awsCanonicalURI`, `awsSigningKey`, `awsPayloadHash`, `awsURIEncode`. |
+| [digest.go](digest.go) | HTTP Digest access auth (#75): `DigestRespond` (answer a 401 challenge), `parseDigestChallenge`, `digestAuthorize` (RFC 7616 response hash — MD5 / SHA-256, qop=auth, and the RFC 2069 legacy form). |
 | [oauth1.go](oauth1.go) | OAuth 1.0a HMAC-SHA1 signing (#77): `oauth1Header` (builds the `Authorization: OAuth` header), `oauth1Sign` (RFC 5849 §3.4 base string + HMAC), `oauth1BaseURL`, `oauth1FormBody`, `oauthEncode`. |
 | [oauth2.go](oauth2.go) | `OAuth2Resolver` interface, `TokenCache`, `TokenEntry`, `CacheKey`, `NewOAuth2Resolver`, `NewClientCredentialsResolver`, `FetchClientCredentialsToken`, and the unexported `cachingResolver` (with grant-dispatch in `Token`), `tokenResponse`, `parseTokenResponse`. |
 | [oauth2_authcode.go](oauth2_authcode.go) | `AuthCodeStarter` interface, `cachingResolver.authorizationCodeToken` (listener + state + PKCE + callback waiting), `exchangeAuthorizationCode`, `buildAuthCodeURL`, `pickListenAddr`, `randomURLToken`, and the `authCodeFlowTimeout` constant. |
@@ -55,6 +56,9 @@
   Created="…"` where `PasswordDigest = Base64(SHA1(nonce + created + password))`
   (`wsseHeader` / `wsseDigest`), plus a companion `Authorization: WSSE
   profile="UsernameToken"`. A user-set `X-WSSE` header short-circuits it.
+- `AuthDigest` (#75) → no-op. Digest is challenge/response; the 401 round and
+  the `Authorization: Digest …` retry are driven by `internal/httpclient`
+  (`DigestRespond`), not `Apply`.
 - `AuthAWSV4` (#76) → sets `X-Amz-Date` (and `X-Amz-Security-Token` when a
   session token is configured), hashes the body, and writes an
   `Authorization: AWS4-HMAC-SHA256 Credential=…, SignedHeaders=…,

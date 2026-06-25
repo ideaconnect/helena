@@ -8,7 +8,7 @@ the request.
 ## Credential storage (git-safety)
 
 The auth credential fields — Basic `password`, Bearer `token`, API-key `value`,
-OAuth2 `clientSecret`, WSSE `password`, OAuth1 `consumerSecret`/`tokenSecret`, and AWS SigV4 `secretAccessKey`/`sessionToken` — are **not written into the
+OAuth2 `clientSecret`, WSSE `password`, OAuth1 `consumerSecret`/`tokenSecret`, AWS SigV4 `secretAccessKey`/`sessionToken`, and Digest `password` — are **not written into the
 git-tracked collection YAML**. On save, [internal/storage](../storage/) externalizes them to a
 per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR`), outside
 any repository, and blanks the fields in the collection file (#42); they are
@@ -36,7 +36,11 @@ This package does four things:
    Base64(SHA1(nonce + created + password))` per send; AWS Signature v4
    (#76) signs the canonical request (AWS4-HMAC-SHA256) into an
    `Authorization` header plus `X-Amz-Date` (and `X-Amz-Security-Token`
-   for session credentials).
+   for session credentials). Digest access auth (#75) is
+   challenge/response and is driven by `internal/httpclient`: `Apply`
+   sends the first request unauthenticated; on a 401 the client calls
+   `DigestRespond` to compute the `Authorization: Digest …` header (MD5 /
+   SHA-256, qop=auth) and retries once.
 4. **Fetch and cache OAuth2 tokens.** A built-in `cachingResolver`
    implements both `client_credentials` and `authorization_code` (with
    optional PKCE) grants. Tokens are cached keyed by collection + auth
@@ -56,6 +60,7 @@ wins over the auth-derived value, so manual escape hatches keep working.
 | --- | --- |
 | `Resolve(reqAuth, ancestors) model.Auth` | Flatten Inherit by walking the ancestor chain. |
 | `ResolveValues(a, resolve) model.Auth` | Return a deep copy with every credential string substituted through `resolve`. |
+| `DigestRespond(wwwAuthenticate, method, uri, d) (header, ok, err)` | Answer a 401 Digest challenge (#75): parse the `WWW-Authenticate: Digest` header and return the `Authorization` value to retry with. `ok` is false when there is no answerable Digest challenge. |
 | `Apply(ctx, req, a, resolver) error` | Mutate the outgoing request based on the resolved auth. `resolver` is consulted only for OAuth2 grants; nil keeps the legacy `ErrOAuth2NotImplemented` behaviour. |
 | `OAuth2Resolver` (interface) | One-method interface: `Token(ctx, model.OAuth2Auth) (string, error)`. |
 | `TokenCache` | Goroutine-safe in-memory cache with `Get` / `Set` / `Clear` / `ClearNamespace` (scoped to a CacheKey namespace, e.g. one collection) / `ClearAll` (global). |
@@ -71,7 +76,7 @@ wins over the auth-derived value, so manual escape hatches keep working.
 ## Dependencies
 
 - Internal: [`internal/model`](../model/) — domain types only.
-- External: standard library only (`context`, `crypto/hmac`, `crypto/rand`,
+- External: standard library only (`context`, `crypto/hmac`, `crypto/md5`, `crypto/rand`,
   `crypto/sha1`, `crypto/sha256`, `encoding/base64`, `encoding/hex`,
   `encoding/json`, `errors`, `fmt`, `io`, `net/http`, `net/url`, `sort`,
   `strconv`, `strings`, `sync`, `time`). No third-party deps.

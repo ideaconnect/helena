@@ -12,7 +12,7 @@ import (
 
 // authTypeLabels keeps a stable display order for the auth Type dropdown
 // and maps human-friendly labels to model.AuthType values.
-var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security", "AWS Signature v4"}
+var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Digest Auth", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security", "AWS Signature v4"}
 
 var authTypeByLabel = map[string]model.AuthType{
 	"None":                model.AuthNone,
@@ -24,6 +24,7 @@ var authTypeByLabel = map[string]model.AuthType{
 	"OAuth 2.0":           model.AuthOAuth2,
 	"WS-Security":         model.AuthWSSE,
 	"AWS Signature v4":    model.AuthAWSV4,
+	"Digest Auth":         model.AuthDigest,
 }
 
 var authLabelByType = map[model.AuthType]string{
@@ -36,6 +37,7 @@ var authLabelByType = map[model.AuthType]string{
 	model.AuthOAuth2:  "OAuth 2.0",
 	model.AuthWSSE:    "WS-Security",
 	model.AuthAWSV4:   "AWS Signature v4",
+	model.AuthDigest:  "Digest Auth",
 }
 
 var apiKeyPlacementLabels = []string{"Header", "Query"}
@@ -84,6 +86,14 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 	})
 	// A bearer token is as sensitive as a Basic password — mask it (#44).
 	m.authBearerToken.Password = true
+
+	m.authDigestUsername = m.newAuthEntry("username", func(s string) {
+		m.ensureDigest().Username = s
+	})
+	m.authDigestPassword = m.newAuthEntry("password", func(s string) {
+		m.ensureDigest().Password = s
+	})
+	m.authDigestPassword.Password = true
 
 	m.authWSSEUsername = m.newAuthEntry("username", func(s string) {
 		m.ensureWSSE().Username = s
@@ -188,6 +198,10 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 	m.authBearerPanel = widget.NewForm(
 		widget.NewFormItem("Token", m.authBearerToken),
 	)
+	m.authDigestPanel = widget.NewForm(
+		widget.NewFormItem("Username", m.authDigestUsername),
+		widget.NewFormItem("Password", m.authDigestPassword),
+	)
 	m.authAPIKeyPanel = widget.NewForm(
 		widget.NewFormItem("Name", m.authAPIKeyName),
 		widget.NewFormItem("Value", m.authAPIKeyValue),
@@ -228,6 +242,7 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
 		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel, m.authAWSV4Panel,
+		m.authDigestPanel,
 	)
 
 	top := container.NewBorder(nil, nil, widget.NewLabel("Type:"), nil, m.authType)
@@ -261,6 +276,13 @@ func (m *MainUI) ensureBearer() *model.BearerAuth {
 		m.currentRequest.Auth.Bearer = &model.BearerAuth{}
 	}
 	return m.currentRequest.Auth.Bearer
+}
+
+func (m *MainUI) ensureDigest() *model.DigestAuth {
+	if m.currentRequest.Auth.Digest == nil {
+		m.currentRequest.Auth.Digest = &model.DigestAuth{}
+	}
+	return m.currentRequest.Auth.Digest
 }
 
 func (m *MainUI) ensureWSSE() *model.WSSEAuth {
@@ -309,6 +331,7 @@ func (m *MainUI) refreshAuthVisibility() {
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
 		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel, m.authAWSV4Panel,
+		m.authDigestPanel,
 	}
 	for _, p := range panels {
 		p.Hide()
@@ -321,6 +344,8 @@ func (m *MainUI) refreshAuthVisibility() {
 		active = m.authInheritPanel
 	case model.AuthBasic:
 		active = m.authBasicPanel
+	case model.AuthDigest:
+		active = m.authDigestPanel
 	case model.AuthBearer:
 		active = m.authBearerPanel
 	case model.AuthAPIKey:
@@ -374,6 +399,8 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authType.SetSelected("Inherit from parent")
 		m.authBasicUsername.SetText("")
 		m.authBasicPassword.SetText("")
+		m.authDigestUsername.SetText("")
+		m.authDigestPassword.SetText("")
 		m.authBearerToken.SetText("")
 		m.authWSSEUsername.SetText("")
 		m.authWSSEPassword.SetText("")
@@ -417,6 +444,13 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 	} else {
 		m.authBasicUsername.SetText("")
 		m.authBasicPassword.SetText("")
+	}
+	if d := req.Auth.Digest; d != nil {
+		m.authDigestUsername.SetText(d.Username)
+		m.authDigestPassword.SetText(d.Password)
+	} else {
+		m.authDigestUsername.SetText("")
+		m.authDigestPassword.SetText("")
 	}
 	if br := req.Auth.Bearer; br != nil {
 		m.authBearerToken.SetText(br.Token)

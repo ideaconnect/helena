@@ -326,6 +326,30 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 	if err != nil {
 		return nil, sanitizeDoError(err)
 	}
+
+	// HTTP Digest challenge/response (#75): the first request is sent without
+	// credentials; on a 401 carrying a Digest challenge, compute the response
+	// header and retry once with a freshly built request (so the body replays).
+	if resp.StatusCode == http.StatusUnauthorized && r.Auth.Type == model.AuthDigest && r.Auth.Digest != nil {
+		resolve := func(s string) string {
+			if res == nil {
+				return s
+			}
+			v, _ := res.Resolve(s)
+			return v
+		}
+		creds := auth.ResolveValues(r.Auth, resolve).Digest
+		hdr, ok, derr := auth.DigestRespond(resp.Header.Values("Www-Authenticate"), req.Method, req.URL.RequestURI(), *creds)
+		if derr == nil && ok {
+			_ = resp.Body.Close()
+			if req2, body2, berr := Build(ctx, r, res, c.oauth2Resolver); berr == nil {
+				req2.Header.Set("Authorization", hdr)
+				if resp2, err2 := c.http.Do(req2); err2 == nil {
+					resp, body = resp2, body2
+				}
+			}
+		}
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// Bound the read so an oversized/hostile body can't OOM the app.

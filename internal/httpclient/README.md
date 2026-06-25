@@ -22,6 +22,6 @@ Because Helena runs as a native app and not in a browser, the CORS preflight con
 
 - `net/http`, `net/url`, `crypto/tls` — request/response plumbing and transport configuration.
 - `bytes`, `io`, `strings`, `time`, `context`, `fmt` — standard library helpers.
-- [`github.com/idct/helena/internal/model`](../model) — `Request`, `Settings`, `Body`, `KeyValue`, `Method`, `BodyType.ContentType()`, `EnabledPairs`.
+- [`github.com/idct/helena/internal/model`](../model) — `Request`, `Settings`, `Body`, `KeyValue`, `Method`, `BodyType.ContentType()`, `EnabledPairs`, `Auth` (for the Digest challenge round #75).
 - [`github.com/idct/helena/internal/vars`](../vars) — `*vars.Resolver` for `{{var}}` substitution.
 - [`github.com/idct/helena/internal/auth`](../auth) — `auth.ResolveValues` and `auth.Apply` substitute credential `{{vars}}` and write the resulting Authorization / API-Key onto the outgoing request.
