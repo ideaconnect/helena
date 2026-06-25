@@ -38,6 +38,7 @@ func (m *MainUI) registerShortcuts() {
 		{fyne.KeyN, 0, "N", "New request", m.actionNewRequest},
 		{fyne.KeyN, fyne.KeyModifierShift, "Shift+N", "New collection", m.actionNewCollection},
 		{fyne.KeyD, 0, "D", "Duplicate selected item", m.actionDuplicate},
+		{fyne.KeyZ, 0, "Z", "Undo last delete", m.actionUndoDelete},
 		{fyne.KeyE, 0, "E", "Edit environments", m.editEnvironments},
 		{fyne.KeyComma, 0, ",", "Settings", m.editSettings},
 	}

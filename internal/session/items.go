@@ -261,15 +261,87 @@ func (s *Session) DeleteItem(nodeID string) error {
 		if foldersP == nil || idx < 0 || idx >= len(*foldersP) {
 			return fmt.Errorf("invalid folder %q", nodeID)
 		}
+		s.lastDeleted = &deletedNode{parent: parent, kind: "f", index: idx,
+			colIdx: nodeCollectionIndex(nodeID), folder: cloneFolderKeepID((*foldersP)[idx])}
 		*foldersP = slices.Delete(*foldersP, idx, idx+1)
 	case "r":
 		_, _, requestsP := s.containerAtPtr(parent)
 		if requestsP == nil || idx < 0 || idx >= len(*requestsP) {
 			return fmt.Errorf("invalid request %q", nodeID)
 		}
+		s.lastDeleted = &deletedNode{parent: parent, kind: "r", index: idx,
+			colIdx: nodeCollectionIndex(nodeID), request: cloneRequestKeepID((*requestsP)[idx])}
 		*requestsP = slices.Delete(*requestsP, idx, idx+1)
 	}
 	return s.saveCollection(nodeCollectionIndex(nodeID))
+}
+
+// deletedNode captures everything needed to restore the most recently deleted
+// folder or request (#68): its position (parent container ID + index +
+// collection index) and a deep copy of the node, so RestoreLastDeleted can
+// re-insert and re-save. The full model copy preserves the persistent
+// Request.ID, keeping chain refs valid across a delete->undo.
+type deletedNode struct {
+	parent  string
+	kind    string // "f" or "r"
+	index   int
+	colIdx  int
+	folder  model.Folder  // valid when kind == "f"
+	request model.Request // valid when kind == "r"
+}
+
+// CanUndoDelete reports whether a delete is available to undo.
+func (s *Session) CanUndoDelete() bool { return s.lastDeleted != nil }
+
+// LastDeletedName returns the display name of the node a subsequent
+// RestoreLastDeleted would bring back, or "" when there is nothing to undo.
+func (s *Session) LastDeletedName() string {
+	d := s.lastDeleted
+	if d == nil {
+		return ""
+	}
+	if d.kind == "f" {
+		return d.folder.Name
+	}
+	return d.request.Name
+}
+
+// RestoreLastDeleted re-inserts the most recently deleted folder/request at its
+// original position (clamped to the container's current length, since later
+// edits may have shifted it) and re-saves the collection (#68). It restores at
+// most one delete — the last — and clears the undo state on success. Returns
+// the restored node's tree ID.
+func (s *Session) RestoreLastDeleted() (string, error) {
+	d := s.lastDeleted
+	if d == nil {
+		return "", fmt.Errorf("nothing to undo")
+	}
+	_, foldersP, requestsP := s.containerAtPtr(d.parent)
+	switch d.kind {
+	case "f":
+		if foldersP == nil {
+			return "", fmt.Errorf("cannot restore: parent container is gone")
+		}
+		i := clampIndex(d.index, len(*foldersP))
+		*foldersP = slices.Insert(*foldersP, i, cloneFolderKeepID(d.folder))
+		s.lastDeleted = nil
+		if err := s.saveCollection(d.colIdx); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s/f%d", d.parent, i), nil
+	case "r":
+		if requestsP == nil {
+			return "", fmt.Errorf("cannot restore: parent container is gone")
+		}
+		i := clampIndex(d.index, len(*requestsP))
+		*requestsP = slices.Insert(*requestsP, i, cloneRequestKeepID(d.request))
+		s.lastDeleted = nil
+		if err := s.saveCollection(d.colIdx); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("%s/r%d", d.parent, i), nil
+	}
+	return "", fmt.Errorf("cannot restore: unknown node kind")
 }
 
 // DuplicateItem copies the folder or request at nodeID and inserts the copy
@@ -562,6 +634,39 @@ func parseLeaf(nodeID string) (parent, kind string, idx int, ok bool) {
 	return parent, string(last[0]), n, true
 }
 
+// cloneRequestKeepID deep-copies a request's slices while PRESERVING its
+// persistent ID — unlike deepCopyRequest, which mints a new identity for
+// duplication. Used by undo (#68) so chain refs that pin a request by ID
+// survive a delete->restore.
+func cloneRequestKeepID(r model.Request) model.Request {
+	r.Headers = slices.Clone(r.Headers)
+	r.Params = slices.Clone(r.Params)
+	r.Body.Form = slices.Clone(r.Body.Form)
+	r.Chain = slices.Clone(r.Chain)
+	r.Variables = slices.Clone(r.Variables)
+	return r
+}
+
+// cloneFolderKeepID is the folder analogue of cloneRequestKeepID: a deep copy
+// that preserves every ID in the subtree.
+func cloneFolderKeepID(f model.Folder) model.Folder {
+	if f.Requests != nil {
+		out := make([]model.Request, len(f.Requests))
+		for i, r := range f.Requests {
+			out[i] = cloneRequestKeepID(r)
+		}
+		f.Requests = out
+	}
+	if f.Folders != nil {
+		out := make([]model.Folder, len(f.Folders))
+		for i, sub := range f.Folders {
+			out[i] = cloneFolderKeepID(sub)
+		}
+		f.Folders = out
+	}
+	return f
+}
+
 func deepCopyRequest(r model.Request) model.Request {
 	r.ID = model.NewID()
 	if r.Headers != nil {
@@ -569,6 +674,9 @@ func deepCopyRequest(r model.Request) model.Request {
 	}
 	if r.Params != nil {
 		r.Params = slices.Clone(r.Params)
+	}
+	if r.Variables != nil {
+		r.Variables = slices.Clone(r.Variables)
 	}
 	if r.Body.Form != nil {
 		r.Body.Form = slices.Clone(r.Body.Form)

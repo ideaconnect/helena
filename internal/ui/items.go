@@ -202,9 +202,25 @@ func (m *MainUI) deleteNode(id string) {
 			m.refreshEmptyState()
 			m.Status.SetText("Removed collection: " + label)
 		} else {
-			m.Status.SetText("Deleted: " + label)
+			m.Status.SetText("Deleted: " + label + " — " + shortcutModifierName() + "+Z to undo")
 		}
 	}, m.win)
+}
+
+// actionUndoDelete restores the most recently deleted folder/request (#68) and
+// selects it. A no-op (with a status hint) when there is nothing to undo;
+// collection removals are not undoable here (they are workspace management).
+func (m *MainUI) actionUndoDelete() {
+	newID, err := m.sess.RestoreLastDeleted()
+	if err != nil {
+		m.Status.SetText(err.Error())
+		return
+	}
+	m.Tree.Refresh()
+	m.Tree.OpenBranch(newID)
+	m.Tree.Select(newID)
+	m.refreshEmptyState()
+	m.Status.SetText("Restored")
 }
 
 // duplicateNode clones the node at id and selects the new copy. Shared by the

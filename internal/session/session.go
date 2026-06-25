@@ -34,6 +34,8 @@ type Session struct {
 	jar       *cookiejar.Jar    // session-lifetime cookie jar (#91); in-memory only
 
 	dotEnv map[string]map[string]string // collection dir -> parsed .env vars (#84); lazy, UI-goroutine only
+
+	lastDeleted *deletedNode // most recent folder/request delete, for one-step undo (#68)
 }
 
 // LoadError records a collection directory in the active workspace that failed

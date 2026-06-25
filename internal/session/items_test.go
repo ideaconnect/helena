@@ -119,6 +119,30 @@ func TestDuplicateRequest(t *testing.T) {
 	}
 }
 
+// TestDuplicateRequestVariablesIndependent verifies a duplicated request's
+// Variables slice (#82) is detached from the original — a regression for the
+// deepCopyRequest aliasing gap where the copy shared the original's backing
+// array.
+func TestDuplicateRequestVariablesIndependent(t *testing.T) {
+	s, _ := openUndoSession(t, model.Collection{
+		Name: "C",
+		Requests: []model.Request{{
+			ID: "r1", Name: "A", Method: model.GET, URL: "https://x/",
+			Variables: []model.Variable{{Enabled: true, Key: "k", Value: "orig"}},
+		}},
+	})
+	newID, err := s.DuplicateItem("0/r0")
+	if err != nil {
+		t.Fatalf("DuplicateItem: %v", err)
+	}
+	orig, _ := s.Tree().Request("0/r0")
+	cp, _ := s.Tree().Request(newID)
+	cp.Variables[0].Value = "changed"
+	if orig.Variables[0].Value != "orig" {
+		t.Errorf("duplicate aliased the original's Variables: original now %q", orig.Variables[0].Value)
+	}
+}
+
 // TestDuplicateFolderDeepCopies verifies that duplicating a folder produces an
 // independent subtree: edits to the original's nested request do not leak into
 // the copy.
