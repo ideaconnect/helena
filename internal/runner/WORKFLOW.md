@@ -1,5 +1,10 @@
 # runner — Workflow
 
+`runner.Run` has two entry points: the `helena run` CLI (below) and the in-app
+"Run collection" button (#89), which calls `runner.Run` off the UI goroutine and
+renders the `Report` as a per-request + aggregate dialog (`actionRunCollection`
+/ `showRunReport` in [internal/ui/runcollection.go](../ui/runcollection.go)).
+
 ## `helena run <collection-dir> [--env NAME]`
 1. `cmd/helena` dispatches the `run` subcommand before `flag.Parse`, so the GUI never starts.
 2. It builds an ephemeral `session.New("")` (no config persistence), `OpenCollection(dir)`, `SetActiveCollection(0)`, and `SetActiveEnv(name)` when `--env` is given.

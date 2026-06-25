@@ -116,6 +116,7 @@ type MainUI struct {
 	lastSelectedNodeID string
 	loading            bool // suppress write-back during programmatic widget updates
 	syncing            bool // suppress re-entrant URL<->Query sync (see query.go)
+	runningCollection  bool // a #89 collection run is in flight; ignore re-clicks
 
 	// Editor tab strip. tabs is the ordered set of open requests;
 	// activeTabIdx indexes the active one (-1 when none). tabBar holds the
@@ -399,6 +400,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	openBtn := tipButton("folder-open", "Open collection", m.openCollection)
 	importBtn := tipButton("download", "Import", m.actionImport)
 	colVarsBtn := tipButton("sliders", "Collection variables", m.editCollectionVariables)
+	runColBtn := tipButton("play", "Run collection", m.actionRunCollection)
 
 	// Node-action buttons operating on the selected tree node. Enable state is
 	// reconciled by refreshSidebarActions (rename/delete need any selection;
@@ -426,7 +428,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	fileIndicator := container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), fileIcon)
 	gap := canvas.NewRectangle(color.Transparent)
 	gap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
-	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn, colVarsBtn)
+	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn, colVarsBtn, runColBtn)
 	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename)
 	actionToolbar := container.NewThemeOverride(
 		container.NewBorder(nil, nil, leftGroup, rightGroup),
