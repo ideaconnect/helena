@@ -30,7 +30,7 @@ func (m *MainUI) actionExport() {
 		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
 	}
 
-	res := m.sess.ResolverForRequest(&req)
+	res := m.sess.ResolverForNode(m.currentRequestID, &req)
 	settings := m.sess.Settings()
 
 	// mkTab builds one read-only snippet tab with its own Copy button, so adding

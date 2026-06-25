@@ -229,6 +229,63 @@ func (t *Tree) containerAuth(id string) (model.Auth, bool) {
 	return folder.Auth, true
 }
 
+// AncestorVars returns the merged folder-scoped variables (#81) on every folder
+// above id, with nearer (inner) folders overriding outer ones. Collection-level
+// variables are a separate scope (see activeCollectionVars), so the collection
+// root is not consulted here. Disabled variables are skipped.
+func (t *Tree) AncestorVars(id string) map[string]string {
+	m := map[string]string{}
+	if id == "" {
+		return m
+	}
+	for p := parentID(id); p != id; p = parentID(p) {
+		if f, ok := t.containerFolder(p); ok {
+			for _, v := range f.Variables {
+				if v.Enabled {
+					if _, exists := m[v.Key]; !exists {
+						m[v.Key] = v.Value // walked inner-first, so the innermost folder wins
+					}
+				}
+			}
+		}
+		if p == "" {
+			break
+		}
+		id = p
+	}
+	return m
+}
+
+// containerFolder returns the folder addressed by id, or false for the
+// collection root, request nodes, and out-of-range indices.
+func (t *Tree) containerFolder(id string) (*model.Folder, bool) {
+	if id == "" {
+		return nil, false
+	}
+	parts := strings.Split(id, "/")
+	ci, err := strconv.Atoi(parts[0])
+	if err != nil || ci < 0 || ci >= len(t.cols) {
+		return nil, false
+	}
+	if len(parts) == 1 {
+		return nil, false // collection root, not a folder
+	}
+	folders := t.cols[ci].Folders
+	var folder *model.Folder
+	for _, p := range parts[1:] {
+		if !strings.HasPrefix(p, "f") {
+			return nil, false
+		}
+		fi, err := strconv.Atoi(p[1:])
+		if err != nil || fi < 0 || fi >= len(folders) {
+			return nil, false
+		}
+		folder = &folders[fi]
+		folders = folder.Folders
+	}
+	return folder, folder != nil
+}
+
 // CollectionIndex returns the collection index a node ID belongs to, or -1.
 func (t *Tree) CollectionIndex(id string) int {
 	seg := id

@@ -39,11 +39,15 @@ The active environment determines which variables `Resolver()` exposes for
    overrides a global of the same name, a collection value overrides `.env`, an
    environment value overrides the collection, and the overlay overrides all
    (see "Env overlay" below).
-   `ResolverForRequest(r)` inserts the request's own `Variables` (#82) between
-   the environment and the overlay, making them the highest **static** scope:
-   global < .env < collection < environment < request < overlay. The Send worker
-   layers the same scopes directly in `execution.go`; the URL preview and
-   exporter call `ResolverForRequest(currentRequest)`.
+   `ResolverForNode(nodeID, r)` inserts the folder-scoped `Variables` (#81) on
+   `nodeID`'s ancestor folders, then the request's own `Variables` (#82), between
+   the environment and the overlay — the full **static** chain:
+   global < .env < collection < environment < folder < request < overlay (inner
+   folders override outer ones). The URL preview and exporter call
+   `ResolverForNode(currentRequestID, currentRequest)`. The Send worker folds the
+   leaf's ancestor folder vars into its request scope (`withFolderVars` in
+   `send.go`) and layers the rest in `execution.go`; chain steps get their own
+   request/auth scopes but not folder vars (a documented v1 limitation).
 
 The `.env` file is read from the active collection's directory and cached per
 collection (the cache is dropped on `reload()`, so reopening a collection

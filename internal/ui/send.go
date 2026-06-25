@@ -21,6 +21,22 @@ import (
 	"github.com/idct/helena/internal/vars"
 )
 
+// withFolderVars prepends folder-scoped variables (#81) to a request's own
+// variables so the resolver's request scope includes them; the request's own
+// values come last and therefore win on a name clash (enabledRequestVars builds
+// a map where later entries override). Returns own unchanged when there are no
+// folder vars.
+func withFolderVars(folder map[string]string, own []model.Variable) []model.Variable {
+	if len(folder) == 0 {
+		return own
+	}
+	out := make([]model.Variable, 0, len(folder)+len(own))
+	for k, v := range folder {
+		out = append(out, model.Variable{Enabled: true, Key: k, Value: v})
+	}
+	return append(out, own...)
+}
+
 // requestTemplateStrings collects every {{...}}-bearing string in a request so
 // PromptVars can find the {{?Name}} markers a Send must ask the user about
 // (#86): URL, body content, and the values of enabled headers / params / form
@@ -245,6 +261,9 @@ func (m *MainUI) send() {
 		// Flatten any Inherit on the in-memory request copy via the session's
 		// ancestor walk so httpclient sees the concrete auth.
 		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
+		// Fold the leaf's ancestor folder variables (#81) into its request scope
+		// so {{vars}} resolve against them; the request's own values win.
+		req.Variables = withFolderVars(m.sess.SnapshotAncestorVars(m.currentRequestID), req.Variables)
 	} else {
 		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
 	}

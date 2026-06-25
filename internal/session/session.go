@@ -458,16 +458,56 @@ func (s *Session) globalVars() map[string]string { return enabledVars(s.cfg.Vari
 // Send worker (same rationale as SnapshotActiveCollectionVars).
 func (s *Session) SnapshotGlobalVars() map[string]string { return s.globalVars() }
 
-// ResolverForRequest is Resolver plus the given request's own variables (#82)
-// layered as the highest-precedence static scope — above environment and
-// collection, below only the runtime script overlay. Used by the URL preview
-// and exporter so they reflect per-request variables; a nil request behaves
-// exactly like Resolver. Call from the UI goroutine.
+// ResolverForRequest is ResolverForNode with no node context — it adds the
+// request's own variables (#82) but no folder scope (#81). A nil request
+// behaves exactly like Resolver. Call from the UI goroutine.
 func (s *Session) ResolverForRequest(r *model.Request) *vars.Resolver {
-	if r == nil {
-		return s.Resolver()
+	return s.ResolverForNode("", r)
+}
+
+// ResolverForNode is Resolver plus the folder-scoped variables (#81) on the
+// ancestors of nodeID and the request's own variables (#82), giving the full
+// static precedence chain: global < .env < collection < environment < folder <
+// request < script overlay. An empty nodeID contributes no folder scope; a nil
+// request contributes no request scope. Used by the URL preview and exporter so
+// they reflect folder + request variables. Call from the UI goroutine.
+func (s *Session) ResolverForNode(nodeID string, r *model.Request) *vars.Resolver {
+	var reqVars map[string]string
+	if r != nil {
+		reqVars = enabledVars(r.Variables)
 	}
-	return vars.New(s.globalVars(), s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), enabledVars(r.Variables), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+	return vars.New(
+		s.globalVars(), s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(),
+		s.Tree().AncestorVars(nodeID), reqVars, s.SnapshotEnvOverlay(),
+	).WithFallback(vars.Dynamic)
+}
+
+// SnapshotAncestorVars returns a copy of the merged folder-scoped variables
+// (#81) on the ancestors of nodeID, for the Send worker to layer beneath the
+// request scope. Empty nodeID (a scratch request) yields an empty map.
+func (s *Session) SnapshotAncestorVars(nodeID string) map[string]string {
+	return s.Tree().AncestorVars(nodeID)
+}
+
+// FolderVariables returns the folder-scoped variables (#81) of the folder at
+// nodeID, or false when nodeID does not address a folder.
+func (s *Session) FolderVariables(nodeID string) ([]model.Variable, bool) {
+	f, ok := s.Tree().containerFolder(nodeID)
+	if !ok {
+		return nil, false
+	}
+	return f.Variables, true
+}
+
+// SetFolderVariables replaces the folder's variables and persists its
+// collection. The folder pointer is live in s.cols (Tree shares the slice).
+func (s *Session) SetFolderVariables(nodeID string, variables []model.Variable) error {
+	f, ok := s.Tree().containerFolder(nodeID)
+	if !ok {
+		return fmt.Errorf("not a folder: %q", nodeID)
+	}
+	f.Variables = variables
+	return s.saveCollection(nodeCollectionIndex(nodeID))
 }
 
 // SetEnvOverlay records a script-set environment variable for the lifetime

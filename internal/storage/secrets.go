@@ -161,6 +161,7 @@ func eachFolderSecret(prefix string, folders []model.Folder, fn func(string, *st
 	for i := range folders {
 		p := fmt.Sprintf("%sf%d", prefix, i)
 		authSecrets(p, &folders[i].Auth, fn)
+		variableSecrets(p, folders[i].Variables, fn)
 		for j := range folders[i].Requests {
 			rp := fmt.Sprintf("%s/r%d", p, j)
 			authSecrets(rp, &folders[i].Requests[j].Auth, fn)
@@ -242,6 +243,11 @@ func cloneFolders(folders []model.Folder) []model.Folder {
 		f.Auth = cloneAuth(f.Auth)
 		f.Folders = cloneFolders(f.Folders)
 		f.Requests = cloneRequests(f.Requests)
+		if f.Variables != nil {
+			vs := make([]model.Variable, len(f.Variables))
+			copy(vs, f.Variables)
+			f.Variables = vs
+		}
 		out[i] = f
 	}
 	return out

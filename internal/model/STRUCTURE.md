@@ -49,6 +49,7 @@ A toggleable key/value pair shared by headers, query params, and form fields.
 ### `Folder` — [model.go:107](model.go#L107)
 A tree node grouping requests and sub-folders inside a collection. Recursive: a folder may contain folders.
 - `Auth` — applies to every descendant whose own `Auth` is `Inherit`.
+- `Variables` — folder-scoped variables (#81): a resolver scope between the environment and the request, with inner folders overriding outer ones.
 
 ### `Variable` — [model.go:115](model.go#L115)
 An environment variable.

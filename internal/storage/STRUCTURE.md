@@ -5,7 +5,7 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level doc comment. |
-| [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. `ocCollectionFile.Vars` carries collection-level variables (#80) and `ocRequestFile.Vars` request-scoped variables (#82); `varsToFile`/`fileToVars` map `[]model.Variable` ↔ `[]ocEnvVar`, shared by environments, the collection root, and requests. |
+| [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. `ocCollectionFile.Vars` carries collection-level variables (#80), `ocFolderFile.Vars` folder-scoped variables (#81), and `ocRequestFile.Vars` request-scoped variables (#82); `varsToFile`/`fileToVars` map `[]model.Variable` ↔ `[]ocEnvVar`, shared by environments, the collection root, folders, and requests. |
 | [store.go](store.go) | The `Save`/`Load` entry points and the directory walker, including the Extra round-trip, the collection-variables round-trip (#80), and the orphan sweep. |
 | [secrets.go](secrets.go) | Secret externalization (#42): split secret fields out of the collection YAML into a config-dir store on Save, merge back on Load. Covers request/folder/collection auth, environment variables, and Secret-flagged collection variables (#80). |
 | [storage_test.go](storage_test.go) | Round-trip, key-naming and docs-key tests. |
@@ -31,7 +31,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocAssertion` | one entry under `assertions:` (`source`, `op`, `expected`, `disabled`, + Extra) | `model.Assertion` (#88). `disabled` is the inverse of `Enabled`. |
 | `ocScripts` | the per-request `scripts:` block (`preRequest`, `postResponse`, + Extra) | `model.Scripts` |
 | `ocChainStep` | one entry under `chain:` (`alias`, `request`, `requestId`, + Extra) | `model.ChainStep`. `requestId` pins the ref to the target's persistent `Request.ID` so renames + folder moves don't break the chain. |
-| `ocFolderFile` | one `folder.yml` (info + auth + Extra) | `model.Folder` (name + auth; folders/requests are read from the surrounding directory) |
+| `ocFolderFile` | one `folder.yml` (info + auth + vars + Extra) | `model.Folder` (name + auth + `Variables` #81; folders/requests are read from the surrounding directory) |
 | `ocCollectionFile` | the root `opencollection.yml` (info + auth + Extra) | the top-level `model.Collection` (name + auth; the rest comes from the directory) |
 | `ocAuth` | the `auth:` block on requests / folders / collections (`type`, one sub-block, + Extra) | `model.Auth` |
 | `ocAuthBasic` / `ocAuthBearer` / `ocAuthAPIKey` / `ocAuthOAuth2` | the credential sub-blocks under `auth.<type>` | `model.BasicAuth` / `BearerAuth` / `APIKeyAuth` / `OAuth2Auth` |

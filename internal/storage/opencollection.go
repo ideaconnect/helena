@@ -102,6 +102,7 @@ type ocScripts struct {
 type ocFolderFile struct {
 	Info  ocInfo               `yaml:"info"`
 	Auth  *ocAuth              `yaml:"auth,omitempty"`
+	Vars  []ocEnvVar           `yaml:"vars,omitempty"` // folder-scoped variables (#81)
 	Extra map[string]yaml.Node `yaml:",inline"`
 }
 

@@ -177,6 +177,9 @@ type Folder struct {
 	Folders  []Folder  `json:"folders,omitempty"`
 	Requests []Request `json:"requests,omitempty"`
 	Auth     Auth      `json:"auth,omitempty"`
+	// Variables are folder-scoped variables (#81): a resolver scope between the
+	// environment and the request — nearer (inner) folders override outer ones.
+	Variables []Variable `json:"variables,omitempty"`
 }
 
 // Variable is a single environment variable.

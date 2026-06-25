@@ -42,11 +42,12 @@ type MainUI struct {
 	// Sidebar toolbar: node-action icon buttons operating on the selected tree
 	// node. rename / delete enable with any selection; clone with a folder or
 	// request; add request / folder fall back to the active collection.
-	sbAddReq    *ttwidget.Button
-	sbAddFolder *ttwidget.Button
-	sbRename    *ttwidget.Button
-	sbClone     *ttwidget.Button
-	sbDelete    *ttwidget.Button
+	sbAddReq     *ttwidget.Button
+	sbAddFolder  *ttwidget.Button
+	sbRename     *ttwidget.Button
+	sbClone      *ttwidget.Button
+	sbDelete     *ttwidget.Button
+	sbFolderVars *ttwidget.Button // folder-scoped variables (#81); gated to folder selection
 	// Drag-and-drop reordering of the collections tree (see treedrag.go).
 	treeRows      map[*treeRow]string // live row → bound node id, for drop hit-testing
 	treeSearch    *widget.Entry       // sidebar cross-collection search box (#67)
@@ -409,6 +410,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.sbAddFolder = tipButton("folder-plus", "New folder", m.actionNewFolder)
 	m.sbRename = tipButton("pen-to-square", "Rename", m.actionRename)
 	m.sbClone = tipButton("copy", "Duplicate", m.actionDuplicate)
+	m.sbFolderVars = tipButton("folder-tree", "Folder variables", m.editFolderVariables)
 	m.sbDelete = tipButton("trash-can", "Delete", m.actionDelete)
 	m.refreshSidebarActions()
 
@@ -429,7 +431,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	gap := canvas.NewRectangle(color.Transparent)
 	gap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
 	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn, colVarsBtn, runColBtn)
-	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename)
+	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename, m.sbFolderVars)
 	actionToolbar := container.NewThemeOverride(
 		container.NewBorder(nil, nil, leftGroup, rightGroup),
 		toolbarTheme{})
@@ -646,6 +648,7 @@ func (m *MainUI) refreshSidebarActions() {
 	// Clone duplicates a request or a folder (a node id contains "/"); whole
 	// collections aren't duplicable, so a collection selection leaves it off.
 	enableButton(m.sbClone, strings.Contains(sel, "/"))
+	enableButton(m.sbFolderVars, m.isFolderSelected())
 }
 
 // loadRequest populates every editor widget from req, with the loading flag set
@@ -818,7 +821,7 @@ func (m *MainUI) updateURLPreview() {
 		m.urlPreview.Hide()
 		return
 	}
-	resolved, missing := m.sess.ResolverForRequest(m.currentRequest).Resolve(m.URL.Text)
+	resolved, missing := m.sess.ResolverForNode(m.currentRequestID, m.currentRequest).Resolve(m.URL.Text)
 	// {{chain.<alias>...}} vars resolve at Send time (from chained-request
 	// results) and {{?Name}} prompt vars (#86) are collected at Send time, so
 	// don't flag either as unresolved in the live preview.

@@ -244,6 +244,7 @@ func saveItems(dir string, folders []model.Folder, requests []model.Request) err
 		ff := ocFolderFile{
 			Info: ocInfo{Name: f.Name, Type: "folder", Seq: i + 1},
 			Auth: authToFile(f.Auth),
+			Vars: varsToFile(f.Variables),
 		}
 		if prev, err := readFolderFile(filepath.Join(sub, folderFile)); err == nil {
 			ff.Extra = prev.Extra
@@ -548,11 +549,12 @@ func loadItems(dir string) ([]model.Folder, []model.Request, error) {
 				folderAuth = fileToAuth(ff.Auth)
 			}
 			fols = append(fols, seqFol{ff.Info.Seq, model.Folder{
-				ID:       model.NewID(),
-				Name:     ff.Info.Name,
-				Folders:  subFolders,
-				Requests: subRequests,
-				Auth:     folderAuth,
+				ID:        model.NewID(),
+				Name:      ff.Info.Name,
+				Folders:   subFolders,
+				Requests:  subRequests,
+				Auth:      folderAuth,
+				Variables: fileToVars(ff.Vars),
 			}})
 			continue
 		}
