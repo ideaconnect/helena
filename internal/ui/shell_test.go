@@ -30,8 +30,8 @@ func TestNewMainUIBuilds(t *testing.T) {
 	if m.Workspace.Selected != "Default" {
 		t.Errorf("workspace = %q, want Default", m.Workspace.Selected)
 	}
-	if len(m.Request.Items) != 8 || len(m.Response.Items) != 2 {
-		t.Errorf("tabs = %d/%d, want 8/2", len(m.Request.Items), len(m.Response.Items))
+	if len(m.Request.Items) != 9 || len(m.Response.Items) != 2 {
+		t.Errorf("tabs = %d/%d, want 9/2", len(m.Request.Items), len(m.Response.Items))
 	}
 
 	// Lay it out in a headless window to catch construction/layout panics.

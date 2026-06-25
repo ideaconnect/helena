@@ -27,7 +27,8 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocParam` | a query/path parameter (name/value/type/disabled + Extra) | `model.KeyValue` used for `model.Request.Params` |
 | `ocBody` | a request body (`type`, `data`, `filePath`, `contentType` + Extra) | `model.Body` (`Type`, `Content`, `FilePath`, `ContentType` #24) |
 | `ocHTTP` | the `http:` block of a request (method, url, headers, params, body, auth + Extra) | the HTTP-level fields of `model.Request` |
-| `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + vars + Extra) | `model.Request` |
+| `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + assertions + vars + Extra) | `model.Request` |
+| `ocAssertion` | one entry under `assertions:` (`source`, `op`, `expected`, `disabled`, + Extra) | `model.Assertion` (#88). `disabled` is the inverse of `Enabled`. |
 | `ocScripts` | the per-request `scripts:` block (`preRequest`, `postResponse`, + Extra) | `model.Scripts` |
 | `ocChainStep` | one entry under `chain:` (`alias`, `request`, `requestId`, + Extra) | `model.ChainStep`. `requestId` pins the ref to the target's persistent `Request.ID` so renames + folder moves don't break the chain. |
 | `ocFolderFile` | one `folder.yml` (info + auth + Extra) | `model.Folder` (name + auth; folders/requests are read from the surrounding directory) |
@@ -51,6 +52,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | [`fileToScripts`](opencollection.go) | `*ocScripts` → `model.Scripts`. Nil input produces the zero `Scripts` value (both hooks empty). |
 | [`chainToFile`](opencollection.go) | `[]model.ChainStep` → `[]ocChainStep`. Returns nil for an empty slice. |
 | [`fileToChain`](opencollection.go) | `[]ocChainStep` → `[]model.ChainStep`. Nil-safe; returns nil for an empty slice. |
+| [`assertionsToFile`](opencollection.go) / [`fileToAssertions`](opencollection.go) | `[]model.Assertion` ↔ `[]ocAssertion` (#88); nil for empty, `Enabled` ↔ `!Disabled`. |
 
 The model's `KeyValue.Enabled` is flipped to the DTO's `Disabled` and back so
 the on-disk representation matches OpenCollection's convention of recording

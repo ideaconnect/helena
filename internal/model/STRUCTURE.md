@@ -20,6 +20,7 @@ A single HTTP request as the user defined it.
 - `Auth` — own auth or `Inherit` from parent; see [auth.go](auth.go).
 - `Scripts` — pre/post JavaScript hooks; see `Scripts`.
 - `Chain` — ordered list of `ChainStep` before-hooks; see `ChainStep`.
+- `Assertions` — declarative response checks (#88): `[]Assertion` evaluated after Send by [internal/assertion](../assertion). Each is `{Enabled, Source, Op, Expected}`.
 - `Variables` — request-scoped variables (#82): the highest static resolver scope (above environment and collection; only the script overlay wins). Applied only when this request is sent.
 
 ### `ChainStep` — [model.go](model.go)

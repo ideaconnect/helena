@@ -113,6 +113,9 @@ type Request struct {
 	Auth    Auth        `json:"auth,omitempty"`    // own auth or Inherit from parent
 	Scripts Scripts     `json:"scripts,omitempty"` // pre/post JS hooks
 	Chain   []ChainStep `json:"chain,omitempty"`   // before-hooks (linear list)
+	// Assertions are declarative (no-code) response checks (#88), evaluated
+	// after Send and reported alongside test()/expect() results.
+	Assertions []Assertion `json:"assertions,omitempty"`
 	// Variables are request-scoped variables — the highest-precedence static
 	// scope (above environment and collection; only the runtime script overlay
 	// wins). They apply only when this request is the one being sent.
@@ -136,6 +139,17 @@ type ChainStep struct {
 	Alias     string `json:"alias"`
 	Request   string `json:"request"`
 	RequestID string `json:"requestId,omitempty"`
+}
+
+// Assertion is one declarative response check (#88). Source is an expression
+// over the response (e.g. "res.status", "res.body", "res.header.Content-Type",
+// "res.json.data.0.id"); Op is one of the evaluator's operators; Expected is
+// the comparison value (ignored for exists/notExists).
+type Assertion struct {
+	Enabled  bool   `json:"enabled"`
+	Source   string `json:"source"`
+	Op       string `json:"op"`
+	Expected string `json:"expected,omitempty"`
 }
 
 // Scripts holds the per-request JavaScript hooks the scripting runtime

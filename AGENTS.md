@@ -35,6 +35,7 @@ Top-level orientation:
 | [internal/scripting/](internal/scripting/) | goja JS runtime for per-request pre/post hooks. Mutable `request` in pre, read-only `request` + parsed `response` in post, `helena.env.*` overlay writes, `chain.<alias>` predecessor views. |
 | [internal/chain/](internal/chain/) | Per-request before-hooks runner. Recursive resolution with per-request alias scope, cycle detection, and an Executor/RequestFinder seam so the package stays free of httpclient/scripting/session deps. |
 | [internal/responsefmt/](internal/responsefmt/) | JSON/XML pretty-print (request-body validate/format) + header / size / duration formatting. |
+| [internal/assertion/](internal/assertion/) | Declarative (no-code) response-check evaluator (#88). |
 | [internal/importer/](internal/importer/) | OpenAPI / Swagger / WSDL + URL fetch. |
 | [internal/exporter/](internal/exporter/) | cURL / wget rendering. |
 | [internal/config/](internal/config/) | Persisted settings + UI state. |

@@ -29,6 +29,7 @@
 | [docs.go](docs.go) | `buildDocsTab` and `refreshDocsPreview` — per-request Markdown editor with rendered preview subtab. |
 | [scripts.go](scripts.go) | `buildScriptsTab` — the Pre-request / Post-response code editors and the read-only Console panel below. `loadScriptsTab` populates the editors during `loadRequest`; `setScriptConsole` renders the captured console output after each Send. |
 | [chain.go](chain.go) | `buildChainTab` — the list of (Alias, Request path) rows for declaring before-hooks. `loadChainTab` / `rebuildChainRows` / `addChainStep` / `buildChainRow` follow the same patterns as the Params and Headers tabs. |
+| [assertions.go](assertions.go) | `buildAssertionsTab` (#88) — the declarative-check rows (enabled / source / operator / expected). `loadAssertionsTab` / `rebuildAssertionRows` / `addAssertion` / `buildAssertionRow` mirror the Chain tab; results are evaluated by [internal/assertion](../assertion) in `ExecuteOnce` and shown in the Scripts console. |
 | [auth.go](auth.go) | `buildAuthTab`, `loadAuthTab`, `refreshAuthVisibility`, `refreshAuthInheritLabel`, and the `ensureBasic`/`ensureBearer`/`ensureAPIKey`/`ensureOAuth2` lazy allocators for the per-type sub-structs. |
 | [oauth2.go](oauth2.go) | `fyneAuthCodeStarter` — adapter that hands the authorization URL to `fyne.CurrentApp().OpenURL`. The `newAuthCodeStarter` package-level var lets tests swap in a fake. |
 | [theme.go](theme.go) | `ApplyTheme` (installs the custom theme pinned to the variant for the setting) plus `themeName` / `themeFromName` and `variantFor` (Helena `model.Theme` → `fyne.ThemeVariant`, used to repaint the response PrettyView on a theme switch). |
@@ -81,7 +82,7 @@ without infinite write-back loops.
 | `treeFilter` | `map[string]bool` | Visible node IDs when a search is active (from `Tree.Search`); nil means show everything. The tree's `childUIDs` callback intersects `ChildIDs` with this set. |
 | `dragActive` / `dragSrcID` / `dragLastAbs` | `bool` / `string` / `fyne.Position` | In-flight tree drag state (the dragged node and last pointer position), consumed on `DragEnd`. |
 | `dropIndicator` / `dropInto` | `*canvas.Rectangle` | Drag overlays in a `WithoutLayout` layer over the tree: a thin primary line for insert-between, an outlined box for drop-into-container. Hidden at rest. |
-| `Request` | `*container.AppTabs` | Request editor tabs, in order: Body, Auth, Headers, Query, Vars, Scripts, Chain, Docs. ("Query" = the query-string params, two-way synced with the URL field — see `query.go`; "Vars" = request-scoped variables, #82, see `requestvars.go`.) |
+| `Request` | `*container.AppTabs` | Request editor tabs, in order: Body, Auth, Headers, Query, Vars, Scripts, Chain, Assertions, Docs. ("Query" = the query-string params, two-way synced with the URL field — see `query.go`; "Vars" = request-scoped variables, #82, see `requestvars.go`; "Assertions" = declarative checks, #88, see `assertions.go`.) |
 | `Response` | `*container.AppTabs` | Response tabs: **Body** (the `pv` PrettyView + its toolbar) and **Headers**. `applyResponse` selects Body on each new response. |
 | `Status` | `*widget.Label` | Footer status line. |
 | `paramsRows` | `*fyne.Container` | VBox of KV rows for the **Query** tab (query-string params), two-way synced with the URL field via `applyURLEdit` / `syncURLFieldFromParams` (guarded by `syncing`). |

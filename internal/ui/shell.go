@@ -76,6 +76,7 @@ type MainUI struct {
 	postScriptEditor    *widget.Entry
 	scriptConsole       *widget.Entry
 	chainRows           *fyne.Container
+	assertionRows       *fyne.Container // declarative assertion rows (#88)
 
 	authType                                                          *widget.Select
 	authBasicUsername, authBasicPassword                              *widget.Entry
@@ -263,6 +264,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewTabItem("Vars", m.buildVarsTab()),
 		container.NewTabItem("Scripts", m.buildScriptsTab()),
 		container.NewTabItem("Chain", m.buildChainTab()),
+		container.NewTabItem("Assertions", m.buildAssertionsTab()),
 		container.NewTabItem("Docs", m.buildDocsTab()),
 	)
 
@@ -683,6 +685,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.loadAuthTab(nil)
 		m.loadScriptsTab(nil)
 		m.loadChainTab(nil)
+		m.loadAssertionsTab(nil)
 		m.urlPreview.Hide()
 		return
 	}
@@ -734,6 +737,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	m.loadAuthTab(req)
 	m.loadScriptsTab(req)
 	m.loadChainTab(req)
+	m.loadAssertionsTab(req)
 	m.updateURLPreview()
 }
 

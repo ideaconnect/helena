@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/idct/helena/internal/assertion"
 	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
 	"github.com/idct/helena/internal/model"
@@ -120,10 +121,15 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
 		scriptChain)
 	console = append(console, postRes.Console...)
-	// Surface test()/expect() outcomes (#87) in the Scripts console, combining
-	// any pre-request assertions with post-response ones. Formatted before the
-	// post-error check so partial results still show when a later throw aborts.
-	if tests := append(append([]scripting.TestResult(nil), preRes.Tests...), postRes.Tests...); len(tests) > 0 {
+	// Surface test()/expect() outcomes (#87) plus declarative assertions (#88)
+	// in the Scripts console, combining pre-request and post-response script
+	// tests with the assertion results. Formatted before the post-error check so
+	// partial results still show when a later throw aborts.
+	tests := append(append([]scripting.TestResult(nil), preRes.Tests...), postRes.Tests...)
+	for _, a := range assertion.Evaluate(r.Assertions, resp.StatusCode, resp.Headers, resp.Body) {
+		tests = append(tests, scripting.TestResult{Name: a.Name, Passed: a.Passed, Error: a.Error})
+	}
+	if len(tests) > 0 {
 		console = append(console, formatTestResults(tests)...)
 	}
 	if postErr != nil {

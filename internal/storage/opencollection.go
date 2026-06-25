@@ -58,13 +58,24 @@ type ocHTTP struct {
 }
 
 type ocRequestFile struct {
-	Info    ocInfo               `yaml:"info"`
-	HTTP    *ocHTTP              `yaml:"http,omitempty"`
-	Docs    string               `yaml:"docs,omitempty"` // free-form markdown
-	Scripts *ocScripts           `yaml:"scripts,omitempty"`
-	Chain   []ocChainStep        `yaml:"chain,omitempty"`
-	Vars    []ocEnvVar           `yaml:"vars,omitempty"` // request-scoped variables (#82)
-	Extra   map[string]yaml.Node `yaml:",inline"`        // catches settings, runtime, …
+	Info       ocInfo               `yaml:"info"`
+	HTTP       *ocHTTP              `yaml:"http,omitempty"`
+	Docs       string               `yaml:"docs,omitempty"` // free-form markdown
+	Scripts    *ocScripts           `yaml:"scripts,omitempty"`
+	Chain      []ocChainStep        `yaml:"chain,omitempty"`
+	Assertions []ocAssertion        `yaml:"assertions,omitempty"` // declarative checks (#88)
+	Vars       []ocEnvVar           `yaml:"vars,omitempty"`       // request-scoped variables (#82)
+	Extra      map[string]yaml.Node `yaml:",inline"`              // catches settings, runtime, …
+}
+
+// ocAssertion mirrors one declarative assertion row (#88). Disabled inverts the
+// model's Enabled to match the param/header `disabled` convention.
+type ocAssertion struct {
+	Source   string               `yaml:"source"`
+	Op       string               `yaml:"op"`
+	Expected string               `yaml:"expected,omitempty"`
+	Disabled bool                 `yaml:"disabled,omitempty"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
 // ocChainStep mirrors one entry under the on-disk `chain:` list. Extra
@@ -178,13 +189,39 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 	}
 	h.Auth = authToFile(r.Auth)
 	return ocRequestFile{
-		Info:    ocInfo{Name: r.Name, ID: r.ID, Type: "http", Seq: seq},
-		HTTP:    h,
-		Docs:    r.Docs,
-		Scripts: scriptsToFile(r.Scripts),
-		Chain:   chainToFile(r.Chain),
-		Vars:    varsToFile(r.Variables),
+		Info:       ocInfo{Name: r.Name, ID: r.ID, Type: "http", Seq: seq},
+		HTTP:       h,
+		Docs:       r.Docs,
+		Scripts:    scriptsToFile(r.Scripts),
+		Chain:      chainToFile(r.Chain),
+		Assertions: assertionsToFile(r.Assertions),
+		Vars:       varsToFile(r.Variables),
 	}
+}
+
+// assertionsToFile / fileToAssertions map between the model assertion slice and
+// the on-disk DTO (#88). Returns nil for an empty slice so clean requests stay
+// out of the YAML.
+func assertionsToFile(as []model.Assertion) []ocAssertion {
+	if len(as) == 0 {
+		return nil
+	}
+	out := make([]ocAssertion, len(as))
+	for i, a := range as {
+		out[i] = ocAssertion{Source: a.Source, Op: a.Op, Expected: a.Expected, Disabled: !a.Enabled}
+	}
+	return out
+}
+
+func fileToAssertions(ocs []ocAssertion) []model.Assertion {
+	if len(ocs) == 0 {
+		return nil
+	}
+	out := make([]model.Assertion, len(ocs))
+	for i, a := range ocs {
+		out[i] = model.Assertion{Enabled: !a.Disabled, Source: a.Source, Op: a.Op, Expected: a.Expected}
+	}
+	return out
 }
 
 // chainToFile mirrors a Chain slice into its on-disk DTO form. Returns
@@ -245,14 +282,15 @@ func fileToRequest(f ocRequestFile) model.Request {
 		id = model.NewID()
 	}
 	r := model.Request{
-		ID:        id,
-		Name:      f.Info.Name,
-		Body:      model.Body{Type: model.BodyNone},
-		Docs:      f.Docs,
-		Auth:      model.Auth{Type: model.AuthInherit},
-		Scripts:   fileToScripts(f.Scripts),
-		Chain:     fileToChain(f.Chain),
-		Variables: fileToVars(f.Vars),
+		ID:         id,
+		Name:       f.Info.Name,
+		Body:       model.Body{Type: model.BodyNone},
+		Docs:       f.Docs,
+		Auth:       model.Auth{Type: model.AuthInherit},
+		Scripts:    fileToScripts(f.Scripts),
+		Chain:      fileToChain(f.Chain),
+		Assertions: fileToAssertions(f.Assertions),
+		Variables:  fileToVars(f.Vars),
 	}
 	if f.HTTP == nil {
 		return r
