@@ -121,7 +121,17 @@ type ocAuth struct {
 	OAuth2 *ocAuthOAuth2        `yaml:"oauth2,omitempty"`
 	WSSE   *ocAuthWSSE          `yaml:"wsse,omitempty"`   // WS-Security UsernameToken (#79)
 	OAuth1 *ocAuthOAuth1        `yaml:"oauth1,omitempty"` // OAuth 1.0a HMAC-SHA1 (#77)
+	AWSV4  *ocAuthAWSV4         `yaml:"awsv4,omitempty"`  // AWS Signature v4 (#76)
 	Extra  map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthAWSV4 struct {
+	AccessKeyID     string               `yaml:"accessKeyId"`
+	SecretAccessKey string               `yaml:"secretAccessKey"`
+	Region          string               `yaml:"region,omitempty"`
+	Service         string               `yaml:"service,omitempty"`
+	SessionToken    string               `yaml:"sessionToken,omitempty"`
+	Extra           map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocAuthWSSE struct {
@@ -415,6 +425,16 @@ func authToFile(a model.Auth) *ocAuth {
 				TokenSecret:    a.OAuth1.TokenSecret,
 			}
 		}
+	case model.AuthAWSV4:
+		if a.AWSV4 != nil {
+			out.AWSV4 = &ocAuthAWSV4{
+				AccessKeyID:     a.AWSV4.AccessKeyID,
+				SecretAccessKey: a.AWSV4.SecretAccessKey,
+				Region:          a.AWSV4.Region,
+				Service:         a.AWSV4.Service,
+				SessionToken:    a.AWSV4.SessionToken,
+			}
+		}
 	}
 	return out
 }
@@ -462,6 +482,15 @@ func fileToAuth(f *ocAuth) model.Auth {
 			ConsumerSecret: f.OAuth1.ConsumerSecret,
 			Token:          f.OAuth1.Token,
 			TokenSecret:    f.OAuth1.TokenSecret,
+		}
+	}
+	if f.AWSV4 != nil {
+		a.AWSV4 = &model.AWSV4Auth{
+			AccessKeyID:     f.AWSV4.AccessKeyID,
+			SecretAccessKey: f.AWSV4.SecretAccessKey,
+			Region:          f.AWSV4.Region,
+			Service:         f.AWSV4.Service,
+			SessionToken:    f.AWSV4.SessionToken,
 		}
 	}
 	return a

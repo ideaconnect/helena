@@ -203,6 +203,10 @@ func authSecrets(prefix string, a *model.Auth, fn func(string, *string)) {
 		fn(prefix+"/auth/oauth1.consumerSecret", &a.OAuth1.ConsumerSecret)
 		fn(prefix+"/auth/oauth1.tokenSecret", &a.OAuth1.TokenSecret)
 	}
+	if a.AWSV4 != nil {
+		fn(prefix+"/auth/awsv4.secretAccessKey", &a.AWSV4.SecretAccessKey)
+		fn(prefix+"/auth/awsv4.sessionToken", &a.AWSV4.SessionToken)
+	}
 }
 
 // cloneForSecretSplit deep-copies exactly the parts splitSecrets mutates — the
@@ -245,6 +249,10 @@ func cloneAuth(a model.Auth) model.Auth {
 	if a.OAuth1 != nil {
 		b := *a.OAuth1
 		a.OAuth1 = &b
+	}
+	if a.AWSV4 != nil {
+		b := *a.AWSV4
+		a.AWSV4 = &b
 	}
 	return a
 }

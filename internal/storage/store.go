@@ -291,6 +291,9 @@ func mergeAuthExtras(next, prev *ocAuth) {
 	if next.OAuth1 != nil && prev.OAuth1 != nil {
 		next.OAuth1.Extra = prev.OAuth1.Extra
 	}
+	if next.AWSV4 != nil && prev.AWSV4 != nil {
+		next.AWSV4.Extra = prev.AWSV4.Extra
+	}
 }
 
 // mergeKVExtras pairs new and prev header rows by name and copies

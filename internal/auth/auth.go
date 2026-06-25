@@ -109,6 +109,16 @@ func ResolveValues(a model.Auth, resolve func(string) string) model.Auth {
 			cp.TokenSecret = resolve(cp.TokenSecret)
 			out.OAuth1 = &cp
 		}
+	case model.AuthAWSV4:
+		if a.AWSV4 != nil {
+			cp := *a.AWSV4
+			cp.AccessKeyID = resolve(cp.AccessKeyID)
+			cp.SecretAccessKey = resolve(cp.SecretAccessKey)
+			cp.Region = resolve(cp.Region)
+			cp.Service = resolve(cp.Service)
+			cp.SessionToken = resolve(cp.SessionToken)
+			out.AWSV4 = &cp
+		}
 	}
 	return out
 }
@@ -220,6 +230,24 @@ func Apply(ctx context.Context, req *http.Request, a model.Auth, resolver OAuth2
 			return err
 		}
 		req.Header.Set("Authorization", header)
+		return nil
+	case model.AuthAWSV4:
+		if a.AWSV4 == nil {
+			return nil
+		}
+		if req.Header.Get("Authorization") != "" {
+			return nil
+		}
+		amzDate := time.Now().UTC().Format("20060102T150405Z")
+		req.Header.Set("X-Amz-Date", amzDate)
+		if a.AWSV4.SessionToken != "" {
+			req.Header.Set("X-Amz-Security-Token", a.AWSV4.SessionToken)
+		}
+		payloadHash, err := awsPayloadHash(req)
+		if err != nil {
+			return err
+		}
+		req.Header.Set("Authorization", awsSigV4Header(req, a.AWSV4, amzDate, payloadHash))
 		return nil
 	default:
 		return fmt.Errorf("auth.Apply: unknown auth type %q", a.Type)

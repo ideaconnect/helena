@@ -5,6 +5,7 @@
 | File | Responsibility |
 | --- | --- |
 | [auth.go](auth.go) | `Resolve`, `ResolveValues`, `Apply`, `ErrOAuth2NotImplemented`. The synchronous core. |
+| [awssigv4.go](awssigv4.go) | AWS Signature v4 signing (#76): `awsSigV4Header` (canonical request + string-to-sign + AWS4-HMAC-SHA256), `awsCanonicalHeaders`/`awsCanonicalQuery`/`awsCanonicalURI`, `awsSigningKey`, `awsPayloadHash`, `awsURIEncode`. |
 | [oauth1.go](oauth1.go) | OAuth 1.0a HMAC-SHA1 signing (#77): `oauth1Header` (builds the `Authorization: OAuth` header), `oauth1Sign` (RFC 5849 §3.4 base string + HMAC), `oauth1BaseURL`, `oauth1FormBody`, `oauthEncode`. |
 | [oauth2.go](oauth2.go) | `OAuth2Resolver` interface, `TokenCache`, `TokenEntry`, `CacheKey`, `NewOAuth2Resolver`, `NewClientCredentialsResolver`, `FetchClientCredentialsToken`, and the unexported `cachingResolver` (with grant-dispatch in `Token`), `tokenResponse`, `parseTokenResponse`. |
 | [oauth2_authcode.go](oauth2_authcode.go) | `AuthCodeStarter` interface, `cachingResolver.authorizationCodeToken` (listener + state + PKCE + callback waiting), `exchangeAuthorizationCode`, `buildAuthCodeURL`, `pickListenAddr`, `randomURLToken`, and the `authCodeFlowTimeout` constant. |
@@ -54,6 +55,11 @@
   Created="…"` where `PasswordDigest = Base64(SHA1(nonce + created + password))`
   (`wsseHeader` / `wsseDigest`), plus a companion `Authorization: WSSE
   profile="UsernameToken"`. A user-set `X-WSSE` header short-circuits it.
+- `AuthAWSV4` (#76) → sets `X-Amz-Date` (and `X-Amz-Security-Token` when a
+  session token is configured), hashes the body, and writes an
+  `Authorization: AWS4-HMAC-SHA256 Credential=…, SignedHeaders=…,
+  Signature=…` header (`awsSigV4Header`). Region/Service default to
+  `us-east-1`/`service`. A user-set `Authorization` header short-circuits it.
 - Any other `Type` → returns a descriptive error so unknown values fail
   loudly rather than silently sending without auth.
 

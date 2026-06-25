@@ -18,6 +18,7 @@ const (
 	AuthOAuth2  AuthType = "oauth2"
 	AuthWSSE    AuthType = "wsse"   // WS-Security UsernameToken (#79)
 	AuthOAuth1  AuthType = "oauth1" // OAuth 1.0a, HMAC-SHA1 (#77)
+	AuthAWSV4   AuthType = "awsv4"  // AWS Signature Version 4 (#76)
 )
 
 // APIKeyPlacement chooses whether the API-Key credential rides on a request
@@ -53,6 +54,21 @@ type Auth struct {
 	OAuth2 *OAuth2Auth `json:"oauth2,omitempty"`
 	WSSE   *WSSEAuth   `json:"wsse,omitempty"`
 	OAuth1 *OAuth1Auth `json:"oauth1,omitempty"`
+	AWSV4  *AWSV4Auth  `json:"awsV4,omitempty"`
+}
+
+// AWSV4Auth carries AWS Signature Version 4 credentials (#76). On each send the
+// canonical request is signed (AWS4-HMAC-SHA256) and an `Authorization:
+// AWS4-HMAC-SHA256 …` header plus an `X-Amz-Date` header are emitted; a
+// SessionToken (for temporary STS credentials) is sent as `X-Amz-Security-Token`
+// and folded into the signature. Service/Region default to the common values
+// when blank. All fields run through the variable resolver before signing.
+type AWSV4Auth struct {
+	AccessKeyID     string `json:"accessKeyId"`
+	SecretAccessKey string `json:"secretAccessKey"`
+	Region          string `json:"region,omitempty"`
+	Service         string `json:"service,omitempty"`
+	SessionToken    string `json:"sessionToken,omitempty"`
 }
 
 // OAuth1Auth carries OAuth 1.0a credentials (#77). On each send the request is

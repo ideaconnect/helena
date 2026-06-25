@@ -12,7 +12,7 @@ import (
 
 // authTypeLabels keeps a stable display order for the auth Type dropdown
 // and maps human-friendly labels to model.AuthType values.
-var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security"}
+var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security", "AWS Signature v4"}
 
 var authTypeByLabel = map[string]model.AuthType{
 	"None":                model.AuthNone,
@@ -23,6 +23,7 @@ var authTypeByLabel = map[string]model.AuthType{
 	"OAuth 1.0a":          model.AuthOAuth1,
 	"OAuth 2.0":           model.AuthOAuth2,
 	"WS-Security":         model.AuthWSSE,
+	"AWS Signature v4":    model.AuthAWSV4,
 }
 
 var authLabelByType = map[model.AuthType]string{
@@ -34,6 +35,7 @@ var authLabelByType = map[model.AuthType]string{
 	model.AuthOAuth1:  "OAuth 1.0a",
 	model.AuthOAuth2:  "OAuth 2.0",
 	model.AuthWSSE:    "WS-Security",
+	model.AuthAWSV4:   "AWS Signature v4",
 }
 
 var apiKeyPlacementLabels = []string{"Header", "Query"}
@@ -105,6 +107,24 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.ensureOAuth1().TokenSecret = s
 	})
 	m.authOAuth1TokenSecret.Password = true
+
+	m.authAWSV4AccessKey = m.newAuthEntry("access key id", func(s string) {
+		m.ensureAWSV4().AccessKeyID = s
+	})
+	m.authAWSV4SecretKey = m.newAuthEntry("secret access key", func(s string) {
+		m.ensureAWSV4().SecretAccessKey = s
+	})
+	m.authAWSV4SecretKey.Password = true
+	m.authAWSV4Region = m.newAuthEntry("region (default us-east-1)", func(s string) {
+		m.ensureAWSV4().Region = s
+	})
+	m.authAWSV4Service = m.newAuthEntry("service (e.g. s3, execute-api)", func(s string) {
+		m.ensureAWSV4().Service = s
+	})
+	m.authAWSV4SessionToken = m.newAuthEntry("session token (optional, STS)", func(s string) {
+		m.ensureAWSV4().SessionToken = s
+	})
+	m.authAWSV4SessionToken.Password = true
 
 	m.authAPIKeyName = m.newAuthEntry("key name (e.g. X-API-Key)", func(s string) {
 		m.ensureAPIKey().Name = s
@@ -196,11 +216,18 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		widget.NewFormItem("Token", m.authOAuth1Token),
 		widget.NewFormItem("Token Secret", m.authOAuth1TokenSecret),
 	)
+	m.authAWSV4Panel = widget.NewForm(
+		widget.NewFormItem("Access Key ID", m.authAWSV4AccessKey),
+		widget.NewFormItem("Secret Access Key", m.authAWSV4SecretKey),
+		widget.NewFormItem("Region", m.authAWSV4Region),
+		widget.NewFormItem("Service", m.authAWSV4Service),
+		widget.NewFormItem("Session Token", m.authAWSV4SessionToken),
+	)
 
 	m.authFormsStack = container.NewStack(
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
-		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel,
+		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel, m.authAWSV4Panel,
 	)
 
 	top := container.NewBorder(nil, nil, widget.NewLabel("Type:"), nil, m.authType)
@@ -250,6 +277,13 @@ func (m *MainUI) ensureOAuth1() *model.OAuth1Auth {
 	return m.currentRequest.Auth.OAuth1
 }
 
+func (m *MainUI) ensureAWSV4() *model.AWSV4Auth {
+	if m.currentRequest.Auth.AWSV4 == nil {
+		m.currentRequest.Auth.AWSV4 = &model.AWSV4Auth{}
+	}
+	return m.currentRequest.Auth.AWSV4
+}
+
 func (m *MainUI) ensureAPIKey() *model.APIKeyAuth {
 	if m.currentRequest.Auth.APIKey == nil {
 		m.currentRequest.Auth.APIKey = &model.APIKeyAuth{Placement: model.APIKeyHeader}
@@ -274,7 +308,7 @@ func (m *MainUI) refreshAuthVisibility() {
 	panels := []fyne.CanvasObject{
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
-		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel,
+		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel, m.authAWSV4Panel,
 	}
 	for _, p := range panels {
 		p.Hide()
@@ -297,6 +331,8 @@ func (m *MainUI) refreshAuthVisibility() {
 		active = m.authOAuth2Panel
 	case model.AuthWSSE:
 		active = m.authWSSEPanel
+	case model.AuthAWSV4:
+		active = m.authAWSV4Panel
 	default:
 		active = m.authInheritPanel
 	}
@@ -345,6 +381,11 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authOAuth1ConsumerSecret.SetText("")
 		m.authOAuth1Token.SetText("")
 		m.authOAuth1TokenSecret.SetText("")
+		m.authAWSV4AccessKey.SetText("")
+		m.authAWSV4SecretKey.SetText("")
+		m.authAWSV4Region.SetText("")
+		m.authAWSV4Service.SetText("")
+		m.authAWSV4SessionToken.SetText("")
 		m.authAPIKeyName.SetText("")
 		m.authAPIKeyValue.SetText("")
 		m.authAPIKeyPlacement.SetSelected("Header")
@@ -399,6 +440,19 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authOAuth1ConsumerSecret.SetText("")
 		m.authOAuth1Token.SetText("")
 		m.authOAuth1TokenSecret.SetText("")
+	}
+	if v := req.Auth.AWSV4; v != nil {
+		m.authAWSV4AccessKey.SetText(v.AccessKeyID)
+		m.authAWSV4SecretKey.SetText(v.SecretAccessKey)
+		m.authAWSV4Region.SetText(v.Region)
+		m.authAWSV4Service.SetText(v.Service)
+		m.authAWSV4SessionToken.SetText(v.SessionToken)
+	} else {
+		m.authAWSV4AccessKey.SetText("")
+		m.authAWSV4SecretKey.SetText("")
+		m.authAWSV4Region.SetText("")
+		m.authAWSV4Service.SetText("")
+		m.authAWSV4SessionToken.SetText("")
 	}
 	if k := req.Auth.APIKey; k != nil {
 		m.authAPIKeyName.SetText(k.Name)
