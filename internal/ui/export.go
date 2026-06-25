@@ -30,7 +30,7 @@ func (m *MainUI) actionExport() {
 		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
 	}
 
-	res := m.sess.Resolver()
+	res := m.sess.ResolverForRequest(&req)
 	settings := m.sess.Settings()
 
 	curlEntry := newSnippetEntry(exporter.ToCurl(req, res, settings))

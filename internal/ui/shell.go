@@ -249,6 +249,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewTabItem("Auth", m.buildAuthTab()),
 		container.NewTabItem("Headers", headersTab),
 		container.NewTabItem("Query", paramsTab),
+		container.NewTabItem("Vars", m.buildVarsTab()),
 		container.NewTabItem("Scripts", m.buildScriptsTab()),
 		container.NewTabItem("Chain", m.buildChainTab()),
 		container.NewTabItem("Docs", m.buildDocsTab()),
@@ -764,7 +765,7 @@ func (m *MainUI) updateURLPreview() {
 		m.urlPreview.Hide()
 		return
 	}
-	resolved, missing := m.sess.Resolver().Resolve(m.URL.Text)
+	resolved, missing := m.sess.ResolverForRequest(m.currentRequest).Resolve(m.URL.Text)
 	// {{chain.<alias>...}} vars only resolve at Send time (from chained-request
 	// results), so don't flag them as unresolved in the live preview.
 	missing = slices.DeleteFunc(missing, func(n string) bool {

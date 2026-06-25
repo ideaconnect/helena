@@ -90,6 +90,7 @@ when displaying or sending requests.
   selection moves to the first remaining env (or clears) when the active one goes.
 - `Session.SetActiveEnvironmentVariables(variables []model.Variable)`
 - `Session.Resolver() *vars.Resolver` — ordered scopes (collection variables < active environment < script overlay) plus the dynamic-variable fallback (`{{$guid}}` etc.). `SnapshotActiveCollectionVars` / `SnapshotActiveEnvVars` capture the lower scopes for the Send worker.
+- `Session.ResolverForRequest(r *model.Request) *vars.Resolver` — `Resolver` plus the request's own variables (#82) layered as the highest static scope (collection < environment < request < script overlay). A nil request behaves like `Resolver`. Used by the URL preview and exporter; the Send worker layers the request scope itself in `execution.go`.
 - `ParseEnvVars(text string) []model.Variable` — `"key = value"` line text
   to variables; `#`-prefixed lines are disabled.
 - `FormatEnvVars(vs []model.Variable) string` — inverse of `ParseEnvVars`.

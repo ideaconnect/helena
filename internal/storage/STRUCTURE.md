@@ -5,7 +5,7 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level doc comment. |
-| [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. `ocCollectionFile.Vars` carries collection-level variables (#80); `varsToFile`/`fileToVars` map `[]model.Variable` ↔ `[]ocEnvVar`, shared by environments and the collection root. |
+| [opencollection.go](opencollection.go) | DTO structs that mirror the OpenCollection YAML schema, plus the small `model` ↔ DTO converters. `ocCollectionFile.Vars` carries collection-level variables (#80) and `ocRequestFile.Vars` request-scoped variables (#82); `varsToFile`/`fileToVars` map `[]model.Variable` ↔ `[]ocEnvVar`, shared by environments, the collection root, and requests. |
 | [store.go](store.go) | The `Save`/`Load` entry points and the directory walker, including the Extra round-trip, the collection-variables round-trip (#80), and the orphan sweep. |
 | [secrets.go](secrets.go) | Secret externalization (#42): split secret fields out of the collection YAML into a config-dir store on Save, merge back on Load. Covers request/folder/collection auth, environment variables, and Secret-flagged collection variables (#80). |
 | [storage_test.go](storage_test.go) | Round-trip, key-naming and docs-key tests. |
@@ -27,7 +27,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocParam` | a query/path parameter (name/value/type/disabled + Extra) | `model.KeyValue` used for `model.Request.Params` |
 | `ocBody` | a request body (`type`, `data` + Extra) | `model.Body` (`Type`, `Content`) |
 | `ocHTTP` | the `http:` block of a request (method, url, headers, params, body, auth + Extra) | the HTTP-level fields of `model.Request` |
-| `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + Extra) | `model.Request` |
+| `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + vars + Extra) | `model.Request` |
 | `ocScripts` | the per-request `scripts:` block (`preRequest`, `postResponse`, + Extra) | `model.Scripts` |
 | `ocChainStep` | one entry under `chain:` (`alias`, `request`, `requestId`, + Extra) | `model.ChainStep`. `requestId` pins the ref to the target's persistent `Request.ID` so renames + folder moves don't break the chain. |
 | `ocFolderFile` | one `folder.yml` (info + auth + Extra) | `model.Folder` (name + auth; folders/requests are read from the surrounding directory) |
@@ -62,7 +62,7 @@ the negated form.
 | --- | --- |
 | `Save` | Public entry. Stages the whole collection into `<dir>.helena-save` then atomically swaps it into place, so a mid-write failure leaves `dir` untouched (#109). |
 | `copyTree` | Recursively copies `dir` into the staging dir so the Extra round-trip can read prior files. |
-| `splitSecrets` / `applySecrets` (secrets.go) | Externalize secret fields out of the collection YAML on Save and merge them back on Load (#42). `eachSecret` walks the secret-bearing fields with positional keys; `writeSecrets`/`readSecrets`/`secretsPath` own the per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR` / the `secretsDirOverride` test seam); `cloneForSecretSplit` deep-copies the mutated parts so the live model keeps its credentials. |
+| `splitSecrets` / `applySecrets` (secrets.go) | Externalize secret fields out of the collection YAML on Save and merge them back on Load (#42). `eachSecret` walks the secret-bearing fields with positional keys (auth credentials, environment + collection variables, and per-request variables #82 via `variableSecrets`); `writeSecrets`/`readSecrets`/`secretsPath` own the per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR` / the `secretsDirOverride` test seam); `cloneForSecretSplit` deep-copies the mutated parts so the live model keeps its credentials. |
 | `saveInPlace` | The non-atomic write logic (root file, environments, items, sweep) that `Save` runs against the staging dir. |
 | `Load` | Public entry, reads the root file, environments and items. |
 | `saveItems` | Recursive: writes one container (collection root or folder) and recurses into subfolders. |

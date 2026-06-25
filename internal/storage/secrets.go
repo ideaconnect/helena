@@ -136,7 +136,9 @@ func applySecrets(c *model.Collection, secrets map[string]string) {
 func eachSecret(c *model.Collection, fn func(key string, val *string)) {
 	authSecrets("col", &c.Auth, fn)
 	for i := range c.Requests {
-		authSecrets(fmt.Sprintf("r%d", i), &c.Requests[i].Auth, fn)
+		prefix := fmt.Sprintf("r%d", i)
+		authSecrets(prefix, &c.Requests[i].Auth, fn)
+		variableSecrets(prefix, c.Requests[i].Variables, fn)
 	}
 	eachFolderSecret("", c.Folders, fn)
 	for i := range c.Environments {
@@ -160,9 +162,23 @@ func eachFolderSecret(prefix string, folders []model.Folder, fn func(string, *st
 		p := fmt.Sprintf("%sf%d", prefix, i)
 		authSecrets(p, &folders[i].Auth, fn)
 		for j := range folders[i].Requests {
-			authSecrets(fmt.Sprintf("%s/r%d", p, j), &folders[i].Requests[j].Auth, fn)
+			rp := fmt.Sprintf("%s/r%d", p, j)
+			authSecrets(rp, &folders[i].Requests[j].Auth, fn)
+			variableSecrets(rp, folders[i].Requests[j].Variables, fn)
 		}
 		eachFolderSecret(p+"/", folders[i].Folders, fn)
+	}
+}
+
+// variableSecrets visits each secret-flagged variable in vars, keyed
+// positionally under prefix (e.g. "r0/v1"). Used for request-scoped
+// variables (#82); environment and collection variables have their own
+// dedicated keying in eachSecret.
+func variableSecrets(prefix string, vars []model.Variable, fn func(string, *string)) {
+	for j := range vars {
+		if vars[j].Secret {
+			fn(fmt.Sprintf("%s/v%d", prefix, j), &vars[j].Value)
+		}
 	}
 }
 
@@ -238,6 +254,11 @@ func cloneRequests(requests []model.Request) []model.Request {
 	out := make([]model.Request, len(requests))
 	for i, r := range requests {
 		r.Auth = cloneAuth(r.Auth)
+		if r.Variables != nil {
+			vs := make([]model.Variable, len(r.Variables))
+			copy(vs, r.Variables)
+			r.Variables = vs
+		}
 		out[i] = r
 	}
 	return out

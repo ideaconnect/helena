@@ -37,6 +37,11 @@ The active environment determines which variables `Resolver()` exposes for
    `vars.Dynamic` fallback for `{{$guid}}`/`{{$timestamp}}`/… (#85). So an
    environment value overrides a collection value of the same name; the overlay
    overrides both (see "Env overlay" below).
+   `ResolverForRequest(r)` inserts the request's own `Variables` (#82) between
+   the environment and the overlay, making them the highest **static** scope:
+   collection < environment < request < overlay. The Send worker layers the
+   same request scope directly in `execution.go`; the URL preview and exporter
+   call `ResolverForRequest(currentRequest)`.
 
 `ActiveEnvironment()` resolves by name (not index) into the active
 collection's `Environments`, so editing an environment's name through the

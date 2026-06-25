@@ -107,6 +107,10 @@ type Request struct {
 	Auth    Auth        `json:"auth,omitempty"`    // own auth or Inherit from parent
 	Scripts Scripts     `json:"scripts,omitempty"` // pre/post JS hooks
 	Chain   []ChainStep `json:"chain,omitempty"`   // before-hooks (linear list)
+	// Variables are request-scoped variables — the highest-precedence static
+	// scope (above environment and collection; only the runtime script overlay
+	// wins). They apply only when this request is the one being sent.
+	Variables []Variable `json:"variables,omitempty"`
 }
 
 // ChainStep names another request to execute before this one, binding

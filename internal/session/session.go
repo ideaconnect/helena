@@ -434,6 +434,18 @@ func (s *Session) Resolver() *vars.Resolver {
 	return vars.New(s.activeCollectionVars(), s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
 
+// ResolverForRequest is Resolver plus the given request's own variables (#82)
+// layered as the highest-precedence static scope — above environment and
+// collection, below only the runtime script overlay. Used by the URL preview
+// and exporter so they reflect per-request variables; a nil request behaves
+// exactly like Resolver. Call from the UI goroutine.
+func (s *Session) ResolverForRequest(r *model.Request) *vars.Resolver {
+	if r == nil {
+		return s.Resolver()
+	}
+	return vars.New(s.activeCollectionVars(), s.activeEnvVars(), enabledVars(r.Variables), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+}
+
 // SetEnvOverlay records a script-set environment variable for the lifetime
 // of the process. Per the Helena scripting contract (AGENTS invariant 9),
 // these never persist to the collection's environment file. Empty name is
@@ -527,11 +539,18 @@ func (s *Session) SnapshotActiveEnvVars() map[string]string {
 // variables (#80). They form the resolver scope BELOW the environment, so an
 // environment value of the same name overrides a collection value.
 func (s *Session) activeCollectionVars() map[string]string {
-	m := map[string]string{}
 	if s.activeCol < 0 || s.activeCol >= len(s.cols) {
-		return m
+		return map[string]string{}
 	}
-	for _, v := range s.cols[s.activeCol].Variables {
+	return enabledVars(s.cols[s.activeCol].Variables)
+}
+
+// enabledVars flattens a Variable slice into a name->value map, skipping
+// disabled rows. Shared by the collection-, environment-, and request-scope
+// resolver inputs.
+func enabledVars(vs []model.Variable) map[string]string {
+	m := make(map[string]string, len(vs))
+	for _, v := range vs {
 		if v.Enabled {
 			m[v.Key] = v.Value
 		}

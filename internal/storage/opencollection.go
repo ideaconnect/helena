@@ -61,7 +61,8 @@ type ocRequestFile struct {
 	Docs    string               `yaml:"docs,omitempty"` // free-form markdown
 	Scripts *ocScripts           `yaml:"scripts,omitempty"`
 	Chain   []ocChainStep        `yaml:"chain,omitempty"`
-	Extra   map[string]yaml.Node `yaml:",inline"` // catches settings, runtime, …
+	Vars    []ocEnvVar           `yaml:"vars,omitempty"` // request-scoped variables (#82)
+	Extra   map[string]yaml.Node `yaml:",inline"`        // catches settings, runtime, …
 }
 
 // ocChainStep mirrors one entry under the on-disk `chain:` list. Extra
@@ -180,6 +181,7 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 		Docs:    r.Docs,
 		Scripts: scriptsToFile(r.Scripts),
 		Chain:   chainToFile(r.Chain),
+		Vars:    varsToFile(r.Variables),
 	}
 }
 
@@ -241,13 +243,14 @@ func fileToRequest(f ocRequestFile) model.Request {
 		id = model.NewID()
 	}
 	r := model.Request{
-		ID:      id,
-		Name:    f.Info.Name,
-		Body:    model.Body{Type: model.BodyNone},
-		Docs:    f.Docs,
-		Auth:    model.Auth{Type: model.AuthInherit},
-		Scripts: fileToScripts(f.Scripts),
-		Chain:   fileToChain(f.Chain),
+		ID:        id,
+		Name:      f.Info.Name,
+		Body:      model.Body{Type: model.BodyNone},
+		Docs:      f.Docs,
+		Auth:      model.Auth{Type: model.AuthInherit},
+		Scripts:   fileToScripts(f.Scripts),
+		Chain:     fileToChain(f.Chain),
+		Variables: fileToVars(f.Vars),
 	}
 	if f.HTTP == nil {
 		return r

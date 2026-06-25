@@ -83,11 +83,13 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		return chain.View{}, console, fmt.Errorf("pre-script: %w", preErr)
 	}
 
-	// The chain fallback lets this request's URL / params / headers / body /
-	// auth use {{chain.<alias>.response.json.token}}-style templates, scoped to
-	// this request's own chain aliases (same map the pre-script saw); Dynamic
-	// adds Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
-	resolver := vars.New(e.colSnap, e.envSnap, e.sess.SnapshotEnvOverlay()).
+	// Scopes low->high: collection (#80) < env < this request's own
+	// variables (#82, highest static) < script overlay. The chain fallback
+	// lets this request's URL / params / headers / body / auth use
+	// {{chain.<alias>.response.json.token}}-style templates, scoped to this
+	// request's own chain aliases (same map the pre-script saw); Dynamic adds
+	// Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
+	resolver := vars.New(e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.sess.SnapshotEnvOverlay()).
 		WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {
