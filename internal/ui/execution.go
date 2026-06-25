@@ -120,10 +120,33 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
 		scriptChain)
 	console = append(console, postRes.Console...)
+	// Surface test()/expect() outcomes (#87) in the Scripts console, combining
+	// any pre-request assertions with post-response ones. Formatted before the
+	// post-error check so partial results still show when a later throw aborts.
+	if tests := append(append([]scripting.TestResult(nil), preRes.Tests...), postRes.Tests...); len(tests) > 0 {
+		console = append(console, formatTestResults(tests)...)
+	}
 	if postErr != nil {
 		return view, console, fmt.Errorf("post-script: %w", postErr)
 	}
 	return view, console, nil
+}
+
+// formatTestResults renders test()/expect() outcomes (#87) as console-style
+// lines plus a one-line summary, so assertions surface in the Scripts console
+// panel without a new UI surface.
+func formatTestResults(tests []scripting.TestResult) []string {
+	lines := make([]string, 0, len(tests)+1)
+	passed := 0
+	for _, t := range tests {
+		if t.Passed {
+			passed++
+			lines = append(lines, "PASS  "+t.Name)
+		} else {
+			lines = append(lines, "FAIL  "+t.Name+" — "+t.Error)
+		}
+	}
+	return append(lines, fmt.Sprintf("Tests: %d passed, %d failed", passed, len(tests)-passed))
 }
 
 // chainViewToScripting bridges chain.View to scripting.ChainView so

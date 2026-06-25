@@ -102,6 +102,8 @@ Bound globals in both phases:
 | `console.info(...)` | Same as `log`. |
 | `console.warn(...)` | Prefixes the line with `WARN: `. |
 | `console.error(...)` | Prefixes the line with `ERROR: `. |
+| `test(name, fn)` | Runs `fn` and records a pass/fail into `Result.Tests` (#87). A thrown matcher error (or any throw) → fail with its message; otherwise pass. |
+| `expect(actual)` | Returns a Chai-like matcher chain (each negatable via `.not`): `toBe`, `toEqual`, `toBeTruthy`, `toBeFalsy`, `toBeNull`, `toBeDefined`, `toBeUndefined`, `toContain`, `toHaveLength`, `toBeGreaterThan`, `toBeLessThan`. A failed matcher throws, so it must be called inside a `test()` to be recorded. |
 
 Pre-request additionally binds a **mutable** `request`:
 

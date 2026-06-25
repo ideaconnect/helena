@@ -56,12 +56,22 @@ func New(env EnvBridge) *Runtime {
 	return &Runtime{env: env}
 }
 
-// Result captures script-emitted console output. Errors thrown inside
-// the script are returned via err from Run*, but any console lines
-// emitted before the throw are still in Result so the UI can show the
-// user how far the script got.
+// Result captures script-emitted console output and test() assertions.
+// Errors thrown inside the script are returned via err from Run*, but any
+// console lines and test results recorded before the throw are still in
+// Result so the UI can show the user how far the script got.
 type Result struct {
 	Console []string
+	Tests   []TestResult // test()/expect() assertion outcomes (#87)
+}
+
+// TestResult is one test(name, fn) outcome (#87). Passed is false when an
+// expect() matcher (or any throw) fired inside the test body; Error then holds
+// the failure message.
+type TestResult struct {
+	Name   string
+	Passed bool
+	Error  string
 }
 
 // ResponseInput is the data scripting binds as the post-response
@@ -108,6 +118,9 @@ func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Re
 		return *res, err
 	}
 	bindConsole(vm, res)
+	if err := bindTest(vm, res); err != nil {
+		return *res, err
+	}
 	reqObj := requestToObject(vm, r)
 	if err := vm.Set("request", reqObj); err != nil {
 		return *res, err
@@ -139,6 +152,9 @@ func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.R
 		return *res, err
 	}
 	bindConsole(vm, res)
+	if err := bindTest(vm, res); err != nil {
+		return *res, err
+	}
 	if err := vm.Set("request", requestToObject(vm, &r)); err != nil {
 		return *res, err
 	}

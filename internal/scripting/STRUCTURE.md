@@ -7,6 +7,8 @@
 | [scripting.go](scripting.go) | Package doc, public types (`Runtime`, `Result`, `EnvBridge`, `ResponseInput`), constructor `New`, and the two entry points `RunPreRequest` / `RunPostResponse`. |
 | [bindings.go](bindings.go) | All internal binding helpers: `bindHelena`, `bindConsole`, `stringify`, `runWithTimeout`, `requestToObject` / `writeBackRequest` / `mergeKVFromObject`, `responseToObject`, `tryParseJSON`. |
 | [helpers.go](helpers.go) | `bindHelpers` — the curated, pure-compute `helena.uuid` / `helena.hash.*` / `helena.date.*` surface — and the local `scriptUUID` formatter. |
+| [assert.go](assert.go) | `bindTest` (#87) — the `__helenaRecordTest` collector that appends to `Result.Tests`, plus the JS `testPrelude` that defines the global `test()` runner and the `expect()` matcher chain. |
+| [assert_test.go](assert_test.go) | Pass/fail recording, the matcher subset + `.not`, throw-in-test, and pre-request availability. |
 | [xml.go](xml.go) | `tryParseXML` and the recursive `readXMLElement` helper that converts response XML bodies into a JS-friendly nested map. |
 | [helpers_test.go](helpers_test.go) | Known-answer tests for the hash/HMAC digests, UUID v4 shape + randomness, RFC 3339 date / Unix timestamp, and helper availability in the post-response phase. |
 | [scripting_test.go](scripting_test.go) | The full behavioural suite — 18 tests covering both phases, env bridge writes, console capture, JSON / XML parsing, timeout, cancellation, error propagation. |
@@ -41,13 +43,24 @@ stub.
 ```go
 type Result struct {
     Console []string
+    Tests   []TestResult // test()/expect() outcomes (#87)
+}
+
+type TestResult struct {
+    Name   string
+    Passed bool
+    Error  string
 }
 ```
 
-One slice entry per `console.log` / `info` / `warn` / `error` call.
-Errors thrown inside the script are returned as the `error` return
-from `Run*`; the partial `Console` accumulated before the throw still
-comes back so the UI can show users how far the script got.
+`Console` holds one entry per `console.log` / `info` / `warn` / `error`
+call; `Tests` holds one entry per `test(name, fn)` call (#87), with
+`Passed` false and `Error` set when an `expect()` matcher or any throw
+fired inside the body. Errors thrown at the top level (outside a
+`test`) are returned as the `error` return from `Run*`; the partial
+`Console` + `Tests` accumulated before the throw still come back so the
+UI can show users how far the script got. The UI renders `Tests` as
+`PASS` / `FAIL` lines plus a summary in the Scripts console.
 
 ### `ResponseInput` ([scripting.go](scripting.go))
 
@@ -71,6 +84,7 @@ tests.
 | `bindHelena` | Attaches `helena.env.{get,set}` and `helena.vars.get` to the VM (all flow through `Runtime.env`), then calls `bindHelpers` to add the curated helper surface to the same `helena` object. |
 | `bindHelpers` | Attaches `helena.uuid()`, `helena.hash.{md5,sha1,sha256,sha512,hmacSha1,hmacSha256}`, and `helena.date.{now,timestamp}`. Pure-compute (crypto/hash, `crypto/rand`, clock); no I/O, so the sandbox boundary is unchanged. |
 | `bindConsole` | Attaches `console.{log,info,warn,error}`. Each emits one space-joined line into `Result.Console`. |
+| `bindTest` | Attaches `test()` / `expect()` (#87): binds the Go `__helenaRecordTest` collector (appends to `Result.Tests`) and runs `testPrelude`, the JS that defines the runner + matcher chain. |
 | `stringify` | Turns a `goja.Value` into a console line: strings pass through, `null` / `undefined` become their names, everything else is JSON-encoded so `console.log({a:1})` shows useful structure. |
 | `runWithTimeout` | Wraps `vm.RunString` with a `ScriptTimeout` watchdog and a ctx-cancel watcher. The watcher goroutine calls `vm.Interrupt` and stores the reason behind a mutex so the error returned upward names the cause (timeout vs cancel vs script-thrown). |
 | `requestToObject` | Builds a fresh `goja.Object` mirroring the model's Method, URL, Body content, enabled headers (as flat `{name: value}`), and enabled params. |
