@@ -10,6 +10,8 @@
 | [curl_test.go](curl_test.go) | `FromCurl` + `tokenizeShell` tests: method/URL/headers/data variants, multipart, basic auth, `-G`, quoting, line continuations, noise-flag skipping, and error paths. |
 | [openapi.go](openapi.go) | OpenAPI 3 / Swagger 2 parsing: `FromOpenAPI`, YAML→JSON normalization, OAS3-to-collection conversion. |
 | [openapi_test.go](openapi_test.go) | OpenAPI tests with embedded `oas3Sample` / `swagger2Sample` fixtures (also reused by url_test.go and wsdl_test.go). |
+| [postman.go](postman.go) | `FromPostman` + the `looksLikePostman` sniffer; the `pm*` decode structs (incl. `pmURL.UnmarshalJSON` accepting string-or-object URLs) and the body/auth mappers. |
+| [postman_test.go](postman_test.go) | Postman tests: folder/request tree, header disabled-flag, query params, raw/urlencoded/formdata/graphql bodies, bearer/basic/apikey/noauth, URL reconstruction, detection, and `From` routing. |
 | [wsdl.go](wsdl.go) | `FromWSDL`, the `wsdl*` XML structs, and the SOAP envelope template builder. |
 | [wsdl_test.go](wsdl_test.go) | WSDL fixture (`wsdlSample`), `FromWSDL` tests, and the `From` dispatcher smoke test covering all three input flavors. |
 | [url.go](url.go) | `FromURL`: HTTP fetch + dispatch through `From`. |
@@ -17,16 +19,19 @@
 
 ## Auto-detection: the `From` dispatcher
 
-`From` ([from.go:7](from.go#L7)) is the public entry point. The detection rule is one byte:
+`From` ([from.go:7](from.go#L7)) is the public entry point. Postman is checked first (a structural JSON probe), then the one-byte XML rule:
 
 ```go
+if looksLikePostman(data) {
+    return FromPostman(data)
+}
 if looksLikeXML(data) {
     return FromWSDL(data)
 }
 return FromOpenAPI(data)
 ```
 
-`looksLikeXML` ([from.go:14](from.go#L14)) skips leading whitespace (`' '`, `'\t'`, `'\n'`, `'\r'`) and returns `true` only if the next byte is `<`. Anything else — `{`, `o`, `s`, `#`, `-` (YAML), digits — falls through to `FromOpenAPI`, which then disambiguates Swagger 2 from OpenAPI 3 by inspecting the top-level `openapi` / `swagger` keys after YAML→JSON normalization.
+`looksLikePostman` ([postman.go](postman.go)) unmarshals a tiny probe and returns `true` only when the document has both an `info` object and an `item` array and carries neither an `openapi` nor a `swagger` key (so OpenAPI/Swagger never misroute). `looksLikeXML` ([from.go:18](from.go#L18)) skips leading whitespace (`' '`, `'\t'`, `'\n'`, `'\r'`) and returns `true` only if the next byte is `<`. Anything else — `{`, `o`, `s`, `#`, `-` (YAML), digits — falls through to `FromOpenAPI`, which then disambiguates Swagger 2 from OpenAPI 3 by inspecting the top-level `openapi` / `swagger` keys after YAML→JSON normalization.
 
 This is deliberately simple: WSDL files always start with `<?xml` or `<definitions`, OpenAPI specs never do. There is no MIME sniff, no magic-bytes table.
 
@@ -49,6 +54,13 @@ This is deliberately simple: WSDL files always start with `<?xml` or `<definitio
 - `extractExample` ([openapi.go:244](openapi.go#L244)) — pulls `Example`, then any first `Examples[i].Value.Value`, then `Schema.Value.Example`.
 - `formatExample` ([openapi.go:259](openapi.go#L259)) — strings pass through; structured values are pretty-printed JSON.
 - `sortedKeys` / `sortStrings` ([openapi.go:277](openapi.go#L277), [openapi.go:288](openapi.go#L288)) — keep import output deterministic without adding a `sort` import.
+
+### Postman parser ([postman.go](postman.go))
+
+- `FromPostman` ([postman.go:14](postman.go#L14)) — unmarshals the v2.x document and walks `item` recursively via `pmAppendItem` (request leaf vs. folder), mapping collection/folder/request auth through `pmConvertAuth`.
+- `pmConvertRequest` / `pmConvertBody` / `pmConvertAuth` — field mappers from the `pm*` decode structs to `model.Request` / `Body` / `Auth`. `pmConvertBody` switches on `mode` (raw/urlencoded/formdata/graphql); `pmRawBodyType` reads `options.raw.language`.
+- `pmURL.UnmarshalJSON` ([postman.go:264](postman.go#L264)) — accepts a URL as a bare string or an object; `effectiveRaw` reconstructs from host + path when `raw` is absent. `pmStringList` decodes host/path as either a string array or a single string.
+- `looksLikePostman` — structural sniffer; see "Auto-detection" above.
 
 ### WSDL types and helpers ([wsdl.go](wsdl.go))
 

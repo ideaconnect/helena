@@ -101,7 +101,7 @@ func (m *MainUI) actionImport() {
 	})
 
 	content := container.NewVBox(
-		widget.NewLabelWithStyle("Import an OpenAPI / Swagger / WSDL spec",
+		widget.NewLabelWithStyle("Import an OpenAPI / Swagger / WSDL / Postman spec",
 			fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		widget.NewLabel("From URL:"),
 		urlEntry,

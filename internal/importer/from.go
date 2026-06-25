@@ -3,8 +3,12 @@ package importer
 import "github.com/idct/helena/internal/model"
 
 // From parses an API description and returns the resulting Helena collection.
+// A Postman collection (info + item, no openapi/swagger key) is detected first;
 // XML input is treated as WSDL; everything else as OpenAPI 3 / Swagger 2.
 func From(data []byte) (model.Collection, error) {
+	if looksLikePostman(data) {
+		return FromPostman(data)
+	}
 	if looksLikeXML(data) {
 		return FromWSDL(data)
 	}

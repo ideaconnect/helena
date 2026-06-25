@@ -1,14 +1,24 @@
 # importer — Workflow
 
-## Auto-detecting OpenAPI vs WSDL
+## Auto-detecting Postman vs OpenAPI vs WSDL
 
-`From` ([from.go:7](from.go#L7)) makes one decision based on a single byte:
+`From` ([from.go:7](from.go#L7)) makes two cheap decisions:
 
-1. Skip leading whitespace (`' '`, `'\t'`, `'\n'`, `'\r'`).
-2. If the next byte is `<`, the input is treated as XML and forwarded to `FromWSDL`.
-3. Otherwise — JSON `{`, YAML `o`/`s`/`#`/`-`, or anything else — it goes to `FromOpenAPI`, which then disambiguates Swagger 2 vs OpenAPI 3 by probing for `swagger` / `openapi` keys.
+1. `looksLikePostman` unmarshals a tiny structural probe. If the document has both an `info` object and an `item` array — and no `openapi`/`swagger` key — it routes to `FromPostman`. (OpenAPI/Swagger docs carry one of those keys, so they never misroute even though they also have `info`.)
+2. Otherwise, skip leading whitespace and look at the first byte: `<` means XML → `FromWSDL`; anything else — JSON `{`, YAML `o`/`s`/`#`/`-` — goes to `FromOpenAPI`, which disambiguates Swagger 2 vs OpenAPI 3 by probing for `swagger` / `openapi` keys.
 
 WSDL files always start with `<?xml` or `<definitions>`; OpenAPI documents never do. The sniff is intentionally minimal — there is no MIME table, no content-type check, no full parse-and-retry.
+
+## Postman collection → Helena tree
+
+`FromPostman` ([postman.go:14](postman.go#L14)) decodes the v2.x JSON into the `pm*` structs and walks `item` recursively (`pmAppendItem`): an item with a non-nil `request` is a leaf request, otherwise it is a folder (whose children recurse). Per request it maps:
+
+- **URL**: `request.url` is either a bare string or an object; `pmURL.UnmarshalJSON` accepts both, and `effectiveRaw` rebuilds `host.join('.') + '/' + path.join('/')` when the object omits `raw`. Object `query` entries become `Params` (Postman `disabled` → `Enabled=false`).
+- **Headers**: `request.header` → `Headers`, with the same disabled-flag mapping.
+- **Body**: `pmConvertBody` switches on `mode` — `raw` (typed by `options.raw.language` → JSON/XML/Text), `urlencoded` → `BodyForm`, `formdata` → `BodyMultipart`, `graphql` → a JSON body carrying `{query, variables}` (Helena has no dedicated GraphQL body type), `file`/unknown → no body.
+- **Auth**: `pmConvertAuth` maps `bearer`/`basic`/`apikey`/`noauth` (collection, folder, and request level). Unsupported types (e.g. `oauth2`) fall through to the zero `Auth`, which loads as Inherit.
+
+Postman events/scripts, response examples, and binary file bodies have no Helena home and are dropped rather than failing the import.
 
 ## Hoisting OpenAPI server URL to `{{base_url}}`
 
