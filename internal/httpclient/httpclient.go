@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -388,6 +389,23 @@ func buildBody(r model.Request, resolve func(string) string) (body []byte, conte
 			return nil, "", fmt.Errorf("multipart: %w", err)
 		}
 		return buf.Bytes(), w.FormDataContentType(), nil
+	case model.BodyFile:
+		// Send the exact bytes of the chosen file (#24). No file path → no body
+		// (the user hasn't picked one yet). The advertised Content-Type comes
+		// from the request, defaulting to application/octet-stream; a user-set
+		// Content-Type header still wins (see the hasContentType check above).
+		if r.Body.FilePath == "" {
+			return nil, "", nil
+		}
+		data, err := os.ReadFile(r.Body.FilePath)
+		if err != nil {
+			return nil, "", fmt.Errorf("read body file %q: %w", r.Body.FilePath, err)
+		}
+		ct := r.Body.ContentType
+		if ct == "" {
+			ct = "application/octet-stream"
+		}
+		return data, ct, nil
 	default:
 		return []byte(resolve(r.Body.Content)), "", nil
 	}

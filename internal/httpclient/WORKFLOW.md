@@ -43,7 +43,8 @@ Variable resolution happens **once**, up front, inside `Build`. The `resolve` cl
 | `BodyText` | `resolve(r.Body.Content)` | `text/plain` |
 | `BodyForm` (structured) | `url.Values{}` populated from `EnabledPairs(r.Body.Form)`, each side resolved | `application/x-www-form-urlencoded` |
 | `BodyForm` (fallback) | `resolve(r.Body.Content)` | `application/x-www-form-urlencoded` |
-| `BodyMultipart` | — | returns `"multipart bodies are not supported yet"` |
+| `BodyMultipart` | enabled `Body.Form` pairs encoded via `mime/multipart` (text fields) | `multipart/form-data; boundary=…` (writer's `FormDataContentType()`) |
+| `BodyFile` (#24) | `os.ReadFile(r.Body.FilePath)` (empty path → no body; missing file → error) | `r.Body.ContentType`, default `application/octet-stream` |
 | anything else | `resolve(r.Body.Content)` | `""` (no auto Content-Type) |
 
 The fallback branch for `BodyForm` exists so the raw-text body editor remains useful even when the user has not filled out structured form rows.

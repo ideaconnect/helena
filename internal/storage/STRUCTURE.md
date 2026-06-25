@@ -25,7 +25,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocInfo` | the `info:` block on every file (name, **id**, type, seq, tags + Extra) | the `Name`, `ID`, and `Type` discrimination on each model type. `id` is Helena's stable identifier; files without one get a fresh ID on Load that the next Save persists. |
 | `ocKV` | a header entry (name/value/disabled + Extra) | `model.KeyValue` (Key/Value/Enabled, with Disabled inverted) |
 | `ocParam` | a query/path parameter (name/value/type/disabled + Extra) | `model.KeyValue` used for `model.Request.Params` |
-| `ocBody` | a request body (`type`, `data` + Extra) | `model.Body` (`Type`, `Content`) |
+| `ocBody` | a request body (`type`, `data`, `filePath`, `contentType` + Extra) | `model.Body` (`Type`, `Content`, `FilePath`, `ContentType` #24) |
 | `ocHTTP` | the `http:` block of a request (method, url, headers, params, body, auth + Extra) | the HTTP-level fields of `model.Request` |
 | `ocRequestFile` | one request `.yml` (info + http + docs + scripts + chain + vars + Extra) | `model.Request` |
 | `ocScripts` | the per-request `scripts:` block (`preRequest`, `postResponse`, + Extra) | `model.Scripts` |

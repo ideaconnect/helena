@@ -35,9 +35,10 @@ Per-request JavaScript bodies the [internal/scripting](../scripting/) runtime ex
 
 ### `Body` — [model.go:88](model.go#L88)
 A request body.
-- `Type` — selects how `Content`/`Form` is interpreted (see `BodyType`).
+- `Type` — selects how `Content`/`Form`/`FilePath` is interpreted (see `BodyType`).
 - `Content` — raw text used for `json`/`xml`/`text` bodies.
 - `Form` — field list used for `form-urlencoded` and `multipart-form` bodies.
+- `FilePath` / `ContentType` — back the `file` body type (#24): the request sends the exact bytes of the file at `FilePath`, advertised as `ContentType` (defaulting to `application/octet-stream`). Empty for the other body types.
 
 ### `KeyValue` — [model.go:80](model.go#L80)
 A toggleable key/value pair shared by headers, query params, and form fields.

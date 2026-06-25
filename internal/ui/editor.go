@@ -140,11 +140,19 @@ func (m *MainUI) refreshBodyEditorVisibility(bt model.BodyType) {
 	if m.bodyFormPanel == nil || m.BodyContent == nil {
 		return
 	}
-	if bt == model.BodyForm || bt == model.BodyMultipart {
-		m.BodyContent.Hide()
+	m.BodyContent.Hide()
+	m.bodyFormPanel.Hide()
+	if m.bodyFilePanel != nil {
+		m.bodyFilePanel.Hide()
+	}
+	switch bt {
+	case model.BodyForm, model.BodyMultipart:
 		m.bodyFormPanel.Show()
-	} else {
-		m.bodyFormPanel.Hide()
+	case model.BodyFile:
+		if m.bodyFilePanel != nil {
+			m.bodyFilePanel.Show()
+		}
+	default:
 		m.BodyContent.Show()
 	}
 }

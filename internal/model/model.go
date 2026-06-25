@@ -46,10 +46,11 @@ const (
 	BodyText      BodyType = "text"
 	BodyForm      BodyType = "form-urlencoded"
 	BodyMultipart BodyType = "multipart-form"
+	BodyFile      BodyType = "file" // raw bytes of a file on disk (#24)
 )
 
 // BodyTypes lists supported body types in display order.
-var BodyTypes = []BodyType{BodyNone, BodyJSON, BodyXML, BodyText, BodyForm, BodyMultipart}
+var BodyTypes = []BodyType{BodyNone, BodyJSON, BodyXML, BodyText, BodyForm, BodyMultipart, BodyFile}
 
 // Valid reports whether t is a recognized body type.
 func (t BodyType) Valid() bool {
@@ -92,6 +93,11 @@ type Body struct {
 	Type    BodyType   `json:"type"`
 	Content string     `json:"content,omitempty"` // raw text for json/xml/text
 	Form    []KeyValue `json:"form,omitempty"`    // fields for form-urlencoded/multipart
+	// FilePath / ContentType back BodyFile (#24): the request sends the exact
+	// bytes of the file at FilePath, advertised as ContentType (defaulting to
+	// application/octet-stream). Both are empty for the other body types.
+	FilePath    string `json:"filePath,omitempty"`
+	ContentType string `json:"contentType,omitempty"`
 }
 
 // Request is a single HTTP request definition.

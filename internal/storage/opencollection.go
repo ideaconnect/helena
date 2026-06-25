@@ -40,9 +40,11 @@ type ocParam struct {
 }
 
 type ocBody struct {
-	Type  string               `yaml:"type"`
-	Data  string               `yaml:"data,omitempty"`
-	Extra map[string]yaml.Node `yaml:",inline"`
+	Type        string               `yaml:"type"`
+	Data        string               `yaml:"data,omitempty"`
+	FilePath    string               `yaml:"filePath,omitempty"`    // BodyFile source path (#24)
+	ContentType string               `yaml:"contentType,omitempty"` // BodyFile advertised content type (#24)
+	Extra       map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocHTTP struct {
@@ -172,7 +174,7 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 		h.Params = append(h.Params, ocParam{Name: p.Key, Value: p.Value, Type: "query", Disabled: !p.Enabled})
 	}
 	if r.Body.Type != "" && r.Body.Type != model.BodyNone {
-		h.Body = &ocBody{Type: string(r.Body.Type), Data: r.Body.Content}
+		h.Body = &ocBody{Type: string(r.Body.Type), Data: r.Body.Content, FilePath: r.Body.FilePath, ContentType: r.Body.ContentType}
 	}
 	h.Auth = authToFile(r.Auth)
 	return ocRequestFile{
@@ -264,7 +266,12 @@ func fileToRequest(f ocRequestFile) model.Request {
 		r.Params = append(r.Params, model.KeyValue{Enabled: !p.Disabled, Key: p.Name, Value: p.Value})
 	}
 	if f.HTTP.Body != nil {
-		r.Body = model.Body{Type: model.BodyType(f.HTTP.Body.Type), Content: f.HTTP.Body.Data}
+		r.Body = model.Body{
+			Type:        model.BodyType(f.HTTP.Body.Type),
+			Content:     f.HTTP.Body.Data,
+			FilePath:    f.HTTP.Body.FilePath,
+			ContentType: f.HTTP.Body.ContentType,
+		}
 	}
 	if f.HTTP.Auth != nil {
 		r.Auth = fileToAuth(f.HTTP.Auth)

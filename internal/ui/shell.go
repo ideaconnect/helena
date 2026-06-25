@@ -60,19 +60,22 @@ type MainUI struct {
 	Response      *container.AppTabs
 	Status        *widget.Label
 
-	paramsRows       *fyne.Container
-	paramRows        []*kvRow // widget handles for each Query row, for in-place updates (#53)
-	headersRows      *fyne.Container
-	BodyType         *widget.Select
-	BodyContent      *prettyview.PrettyView // editable raw body (json/xml/text); hidden for form types
-	bodyFormRows     *fyne.Container        // KV rows bound to Body.Form (form-urlencoded / multipart)
-	bodyFormPanel    *fyne.Container        // wrapper shown in place of BodyContent for form types
-	docsEditor       *widget.Entry
-	docsPreview      *widget.RichText
-	preScriptEditor  *widget.Entry
-	postScriptEditor *widget.Entry
-	scriptConsole    *widget.Entry
-	chainRows        *fyne.Container
+	paramsRows          *fyne.Container
+	paramRows           []*kvRow // widget handles for each Query row, for in-place updates (#53)
+	headersRows         *fyne.Container
+	BodyType            *widget.Select
+	BodyContent         *prettyview.PrettyView // editable raw body (json/xml/text); hidden for form types
+	bodyFormRows        *fyne.Container        // KV rows bound to Body.Form (form-urlencoded / multipart)
+	bodyFormPanel       *fyne.Container        // wrapper shown in place of BodyContent for form types
+	bodyFilePanel       *fyne.Container        // file-picker panel shown for BodyFile (#24)
+	bodyFilePathLabel   *widget.Label          // chosen file path (#24)
+	bodyFileContentType *widget.Entry          // BodyFile advertised Content-Type (#24)
+	docsEditor          *widget.Entry
+	docsPreview         *widget.RichText
+	preScriptEditor     *widget.Entry
+	postScriptEditor    *widget.Entry
+	scriptConsole       *widget.Entry
+	chainRows           *fyne.Container
 
 	authType                                                          *widget.Select
 	authBasicUsername, authBasicPassword                              *widget.Entry
@@ -249,7 +252,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.bodyFormPanel = container.NewBorder(nil, addBodyFieldBtn, nil, nil,
 		container.NewVScroll(m.bodyFormRows))
 	m.bodyFormPanel.Hide() // BodyNone default shows the text editor
-	bodyStack := container.NewStack(m.BodyContent, m.bodyFormPanel)
+	bodyStack := container.NewStack(m.BodyContent, m.bodyFormPanel, m.buildBodyFilePanel())
 	bodyTab := container.NewBorder(bodyTopRow, nil, nil, nil, bodyStack)
 
 	m.Request = container.NewAppTabs(
@@ -666,6 +669,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.URL.SetText("")
 		m.BodyContent.SetText("")
 		m.rebuildBodyFormRows()
+		m.loadBodyFilePanel(model.Body{})
 		m.refreshBodyEditorVisibility(model.BodyNone)
 		m.paramsRows.RemoveAll()
 		m.paramRows = m.paramRows[:0]
@@ -721,6 +725,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	m.BodyType.SetSelected(string(bt))
 	m.BodyContent.SetData([]byte(req.Body.Content), formatForBodyType(bt))
 	m.rebuildBodyFormRows()
+	m.loadBodyFilePanel(req.Body)
 	m.refreshBodyEditorVisibility(bt)
 	if m.docsEditor != nil {
 		m.docsEditor.SetText(req.Docs)
