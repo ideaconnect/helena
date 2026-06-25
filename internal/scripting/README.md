@@ -93,6 +93,11 @@ Bound globals in both phases:
 | `helena.env.get(name)` | Returns the resolved value of `name` (overlay over active env). Empty string when missing. |
 | `helena.env.set(name, value)` | Writes to the in-memory overlay. Never persisted. |
 | `helena.vars.get(name)` | Alias for `helena.env.get`. |
+| `helena.uuid()` | Returns a random RFC 4122 v4 UUID string. |
+| `helena.hash.md5/sha1/sha256/sha512(text)` | Hex digest of `text`. |
+| `helena.hash.hmacSha1/hmacSha256(key, text)` | Hex HMAC digest of `text` keyed by `key`. |
+| `helena.date.now()` | Current UTC time as an ISO-8601 (RFC 3339) string. |
+| `helena.date.timestamp()` | Current Unix time in seconds (number). |
 | `console.log(...args)` | Appends one line (space-joined args) to `Result.Console`. |
 | `console.info(...)` | Same as `log`. |
 | `console.warn(...)` | Prefixes the line with `WARN: `. |
@@ -185,6 +190,10 @@ What this means in practice:
   filesystem, process-spawn, and arbitrary native calls — but it
   cannot stop a script from telling Helena's own HTTP client where to
   send the request.
+- **The curated helpers add no I/O surface.** `helena.uuid`,
+  `helena.hash.*`, and `helena.date.*` are pure-compute (crypto/hash,
+  `crypto/rand`, and the clock) — they read no files, open no sockets,
+  and spawn no processes, so they don't widen the boundary above.
 
 If you're importing a collection from an untrusted source, **read its
 script bodies before pressing Send**. Helena makes them visible in the

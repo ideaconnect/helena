@@ -50,6 +50,10 @@ func (rt *Runtime) bindHelena(vm *goja.Runtime) error {
 		return err
 	}
 
+	if err := rt.bindHelpers(vm, helena); err != nil {
+		return err
+	}
+
 	return vm.Set("helena", helena)
 }
 
