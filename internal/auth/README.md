@@ -8,8 +8,8 @@ the request.
 ## Credential storage (git-safety)
 
 The auth credential fields — Basic `password`, Bearer `token`, API-key `value`,
-and OAuth2 `clientSecret` — are **not written into the git-tracked collection
-YAML**. On save, [internal/storage](../storage/) externalizes them to a
+OAuth2 `clientSecret`, and WSSE `password` — are **not written into the
+git-tracked collection YAML**. On save, [internal/storage](../storage/) externalizes them to a
 per-collection store under the OS config dir (or `$HELENA_SECRETS_DIR`), outside
 any repository, and blanks the fields in the collection file (#42); they are
 merged back on load. So you can version-control a collection directory without
@@ -31,7 +31,9 @@ This package does four things:
 3. **Apply the resolved auth to an `*http.Request`.** Basic and Bearer
    set the `Authorization` header; API-Key writes to a request header or
    query parameter depending on placement; OAuth2 delegates to a
-   user-supplied resolver (see below).
+   user-supplied resolver (see below); WS-Security (#79) emits an
+   `X-WSSE: UsernameToken …` header with a fresh `PasswordDigest =
+   Base64(SHA1(nonce + created + password))` per send.
 4. **Fetch and cache OAuth2 tokens.** A built-in `cachingResolver`
    implements both `client_credentials` and `authorization_code` (with
    optional PKCE) grants. Tokens are cached keyed by collection + auth

@@ -14,11 +14,14 @@ package auth
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha1"
 	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/idct/helena/internal/model"
 )
@@ -87,6 +90,13 @@ func ResolveValues(a model.Auth, resolve func(string) string) model.Auth {
 			cp.RedirectURI = resolve(cp.RedirectURI)
 			cp.Audience = resolve(cp.Audience)
 			out.OAuth2 = &cp
+		}
+	case model.AuthWSSE:
+		if a.WSSE != nil {
+			cp := *a.WSSE
+			cp.Username = resolve(cp.Username)
+			cp.Password = resolve(cp.Password)
+			out.WSSE = &cp
 		}
 	}
 	return out
@@ -166,7 +176,43 @@ func Apply(ctx context.Context, req *http.Request, a model.Auth, resolver OAuth2
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		return nil
+	case model.AuthWSSE:
+		if a.WSSE == nil {
+			return nil
+		}
+		if req.Header.Get("X-WSSE") != "" {
+			return nil
+		}
+		nonce := make([]byte, 16)
+		if _, err := rand.Read(nonce); err != nil {
+			return fmt.Errorf("auth.Apply: wsse nonce: %w", err)
+		}
+		created := time.Now().UTC().Format(time.RFC3339)
+		req.Header.Set("X-WSSE", wsseHeader(a.WSSE.Username, a.WSSE.Password, nonce, created))
+		if req.Header.Get("Authorization") == "" {
+			req.Header.Set("Authorization", `WSSE profile="UsernameToken"`)
+		}
+		return nil
 	default:
 		return fmt.Errorf("auth.Apply: unknown auth type %q", a.Type)
 	}
+}
+
+// wsseHeader builds the X-WSSE UsernameToken header value (#79). The
+// PasswordDigest is Base64(SHA1(nonce + created + password)) per WS-Security,
+// where nonce is the raw bytes (the header carries their Base64 form).
+func wsseHeader(username, password string, nonce []byte, created string) string {
+	digest := wsseDigest(nonce, created, password)
+	return fmt.Sprintf(`UsernameToken Username="%s", PasswordDigest="%s", Nonce="%s", Created="%s"`,
+		username, digest, base64.StdEncoding.EncodeToString(nonce), created)
+}
+
+// wsseDigest computes the WS-Security PasswordDigest:
+// Base64(SHA1(nonce || created || password)).
+func wsseDigest(nonce []byte, created, password string) string {
+	h := sha1.New()
+	h.Write(nonce)
+	h.Write([]byte(created))
+	h.Write([]byte(password))
+	return base64.StdEncoding.EncodeToString(h.Sum(nil))
 }

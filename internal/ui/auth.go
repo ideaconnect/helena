@@ -12,7 +12,7 @@ import (
 
 // authTypeLabels keeps a stable display order for the auth Type dropdown
 // and maps human-friendly labels to model.AuthType values.
-var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 2.0"}
+var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Bearer Token", "API Key", "OAuth 2.0", "WS-Security"}
 
 var authTypeByLabel = map[string]model.AuthType{
 	"None":                model.AuthNone,
@@ -21,6 +21,7 @@ var authTypeByLabel = map[string]model.AuthType{
 	"Bearer Token":        model.AuthBearer,
 	"API Key":             model.AuthAPIKey,
 	"OAuth 2.0":           model.AuthOAuth2,
+	"WS-Security":         model.AuthWSSE,
 }
 
 var authLabelByType = map[model.AuthType]string{
@@ -30,6 +31,7 @@ var authLabelByType = map[model.AuthType]string{
 	model.AuthBearer:  "Bearer Token",
 	model.AuthAPIKey:  "API Key",
 	model.AuthOAuth2:  "OAuth 2.0",
+	model.AuthWSSE:    "WS-Security",
 }
 
 var apiKeyPlacementLabels = []string{"Header", "Query"}
@@ -78,6 +80,14 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 	})
 	// A bearer token is as sensitive as a Basic password — mask it (#44).
 	m.authBearerToken.Password = true
+
+	m.authWSSEUsername = m.newAuthEntry("username", func(s string) {
+		m.ensureWSSE().Username = s
+	})
+	m.authWSSEPassword = m.newAuthEntry("password", func(s string) {
+		m.ensureWSSE().Password = s
+	})
+	m.authWSSEPassword.Password = true
 
 	m.authAPIKeyName = m.newAuthEntry("key name (e.g. X-API-Key)", func(s string) {
 		m.ensureAPIKey().Name = s
@@ -159,10 +169,15 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		widget.NewFormItem("Cache", m.authOAuth2ClearTokens),
 	)
 
+	m.authWSSEPanel = widget.NewForm(
+		widget.NewFormItem("Username", m.authWSSEUsername),
+		widget.NewFormItem("Password", m.authWSSEPassword),
+	)
+
 	m.authFormsStack = container.NewStack(
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
-		m.authAPIKeyPanel, m.authOAuth2Panel,
+		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel,
 	)
 
 	top := container.NewBorder(nil, nil, widget.NewLabel("Type:"), nil, m.authType)
@@ -198,6 +213,13 @@ func (m *MainUI) ensureBearer() *model.BearerAuth {
 	return m.currentRequest.Auth.Bearer
 }
 
+func (m *MainUI) ensureWSSE() *model.WSSEAuth {
+	if m.currentRequest.Auth.WSSE == nil {
+		m.currentRequest.Auth.WSSE = &model.WSSEAuth{}
+	}
+	return m.currentRequest.Auth.WSSE
+}
+
 func (m *MainUI) ensureAPIKey() *model.APIKeyAuth {
 	if m.currentRequest.Auth.APIKey == nil {
 		m.currentRequest.Auth.APIKey = &model.APIKeyAuth{Placement: model.APIKeyHeader}
@@ -222,7 +244,7 @@ func (m *MainUI) refreshAuthVisibility() {
 	panels := []fyne.CanvasObject{
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
-		m.authAPIKeyPanel, m.authOAuth2Panel,
+		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel,
 	}
 	for _, p := range panels {
 		p.Hide()
@@ -241,6 +263,8 @@ func (m *MainUI) refreshAuthVisibility() {
 		active = m.authAPIKeyPanel
 	case model.AuthOAuth2:
 		active = m.authOAuth2Panel
+	case model.AuthWSSE:
+		active = m.authWSSEPanel
 	default:
 		active = m.authInheritPanel
 	}
@@ -283,6 +307,8 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authBasicUsername.SetText("")
 		m.authBasicPassword.SetText("")
 		m.authBearerToken.SetText("")
+		m.authWSSEUsername.SetText("")
+		m.authWSSEPassword.SetText("")
 		m.authAPIKeyName.SetText("")
 		m.authAPIKeyValue.SetText("")
 		m.authAPIKeyPlacement.SetSelected("Header")
@@ -319,6 +345,13 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authBearerToken.SetText(br.Token)
 	} else {
 		m.authBearerToken.SetText("")
+	}
+	if w := req.Auth.WSSE; w != nil {
+		m.authWSSEUsername.SetText(w.Username)
+		m.authWSSEPassword.SetText(w.Password)
+	} else {
+		m.authWSSEUsername.SetText("")
+		m.authWSSEPassword.SetText("")
 	}
 	if k := req.Auth.APIKey; k != nil {
 		m.authAPIKeyName.SetText(k.Name)

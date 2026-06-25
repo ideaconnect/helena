@@ -6,7 +6,7 @@
 | --- | --- |
 | [doc.go](doc.go) | Package-level godoc only. |
 | [model.go](model.go) | Core domain types (`Workspace`, `Collection`, `Folder`, `Request`, `Environment`, `Variable`, `Settings`), enum constants (`Method`, `BodyType`, `Theme`), and helpers (`NewID`, `EnabledPairs`, `DefaultSettings`). |
-| [auth.go](auth.go) | `Auth` plus its sub-structs (`BasicAuth`, `BearerAuth`, `APIKeyAuth`, `OAuth2Auth`) and the related enums (`AuthType`, `APIKeyPlacement`, `OAuth2Grant`). Applied by [internal/auth](../auth/). |
+| [auth.go](auth.go) | `Auth` plus its sub-structs (`BasicAuth`, `BearerAuth`, `APIKeyAuth`, `OAuth2Auth`, `WSSEAuth` #79) and the related enums (`AuthType`, `APIKeyPlacement`, `OAuth2Grant`). Applied by [internal/auth](../auth/). |
 | [model_test.go](model_test.go) | Unit tests for method/body validation, content-type mapping, `EnabledPairs`, ID uniqueness, a `Collection` JSON round-trip, and `Scripts.IsEmpty`. |
 
 ## Type catalog
@@ -69,7 +69,7 @@ A root tree.
 ### `Auth` — [auth.go](auth.go)
 Authentication configuration carried on `Request`, `Folder`, and `Collection`.
 - `Type` — selects which sub-struct is in use; see `AuthType` constants.
-- `Basic` / `Bearer` / `APIKey` / `OAuth2` — pointer fields; exactly one is non-nil for a concrete auth.
+- `Basic` / `Bearer` / `APIKey` / `OAuth2` / `WSSE` — pointer fields; exactly one is non-nil for a concrete auth.
 - The zero value (`Type == ""`) is treated as `Inherit` at load time so freshly created requests inherit from their parent without the caller having to set anything.
 
 ### `BasicAuth` / `BearerAuth` / `APIKeyAuth` / `OAuth2Auth` — [auth.go](auth.go)
@@ -77,10 +77,11 @@ The credential sub-structs. Every string field runs through the `{{var}}` resolv
 - `BasicAuth` — `Username`, `Password`. Encoded as `Authorization: Basic <base64>`.
 - `BearerAuth` — `Token`. Encoded as `Authorization: Bearer <token>`.
 - `APIKeyAuth` — `Name`, `Value`, `Placement` (`header` or `query`).
-- `OAuth2Auth` — `Grant`, `TokenURL`, `AuthURL`, `ClientID`, `ClientSecret`, `Scope`, `RedirectURI`, `UsePKCE`, `Audience`. Apply is stubbed until task 7.1c.
+- `OAuth2Auth` — `Grant`, `TokenURL`, `AuthURL`, `ClientID`, `ClientSecret`, `Scope`, `RedirectURI`, `UsePKCE`, `Audience`.
+- `WSSEAuth` — `Username`, `Password` (#79). On each send a fresh nonce + timestamp produce an `X-WSSE: UsernameToken …` header with `PasswordDigest = Base64(SHA1(nonce + created + password))`.
 
 ### `AuthType` / `APIKeyPlacement` / `OAuth2Grant` — [auth.go](auth.go)
-Typed string enums. `AuthType` covers `none`, `inherit`, `basic`, `bearer`, `apikey`, `oauth2`. `APIKeyPlacement` is `header` or `query`. `OAuth2Grant` is `client_credentials` or `authorization_code`.
+Typed string enums. `AuthType` covers `none`, `inherit`, `basic`, `bearer`, `apikey`, `oauth2`, `wsse`. `APIKeyPlacement` is `header` or `query`. `OAuth2Grant` is `client_credentials` or `authorization_code`.
 
 ### `Workspace` — [model.go:139](model.go#L139)
 A bag of collections; only metadata lives here — actual collections are referenced by path in the persisted config.

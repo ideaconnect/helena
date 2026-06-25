@@ -119,7 +119,14 @@ type ocAuth struct {
 	Bearer *ocAuthBearer        `yaml:"bearer,omitempty"`
 	APIKey *ocAuthAPIKey        `yaml:"apikey,omitempty"`
 	OAuth2 *ocAuthOAuth2        `yaml:"oauth2,omitempty"`
+	WSSE   *ocAuthWSSE          `yaml:"wsse,omitempty"` // WS-Security UsernameToken (#79)
 	Extra  map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthWSSE struct {
+	Username string               `yaml:"username"`
+	Password string               `yaml:"password"`
+	Extra    map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocAuthBasic struct {
@@ -386,6 +393,10 @@ func authToFile(a model.Auth) *ocAuth {
 				Audience:     a.OAuth2.Audience,
 			}
 		}
+	case model.AuthWSSE:
+		if a.WSSE != nil {
+			out.WSSE = &ocAuthWSSE{Username: a.WSSE.Username, Password: a.WSSE.Password}
+		}
 	}
 	return out
 }
@@ -423,6 +434,9 @@ func fileToAuth(f *ocAuth) model.Auth {
 			UsePKCE:      f.OAuth2.UsePKCE,
 			Audience:     f.OAuth2.Audience,
 		}
+	}
+	if f.WSSE != nil {
+		a.WSSE = &model.WSSEAuth{Username: f.WSSE.Username, Password: f.WSSE.Password}
 	}
 	return a
 }

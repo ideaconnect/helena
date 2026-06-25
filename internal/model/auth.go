@@ -16,6 +16,7 @@ const (
 	AuthBearer  AuthType = "bearer"
 	AuthAPIKey  AuthType = "apikey"
 	AuthOAuth2  AuthType = "oauth2"
+	AuthWSSE    AuthType = "wsse" // WS-Security UsernameToken (#79)
 )
 
 // APIKeyPlacement chooses whether the API-Key credential rides on a request
@@ -49,6 +50,16 @@ type Auth struct {
 	Bearer *BearerAuth `json:"bearer,omitempty"`
 	APIKey *APIKeyAuth `json:"apiKey,omitempty"`
 	OAuth2 *OAuth2Auth `json:"oauth2,omitempty"`
+	WSSE   *WSSEAuth   `json:"wsse,omitempty"`
+}
+
+// WSSEAuth carries WS-Security UsernameToken credentials (#79). On each send a
+// fresh nonce + timestamp are generated and a PasswordDigest =
+// Base64(SHA1(nonce + created + password)) is emitted in an X-WSSE header.
+// Username and Password run through the variable resolver before use.
+type WSSEAuth struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
 }
 
 // BasicAuth carries HTTP Basic credentials. Username and Password are run

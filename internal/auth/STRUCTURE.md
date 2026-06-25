@@ -48,6 +48,11 @@
   - resolver set → `resolver.Token(ctx, *a.OAuth2)` is called; the
     returned token becomes `Authorization: Bearer <token>` (subject to
     the same user-header-wins guard).
+- `AuthWSSE` (#79) → generates a 16-byte nonce + RFC3339 timestamp and sets
+  `X-WSSE: UsernameToken Username="…", PasswordDigest="…", Nonce="…",
+  Created="…"` where `PasswordDigest = Base64(SHA1(nonce + created + password))`
+  (`wsseHeader` / `wsseDigest`), plus a companion `Authorization: WSSE
+  profile="UsernameToken"`. A user-set `X-WSSE` header short-circuits it.
 - Any other `Type` → returns a descriptive error so unknown values fail
   loudly rather than silently sending without auth.
 

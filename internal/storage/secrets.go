@@ -196,6 +196,9 @@ func authSecrets(prefix string, a *model.Auth, fn func(string, *string)) {
 	if a.OAuth2 != nil {
 		fn(prefix+"/auth/oauth2.clientSecret", &a.OAuth2.ClientSecret)
 	}
+	if a.WSSE != nil {
+		fn(prefix+"/auth/wsse.password", &a.WSSE.Password)
+	}
 }
 
 // cloneForSecretSplit deep-copies exactly the parts splitSecrets mutates — the
@@ -230,6 +233,10 @@ func cloneAuth(a model.Auth) model.Auth {
 	if a.OAuth2 != nil {
 		b := *a.OAuth2
 		a.OAuth2 = &b
+	}
+	if a.WSSE != nil {
+		b := *a.WSSE
+		a.WSSE = &b
 	}
 	return a
 }
