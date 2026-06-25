@@ -65,6 +65,10 @@ type Config struct {
 	Active     int            `yaml:"active"`
 	Settings   model.Settings `yaml:"settings"`
 	UI         UIState        `yaml:"ui,omitempty"`
+	// Variables are global variables (#83): app-wide, persisted here in the
+	// config, and the lowest-precedence resolver scope (every collection-,
+	// environment-, and request-level value of the same name overrides them).
+	Variables []model.Variable `yaml:"variables,omitempty"`
 }
 
 // Default returns a Config with a single empty "Default" workspace.

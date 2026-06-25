@@ -62,7 +62,8 @@ func (nilFinder) FindRequestByID(string) (model.Request, bool) {
 type chainExecutor struct {
 	rt         *scripting.Runtime
 	client     *httpclient.Client
-	dotEnvSnap map[string]string // collection-root .env variables (#84), lowest scope
+	globalSnap map[string]string // global variables (#83), lowest scope
+	dotEnvSnap map[string]string // collection-root .env variables (#84)
 	colSnap    map[string]string // collection-level variables (#80), below env
 	envSnap    map[string]string
 	sess       *session.Session
@@ -84,13 +85,13 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		return chain.View{}, console, fmt.Errorf("pre-script: %w", preErr)
 	}
 
-	// Scopes low->high: collection-root .env (#84) < collection (#80) < env <
-	// this request's own variables (#82, highest static) < script overlay. The
-	// chain fallback lets this request's URL / params / headers / body / auth
-	// use {{chain.<alias>.response.json.token}}-style templates, scoped to this
-	// request's own chain aliases (same map the pre-script saw); Dynamic adds
-	// Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
-	resolver := vars.New(e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.sess.SnapshotEnvOverlay()).
+	// Scopes low->high: global (#83) < collection-root .env (#84) < collection
+	// (#80) < env < this request's own variables (#82, highest static) < script
+	// overlay. The chain fallback lets this request's URL / params / headers /
+	// body / auth use {{chain.<alias>.response.json.token}}-style templates,
+	// scoped to this request's own chain aliases (same map the pre-script saw);
+	// Dynamic adds Postman-style {{$guid}}/{{$timestamp}}/… magic variables (#85).
+	resolver := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.sess.SnapshotEnvOverlay()).
 		WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
 	resp, err := e.client.Do(ctx, r, resolver)
 	if err != nil {

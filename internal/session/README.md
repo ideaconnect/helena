@@ -89,9 +89,10 @@ when displaying or sending requests.
 - `Session.DeleteEnvironment(name string) error` — remove + persist; the active
   selection moves to the first remaining env (or clears) when the active one goes.
 - `Session.SetActiveEnvironmentVariables(variables []model.Variable)`
-- `Session.Resolver() *vars.Resolver` — ordered scopes (.env < collection variables < active environment < script overlay) plus the dynamic-variable fallback (`{{$guid}}` etc.). `SnapshotActiveDotEnvVars` / `SnapshotActiveCollectionVars` / `SnapshotActiveEnvVars` capture the lower scopes for the Send worker.
-- `Session.ResolverForRequest(r *model.Request) *vars.Resolver` — `Resolver` plus the request's own variables (#82) layered as the highest static scope (.env < collection < environment < request < script overlay). A nil request behaves like `Resolver`. Used by the URL preview and exporter; the Send worker layers the request scope itself in `execution.go`.
-- `Session.SnapshotActiveDotEnvVars() map[string]string` — a copy of the active collection's `.env` variables (#84), the lowest static scope; parsed from `<collection>/.env` and cached (the cache is dropped on reload).
+- `Session.Resolver() *vars.Resolver` — ordered scopes (global < .env < collection variables < active environment < script overlay) plus the dynamic-variable fallback (`{{$guid}}` etc.). `SnapshotGlobalVars` / `SnapshotActiveDotEnvVars` / `SnapshotActiveCollectionVars` / `SnapshotActiveEnvVars` capture the lower scopes for the Send worker.
+- `Session.ResolverForRequest(r *model.Request) *vars.Resolver` — `Resolver` plus the request's own variables (#82) layered as the highest static scope (global < .env < collection < environment < request < script overlay). A nil request behaves like `Resolver`. Used by the URL preview and exporter; the Send worker layers the request scope itself in `execution.go`.
+- `Session.GlobalVariables() []model.Variable` / `SetGlobalVariables([]model.Variable) error` — read / persist the app-wide global variables (#83), the lowest static scope shared across every collection; stored in the config. `SnapshotGlobalVars()` copies the enabled set for the Send worker.
+- `Session.SnapshotActiveDotEnvVars() map[string]string` — a copy of the active collection's `.env` variables (#84), parsed from `<collection>/.env` and cached (the cache is dropped on reload).
 - `ParseEnvVars(text string) []model.Variable` — `"key = value"` line text
   to variables; `#`-prefixed lines are disabled.
 - `FormatEnvVars(vs []model.Variable) string` — inverse of `ParseEnvVars`.

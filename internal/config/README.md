@@ -2,7 +2,7 @@
 
 Persists Helena's application-level state to a single YAML file in the user's OS config directory (typically `~/.config/helena/config.yml` on Linux, equivalent locations on macOS/Windows).
 
-What lives here: the list of workspaces and which one is active, the user's `Settings` (TLS, redirects, timeout, theme), and `UIState` (which collection/environment/request was last open, the set of open editor tabs + the active one, last window size). What does NOT live here: the contents of collections — those are written by the `storage` package to a separate OpenCollection directory; `config` only stores their on-disk paths. Open *scratch* tabs (unsaved, not in any collection) are likewise not persisted.
+What lives here: the list of workspaces and which one is active, the user's `Settings` (TLS, redirects, timeout, theme), global variables (#83 — the app-wide lowest-precedence resolver scope), and `UIState` (which collection/environment/request was last open, the set of open editor tabs + the active one, last window size). What does NOT live here: the contents of collections — those are written by the `storage` package to a separate OpenCollection directory; `config` only stores their on-disk paths. Open *scratch* tabs (unsaved, not in any collection) are likewise not persisted.
 
 `Load` is forgiving: a missing file or an empty path yields `Default()` instead of an error, and an out-of-range `Active` index is clamped to 0. `Save` creates any missing parent directories.
 

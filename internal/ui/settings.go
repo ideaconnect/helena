@@ -81,6 +81,10 @@ func (m *MainUI) editSettings() {
 	themeSelect := widget.NewSelect([]string{"System", "Light", "Dark"}, nil)
 	themeSelect.SetSelected(themeName(s.Theme))
 
+	// Global variables (#83) are app-wide and persisted in the config, so they
+	// live in Settings; the button opens the shared variables editor.
+	globalVarsBtn := widget.NewButtonWithIcon("Edit global variables…", themedIcon("table-list"), m.editGlobalVariables)
+
 	form := widget.NewForm(
 		widget.NewFormItem("Theme", themeSelect),
 		widget.NewFormItem("TLS", insecureBox),
@@ -88,6 +92,7 @@ func (m *MainUI) editSettings() {
 		widget.NewFormItem("Redirects", follow),
 		widget.NewFormItem("Timeout (s)", timeoutEntry),
 		widget.NewFormItem("Max response (MiB)", maxRespEntry),
+		widget.NewFormItem("Global variables", globalVarsBtn),
 	)
 
 	dlg := dialog.NewCustomConfirm("Settings", "Save", "Cancel", form, func(ok bool) {

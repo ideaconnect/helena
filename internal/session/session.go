@@ -425,17 +425,36 @@ func (s *Session) SetActiveEnvironmentVariables(variables []model.Variable) {
 }
 
 // Resolver builds a variable resolver over the active collection's ordered
-// scopes (enabled variables only), lowest precedence first: collection-root
-// .env (#84) < collection variables (#80) < active environment < script
-// overlay. The script-set env overlay is highest so a `helena.env.set(...)`
+// scopes (enabled variables only), lowest precedence first: global variables
+// (#83) < collection-root .env (#84) < collection variables (#80) < active
+// environment < script overlay. The script-set env overlay is highest so a
+// `helena.env.set(...)`
 // during a pre-request or post-response hook is visible to the next Send
 // without ever touching disk.
 //
 // Call from the UI goroutine. Workers should use the SnapshotActive*Vars +
 // SnapshotEnvOverlay snapshots instead so the scopes can't shift mid-Send.
 func (s *Session) Resolver() *vars.Resolver {
-	return vars.New(s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+	return vars.New(s.globalVars(), s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
+
+// GlobalVariables returns the app-wide global variables (#83), persisted in the
+// config and applied across every collection.
+func (s *Session) GlobalVariables() []model.Variable { return s.cfg.Variables }
+
+// SetGlobalVariables replaces the global variables and persists the config.
+func (s *Session) SetGlobalVariables(vs []model.Variable) error {
+	s.cfg.Variables = vs
+	return s.persist()
+}
+
+// globalVars flattens the enabled global variables into a resolver scope; it is
+// the lowest-precedence static scope.
+func (s *Session) globalVars() map[string]string { return enabledVars(s.cfg.Variables) }
+
+// SnapshotGlobalVars returns a copy of the enabled global variables for the
+// Send worker (same rationale as SnapshotActiveCollectionVars).
+func (s *Session) SnapshotGlobalVars() map[string]string { return s.globalVars() }
 
 // ResolverForRequest is Resolver plus the given request's own variables (#82)
 // layered as the highest-precedence static scope — above environment and
@@ -446,7 +465,7 @@ func (s *Session) ResolverForRequest(r *model.Request) *vars.Resolver {
 	if r == nil {
 		return s.Resolver()
 	}
-	return vars.New(s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), enabledVars(r.Variables), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
+	return vars.New(s.globalVars(), s.activeDotEnvVars(), s.activeCollectionVars(), s.activeEnvVars(), enabledVars(r.Variables), s.SnapshotEnvOverlay()).WithFallback(vars.Dynamic)
 }
 
 // SetEnvOverlay records a script-set environment variable for the lifetime

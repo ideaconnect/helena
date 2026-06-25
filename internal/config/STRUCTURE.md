@@ -18,6 +18,7 @@ The root persisted document.
 - `Active` — index into `Workspaces`; `Load` clamps it to `0` if out of range so a hand-edited file can't crash the app.
 - `Settings` — embedded `model.Settings`.
 - `UI` — last-known session state (see `UIState`).
+- `Variables` — global variables (#83): app-wide `[]model.Variable`, the lowest-precedence resolver scope, shared across every collection.
 
 ### `Workspace` — [config.go:15](config.go#L15)
 A workspace entry inside the config.
