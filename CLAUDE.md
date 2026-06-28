@@ -46,6 +46,18 @@ leaves the docs describing the old behaviour is not finished. See the
 "Keep the docs in sync" section of [AGENTS.md](AGENTS.md) for the
 specific trigger conditions.
 
+## The website is part of the change
+
+The project website in [website/](website/) is the public face of Helena.
+When a change ships, removes, or visibly alters a user-facing feature,
+update the website in the same turn so it never advertises a feature
+Helena lacks or omits one it has: refresh the feature list, roadmap, and
+examples, and — when the UI changed — regenerate the captures with `make
+screenshots` (plus `make screenshots-fancy` for the hero-box art). Stale
+copy or an old screenshot on the site is a user-visible bug, not a
+cosmetic nit. Preview locally with `make website`. See the "Keep the docs
+in sync" trigger list in [AGENTS.md](AGENTS.md).
+
 ## Tests are part of the change
 
 Every behaviour-affecting change MUST be paired with test work in the

@@ -100,6 +100,12 @@ Concretely:
 - Changed an invariant or a project-wide convention → update
   [AGENTS.md](AGENTS.md) and mirror the change in [CLAUDE.md](CLAUDE.md)
   / this file when relevant.
+- Shipped, removed, or visibly changed a user-facing feature → update the
+  project website in [website/](website/) so its feature list, roadmap,
+  and examples stay truthful. When the UI changed, regenerate the
+  captures with `make screenshots` (and `make screenshots-fancy` for the
+  hero-box art); preview with `make website`. A stale website is a
+  user-visible bug, not a cosmetic nit.
 
 The doc-quality bar is "scannable in 30 seconds." Brief beats verbose, and
 a one-sentence flow that captures the essential transition beats a

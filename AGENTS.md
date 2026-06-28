@@ -199,9 +199,17 @@ describe it.
   affects contributor onboarding.
 - **Build / test / CI commands change** → update this file and the
   top-level [README.md](README.md).
+- **User-facing feature shipped, removed, or visibly changed** → update
+  the project website under [website/](website/) so it never claims a
+  feature Helena lacks or omits one it has. Refresh the feature list,
+  roadmap, and examples to match; when the UI changed, regenerate the
+  captures with `make screenshots` (and `make screenshots-fancy` for the
+  hero-box art). The website is the public face of the project, so stale
+  copy or an old screenshot there is a user-visible bug, not a cosmetic
+  nit. Preview locally with `make website`.
 
-If you finish a change and the docs still describe the old behaviour,
-the change isn't done.
+If you finish a change and the docs (or the website) still describe the
+old behaviour, the change isn't done.
 
 ## Keep the tests in sync
 
