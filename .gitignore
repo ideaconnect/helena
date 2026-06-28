@@ -17,6 +17,8 @@ coverage.html
 # dockerized Ruby, so the gem cache + lock are per-environment (the lock would
 # otherwise pin a single container arch, e.g. x86_64 vs Apple-Silicon arm64).
 /website/_site/
+/website/_preview/
+/website/_shots/
 /website/.jekyll-cache/
 /website/.bundle/
 /website/Gemfile.lock

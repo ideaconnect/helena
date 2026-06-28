@@ -3,7 +3,7 @@ layout: page
 title: Roadmap
 eyebrow: Where Helena is going
 lead: Most of the client is already shipped. Here's the picture by track, and what's still planned.
-description: Helena's roadmap — shipped tracks, in-progress work, and what's planned next.
+description: Helena's roadmap - shipped tracks, in-progress work, and what's planned next.
 ---
 
 <div style="margin:8px 0 30px">
@@ -16,7 +16,7 @@ description: Helena's roadmap — shipped tracks, in-progress work, and what's p
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h3>Core request &amp; response</h3><span class="badge shipped">Shipped</span></div>
-      <p>Method, URL, query, headers, and bodies — JSON, XML, text, GraphQL, form, multipart, file. Pretty/raw response views, Validate/Format, and the native CORS advisory.</p>
+      <p>Method, URL, query, headers, and bodies - JSON, XML, text, GraphQL, form, multipart, file. Pretty/raw response views, Validate/Format, and the native CORS advisory.</p>
       <div class="chips"><span class="chip">GraphQL mode</span><span class="chip">file bodies</span><span class="chip">CORS advisory</span></div>
     </div>
   </li>
@@ -30,8 +30,8 @@ description: Helena's roadmap — shipped tracks, in-progress work, and what's p
 
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
-      <div class="tl-head"><h3>Authentication — nine schemes</h3><span class="badge shipped">Shipped</span></div>
-      <p>Basic, Bearer, API Key, OAuth 2.0 (+ PKCE), OAuth 1.0a, WSSE, AWS SigV4, Digest, and NTLM — with secrets externalized out of the committed YAML.</p>
+      <div class="tl-head"><h3>Authentication - nine schemes</h3><span class="badge shipped">Shipped</span></div>
+      <p>Basic, Bearer, API Key, OAuth 2.0 (+ PKCE), OAuth 1.0a, WSSE, AWS SigV4, Digest, and NTLM - with secrets externalized out of the committed YAML.</p>
       <div class="chips"><span class="chip">OAuth 2.0 + PKCE</span><span class="chip">AWS SigV4</span><span class="chip">Digest</span><span class="chip">NTLM</span></div>
     </div>
   </li>
@@ -59,8 +59,8 @@ description: Helena's roadmap — shipped tracks, in-progress work, and what's p
 
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
-      <div class="tl-head"><h3>Real-time — SSE &amp; WebSocket</h3><span class="badge shipped">Shipped</span></div>
-      <p>Server-Sent Events streamed into the response view, and a bidirectional WebSocket session UI — both hand-rolled on the standard library, pinned to the specs' own test vectors.</p>
+      <div class="tl-head"><h3>Real-time - SSE &amp; WebSocket</h3><span class="badge shipped">Shipped</span></div>
+      <p>Server-Sent Events streamed into the response view, and a bidirectional WebSocket session UI - both hand-rolled on the standard library, pinned to the specs' own test vectors.</p>
     </div>
   </li>
 

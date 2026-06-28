@@ -13,14 +13,14 @@ are attached to each release.
 
 <p><a class="btn btn-primary" href="{{ site.releases }}">Releases on GitHub →</a></p>
 
-Helena is a single self-contained binary — no installer, no runtime to set up.
+Helena is a single self-contained binary - no installer, no runtime to set up.
 Download it, make it executable, and run it.
 
 > macOS binaries are built in CI but **not yet signed / notarized** for
-> Gatekeeper — see [PACKAGING]({{ site.repo }}/blob/main/docs/PACKAGING.md).
+> Gatekeeper - see [PACKAGING]({{ site.repo }}/blob/main/docs/PACKAGING.md).
 
 Helena never checks for updates at runtime (part of its no-background-traffic
-guarantee) — update by re-downloading a release or via a package manager as
+guarantee) - update by re-downloading a release or via a package manager as
 those land. Run `helena --version` to see your build.
 
 ## Build from source
@@ -28,7 +28,7 @@ those land. Run `helena --version` to see your build.
 **Requirements**
 
 - **Go 1.23+** (the toolchain is pinned in `go.mod`).
-- A **C compiler** — Fyne uses cgo + OpenGL.
+- A **C compiler** - Fyne uses cgo + OpenGL.
 - **Linux:** `sudo apt-get install -y libgl1-mesa-dev xorg-dev`
 - **Windows:** TDM-GCC or MSYS2 mingw-w64 on `PATH`
 - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
@@ -57,6 +57,6 @@ safe to attach).
 
 ## Next steps
 
-- [Getting started]({{ site.repo }}/blob/main/docs/USER_GUIDE.md) — your first request.
-- [Features]({{ '/features/' | relative_url }}) — what's in the box.
-- [Examples]({{ '/examples/' | relative_url }}) — representative workflows.
+- [Getting started]({{ site.repo }}/blob/main/docs/USER_GUIDE.md) - your first request.
+- [Features]({{ '/features/' | relative_url }}) - what's in the box.
+- [Examples]({{ '/examples/' | relative_url }}) - representative workflows.

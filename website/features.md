@@ -2,8 +2,8 @@
 layout: page
 title: Features
 eyebrow: What Helena does
-lead: A full-featured API client in one small native binary — without the browser engine or the lock-in.
-description: Helena's features — auth, scripting, real-time, chaining, the runner, import/export, and diffable storage.
+lead: A full-featured API client in one small native binary - without the browser engine or the lock-in.
+description: Helena's features - auth, scripting, real-time, chaining, the runner, import/export, and diffable storage.
 ---
 
 ## Request builder
@@ -17,7 +17,7 @@ anyway).
 
 ## Variables &amp; environments
 
-{% raw %}`{{variable}}`{% endraw %} resolution everywhere — URL, query, headers, and body — with a
+{% raw %}`{{variable}}`{% endraw %} resolution everywhere - URL, query, headers, and body - with a
 live preview of the resolved URL. Variables resolve through a layered scope
 chain so the most specific value wins:
 
@@ -41,7 +41,7 @@ authorization-code + PKCE, with token caching) · **OAuth 1.0a** (HMAC-SHA1) ·
 ## Scripting, tests &amp; assertions
 
 Pre/post **JavaScript** hooks (via the pure-Go goja engine) with a curated
-`helena.*` API — environment access, `interpolate`, `sendRequest`, cookie
+`helena.*` API - environment access, `interpolate`, `sendRequest`, cookie
 reads, hashing, base64, uuid, sleep, and headless runner control. Verify
 responses with a scripted `test()`/`expect()` framework or the no-code
 **Assertions** tab.
@@ -49,21 +49,21 @@ responses with a scripted `test()`/`expect()` framework or the no-code
 ## Request chaining
 
 A request can declare other requests to run **first**; their results are bound
-as `chain.<alias>` for the leaf's scripts and templates — so you can log in,
+as `chain.<alias>` for the leaf's scripts and templates - so you can log in,
 then use the token, in a single Send.
 
-## Real-time — SSE &amp; WebSocket
+## Real-time - SSE &amp; WebSocket
 
 Stream **Server-Sent Events** straight into the response view, or open a
 **WebSocket** session (`ws://` / `wss://`) with a live two-way transcript. Both
-protocols are hand-rolled on the Go standard library — no third-party network
+protocols are hand-rolled on the Go standard library - no third-party network
 dependency.
 
 ## Collections &amp; the headless runner
 
 Organize requests into workspaces, collections, and folders. Run a whole
 collection from the GUI, or **headlessly from the CLI** with `helena run` for CI
-— same resolution, scripts, and assertions as an interactive Send.
+- same resolution, scripts, and assertions as an interactive Send.
 
 ## Import &amp; export
 
@@ -73,7 +73,7 @@ paste a cURL command to build a request.
 
 ## Storage &amp; privacy
 
-Everything is plain **Open Collection YAML** on disk — diff and merge it like
+Everything is plain **Open Collection YAML** on disk - diff and merge it like
 source code. Auth secrets and Secret-flagged variables are **externalized** to a
 store under your OS config dir (outside the repo), so a committed collection
 carries no cleartext credential. The session env overlay never touches disk.

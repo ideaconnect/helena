@@ -11,7 +11,7 @@ COVERAGE_EXCLUDES := internal/ui,cmd,features,integration,examples
 COVERAGE_PROFILE  := coverage.out
 COVERAGE_HTML     := coverage.html
 
-.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth website website-build screenshots
+.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth website website-build screenshots screenshots-fancy
 
 # The project website is a self-contained Jekyll site under website/ (#64). It
 # builds with dockerized Ruby — no local Ruby toolchain needed. The container
@@ -115,6 +115,14 @@ website-build:
 screenshots:
 	HELENA_SHOTS="$(CURDIR)/$(WEBSITE_DIR)/assets/img" go test ./internal/ui -run TestGenerateScreenshots -count=1 -v
 	@echo "wrote $(WEBSITE_DIR)/assets/img/*.png"
+
+# screenshots-fancy: dress the hero captures as floating app windows (title bar,
+# rounded corners, drop shadow) for the website hero box. Needs ImageMagick +
+# bash; run `make screenshots` first to refresh the source captures.
+IMG := $(WEBSITE_DIR)/assets/img
+screenshots-fancy:
+	$(WEBSITE_DIR)/tools/frame-shot.sh $(IMG)/app-hero.png $(IMG)/app-hero-fancy.png
+	$(WEBSITE_DIR)/tools/frame-shot.sh $(IMG)/shot-auth.png $(IMG)/shot-auth-fancy.png
 
 vet:
 	go vet ./...

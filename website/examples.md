@@ -3,14 +3,14 @@ layout: page
 title: Examples
 eyebrow: See it in action
 lead: A few representative workflows, captured from the real app running against a local demo API.
-description: Example Helena workflows — composing requests, authentication, variables, chaining, real-time WebSocket, and headless CI runs.
+description: Example Helena workflows - composing requests, authentication, variables, chaining, real-time WebSocket, and headless CI runs.
 ---
 
 ## Compose and send a request
 
 Pick a method, type a URL (with {% raw %}`{{variables}}`{% endraw %}), fill in a
 body, hit **Send**. The response panel pretty-prints JSON with structured
-folding, search, and a raw view — and shows the status, size, and timing.
+folding, search, and a raw view - and shows the status, size, and timing.
 
 <figure class="shot">
   <img src="{{ '/assets/img/app-hero.png' | relative_url }}" alt="The Helena desktop app: a collection sidebar, a POST request with a JSON body, and the 201 Created response">
@@ -19,14 +19,14 @@ folding, search, and a raw view — and shows the status, size, and timing.
 
 ## Authenticate, nine schemes
 
-Open the **Auth** tab and choose a scheme — Basic, Bearer, API Key, OAuth&nbsp;2.0
+Open the **Auth** tab and choose a scheme - Basic, Bearer, API Key, OAuth&nbsp;2.0
 (incl. auth-code + PKCE), OAuth&nbsp;1.0a, WSSE, AWS&nbsp;SigV4, Digest, or NTLM.
 Credentials can come from {% raw %}`{{variables}}`{% endraw %}, so secrets stay
 out of the collection YAML.
 
 <figure class="shot">
   <img src="{{ '/assets/img/shot-auth.png' | relative_url }}" alt="The Helena Auth tab set to Bearer Token, with the token sourced from a variable, and a 200 OK response">
-  <figcaption>A Bearer token sourced from <code>{% raw %}{{TOKEN}}{% endraw %}</code> — resolved on the wire, never written to disk.</figcaption>
+  <figcaption>A Bearer token sourced from <code>{% raw %}{{TOKEN}}{% endraw %}</code> - resolved on the wire, never written to disk.</figcaption>
 </figure>
 
 ```js
@@ -50,7 +50,7 @@ values), then read the response back as a folding JSON tree with search.
 
 ## Log in once, reuse the token
 
-Chain a login request before the leaf and forward its token — no copy-paste:
+Chain a login request before the leaf and forward its token - no copy-paste:
 
 {% raw %}
 ```js
@@ -66,15 +66,15 @@ request.headers["Authorization"] = "Bearer " + chain.login.response.json.token;
 
 ## Stream a WebSocket feed
 
-Enter a `wss://` URL and press **Send** — Helena opens a live session. Type
+Enter a `wss://` URL and press **Send** - Helena opens a live session. Type
 messages to send; received messages stream into the transcript. Pings are
 answered automatically and fragmented messages are reassembled. Server-Sent
 Events work the same way: a `text/event-stream` response appends events live.
 
 ## Run a collection in CI
 
-Run the whole collection headlessly — same resolution, scripts, and assertions
-as the GUI — and gate your pipeline on the exit code:
+Run the whole collection headlessly - same resolution, scripts, and assertions
+as the GUI - and gate your pipeline on the exit code:
 
 ```bash
 helena run ./collections/acme --env Staging
@@ -89,5 +89,5 @@ ok    Users/Create user            POST   201  5ms
 ```
 
 > The screenshots above are real captures of the app rendered against a local
-> demo API — regenerate them any time with `make screenshots` (see
+> demo API - regenerate them any time with `make screenshots` (see
 > `website/README.md`).

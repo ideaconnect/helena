@@ -1,48 +1,66 @@
 ---
 layout: default
-title: Helena — a native, lightweight API client
+title: Helena - a fast, native API client
 ---
 
 <section class="hero">
   <div class="wrap">
-    <span class="pill"><span class="dot"></span> One ~35 MB binary · no Electron · plain-text collections</span>
-    <h1>The API client that's <span class="accent">native</span>,<br>lean, and version-controllable.</h1>
-    <p class="lead">
-      Helena is a super-lightweight, cross-platform API client — a native
-      alternative to Postman and Bruno, built with Go&nbsp;+&nbsp;Fyne. Diffable
-      Open&nbsp;Collection YAML, nine auth schemes, scripting, real-time SSE
-      &amp; WebSocket, and a headless runner.
-    </p>
-    <div class="actions">
-      <a class="btn btn-primary" href="{{ site.releases }}">Download</a>
-      <a class="btn btn-ghost" href="{{ '/features/' | relative_url }}">Explore features</a>
-      <a class="btn btn-ghost" href="{{ site.repo }}">GitHub ★</a>
-    </div>
-    <div class="hero-art">
-      <img src="{{ '/assets/img/app-hero.png' | relative_url }}" alt="The Helena desktop app: a collection sidebar, a POST request with a JSON body, and the 201 Created response">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <span class="pill"><span class="dot"></span> One ~35 MB binary. No Electron. Plain-text collections.</span>
+        <h1>A fast API client you can <span class="accent">keep in git</span>.</h1>
+        <p class="lead">
+          Helena does what Postman and Bruno do - send requests, script tests,
+          run whole collections - but it's a single native app that opens
+          instantly and stores everything as plain YAML you can diff and review.
+          No browser engine, no account, no cloud.
+        </p>
+        <div class="actions">
+          <a class="btn btn-primary" href="{{ site.releases }}">Download</a>
+          <a class="btn btn-ghost" href="{{ '/features/' | relative_url }}">See what it does</a>
+          <a class="btn btn-ghost" href="{{ site.repo }}">GitHub</a>
+        </div>
+        <p class="sub">Free and open source. Runs on <b>Linux</b>, <b>macOS</b>, and <b>Windows</b>.</p>
+      </div>
+
+      <div class="hero-box">
+        <figure class="win win-back">
+          <img src="{{ '/assets/img/shot-auth-fancy.png' | relative_url }}" alt="Helena's Auth tab with a Bearer token and a JSON response">
+        </figure>
+        <figure class="win win-front">
+          <img src="{{ '/assets/img/app-hero-fancy.png' | relative_url }}" alt="The Helena app: a collection sidebar, a POST request with a JSON body, and the 201 Created response">
+        </figure>
+      </div>
     </div>
   </div>
 </section>
 
+<div class="band reveal">
+  <div class="wrap">
+    <h2>Everything you reach for in Postman, in a window that <span class="accent">opens instantly</span>.</h2>
+    <p>Nine auth schemes, scripting and tests, request chaining, SSE and WebSocket, a headless CLI runner - and your collections stay as files in your repo.</p>
+  </div>
+</div>
+
 <section>
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head reveal">
       <p class="eyebrow">Why Helena</p>
-      <h2>Built around three trade-offs</h2>
-      <p>Postman and Bruno ship a browser engine and store collections in formats that don't diff cleanly. Helena goes the other way.</p>
+      <h2>Three things it does differently</h2>
+      <p>Postman and Bruno bundle a whole browser and keep your collections in formats that don't diff well. Helena goes the other way.</p>
     </div>
-    <div class="grid">
+    <div class="grid reveal">
       <div class="card">
         <h3><span class="ico">⚡</span> Native, no Electron</h3>
-        <p>Fyne renders through OpenGL. The binary is ~35&nbsp;MB and starts instantly — no bundled Chromium.</p>
+        <p>It's a real desktop app drawn with Fyne, not a packaged web page. The binary is about 35 MB and starts right away.</p>
       </div>
       <div class="card">
-        <h3><span class="ico">🗂️</span> Diffable YAML</h3>
-        <p>Workspaces, collections, and requests are plain Open Collection YAML you can review and merge like any source. Secrets stay out of it.</p>
+        <h3><span class="ico">🗂️</span> Collections are just files</h3>
+        <p>Workspaces, collections, and requests are plain YAML you can review and merge like the rest of your code. Secrets stay out of them.</p>
       </div>
       <div class="card">
-        <h3><span class="ico">🧪</span> Boring, debuggable Go</h3>
-        <p>No JS sandbox to babysit, no exotic concurrency. The runtime is <code>go test</code>-able end to end.</p>
+        <h3><span class="ico">🧪</span> Plain, testable Go</h3>
+        <p>No sandbox to babysit and no surprising magic. The whole runtime is covered by <code>go test</code>.</p>
       </div>
     </div>
   </div>
@@ -50,18 +68,46 @@ title: Helena — a native, lightweight API client
 
 <section style="padding-top:0">
   <div class="wrap">
-    <div class="section-head">
+    <div class="section-head reveal">
       <p class="eyebrow">What's inside</p>
-      <h2>A lot of client, very little weight</h2>
+      <h2>A lot of client for very little weight</h2>
     </div>
-    <div class="grid">
-      <div class="card"><h3><span class="ico">🔐</span> Nine auth schemes</h3><p>Basic, Bearer, API Key, OAuth&nbsp;2.0 (incl. auth-code + PKCE), OAuth&nbsp;1.0a, WSSE, AWS&nbsp;SigV4, Digest, NTLM.</p></div>
-      <div class="card"><h3><span class="ico">📡</span> Real-time</h3><p>Stream Server-Sent Events and open bidirectional WebSocket sessions — both hand-rolled on the standard library.</p></div>
-      <div class="card"><h3><span class="ico">🔣</span> Variables everywhere</h3><p>A layered <code>{% raw %}{{var}}{% endraw %}</code> scope chain across URL, query, headers, and body, with a live resolved-URL preview.</p></div>
-      <div class="card"><h3><span class="ico">📜</span> Scripting &amp; tests</h3><p>Pre/post JavaScript hooks with a curated <code>helena.*</code> API, plus <code>test()</code>/<code>expect()</code> and no-code assertions.</p></div>
-      <div class="card"><h3><span class="ico">🔗</span> Chaining &amp; runner</h3><p>Run other requests first and feed results forward; run a whole collection headlessly with <code>helena run</code>.</p></div>
-      <div class="card"><h3><span class="ico">🔄</span> Import &amp; export</h3><p>Import OpenAPI / Swagger / WSDL / Postman; export to cURL, wget, fetch, Python, or Go.</p></div>
+    <div class="grid reveal">
+      <div class="card"><h3><span class="ico">🔐</span> Nine auth schemes</h3><p>Basic, Bearer, API Key, OAuth 2.0 (with auth-code + PKCE), OAuth 1.0a, WSSE, AWS SigV4, Digest, and NTLM.</p></div>
+      <div class="card"><h3><span class="ico">📡</span> Real-time</h3><p>Stream Server-Sent Events and open two-way WebSocket sessions. Both are written straight on the standard library.</p></div>
+      <div class="card"><h3><span class="ico">🔣</span> Variables everywhere</h3><p>A layered <code>{% raw %}{{var}}{% endraw %}</code> scope chain across the URL, query, headers, and body, with a live preview of the resolved URL.</p></div>
+      <div class="card"><h3><span class="ico">📜</span> Scripting &amp; tests</h3><p>Pre/post JavaScript with a small <code>helena.*</code> API, plus <code>test()</code>/<code>expect()</code> and a no-code Assertions tab.</p></div>
+      <div class="card"><h3><span class="ico">🔗</span> Chaining &amp; a CLI runner</h3><p>Run other requests first and pass their results forward; run a whole collection from CI with <code>helena run</code>.</p></div>
+      <div class="card"><h3><span class="ico">🔄</span> Import &amp; export</h3><p>Import OpenAPI, Swagger, WSDL, or Postman; export to cURL, wget, fetch, Python, or Go.</p></div>
     </div>
     <p style="margin-top:24px"><a class="btn btn-ghost" href="{{ '/roadmap/' | relative_url }}">See the roadmap →</a></p>
   </div>
 </section>
+
+<section id="contribute" style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Contribute</p>
+      <h2>Helena is open - jump in</h2>
+      <p>It's a single Go module with a clear set of rules and good test coverage, so it's an easy codebase to land a change in.</p>
+    </div>
+    <div class="grid reveal">
+      <div class="card"><h3><span class="ico">⭐</span> Star or fork</h3><p>If Helena is useful to you, a star helps. Fork it and try a change - the build is just <code>make build</code>.</p></div>
+      <div class="card"><h3><span class="ico">🐛</span> File an issue</h3><p>Found a bug or want a feature? <a href="{{ site.repo }}/issues">Open an issue</a> - including "this was confusing" reports.</p></div>
+      <div class="card"><h3><span class="ico">🔧</span> Send a PR</h3><p>Read <a href="{{ site.repo }}/blob/main/CONTRIBUTING.md">CONTRIBUTING</a> for the setup and the project's invariants. Every change ships with tests and docs.</p></div>
+    </div>
+    <div class="cta-row reveal">
+      <a class="btn btn-primary" href="{{ site.repo }}">Open the repo</a>
+      <a class="btn btn-ghost" href="{{ site.repo }}/issues">Browse issues</a>
+      <a class="btn btn-ghost" href="{{ '/contact/' | relative_url }}">Get in touch</a>
+    </div>
+  </div>
+</section>
+
+<div class="band reveal">
+  <div class="wrap">
+    <h2>Have a question or an idea?</h2>
+    <p>Drop a line and I'll get back to you.</p>
+    <p style="margin-top:18px"><a class="btn btn-primary" href="{{ '/contact/' | relative_url }}">Contact</a></p>
+  </div>
+</div>
