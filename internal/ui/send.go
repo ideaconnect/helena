@@ -253,6 +253,12 @@ func (m *MainUI) send() {
 		m.Status.SetText("Enter a URL first")
 		return
 	}
+	// A ws:// or wss:// URL is a WebSocket session, not an HTTP request (#72):
+	// open the bidirectional message dialog instead of the request/response path.
+	if isWebSocketURL(m.URL.Text) {
+		m.openWebSocket()
+		return
+	}
 	var req model.Request
 	if m.currentRequest != nil {
 		// The body editor's OnChanged is debounced; pull its live bytes now so a
