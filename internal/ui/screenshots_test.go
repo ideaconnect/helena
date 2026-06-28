@@ -28,6 +28,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
+	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/responsefmt"
@@ -82,6 +83,16 @@ func fakeAPI(t *testing.T) *httptest.Server {
 			"users": []any{user, map[string]any{"id": 7, "name": "Alan Turing", "role": "engineer"}},
 		})
 	})
+	mux.HandleFunc("/login", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"token": "eyJhbGciOiJIUzI1NiJ9.demo.signature", "expiresIn": 3600,
+		})
+	})
+	mux.HandleFunc("/orders", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusCreated, map[string]any{
+			"id": "ord_1099", "status": "confirmed", "total": 4200,
+		})
+	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 	return srv
@@ -110,8 +121,19 @@ func sampleCollection(t *testing.T, base string) string {
 						Content: "{\n  \"name\": \"Grace Hopper\",\n  \"role\": \"engineer\"\n}"}},
 			}},
 			{Name: "Auth", Requests: []model.Request{
+				{ID: "login", Name: "Login", Method: model.POST, URL: base + "/login",
+					Body: model.Body{Type: model.BodyJSON,
+						Content: "{\n  \"email\": \"ada@example.com\",\n  \"password\": \"{{PASSWORD}}\"\n}"}},
 				{ID: "profile", Name: "My profile", Method: model.GET, URL: base + "/users/42",
 					Auth: model.Auth{Type: model.AuthBearer, Bearer: &model.BearerAuth{Token: "{{TOKEN}}"}}},
+			}},
+			{Name: "Orders", Requests: []model.Request{
+				// Runs "Auth/Login" first (aliased "auth") and reuses its token.
+				{ID: "place-order", Name: "Place order", Method: model.POST, URL: base + "/orders",
+					Chain:   []model.ChainStep{{Alias: "auth", Request: "Auth/Login", RequestID: "login"}},
+					Headers: []model.KeyValue{{Key: "Authorization", Value: "Bearer {{chain.auth.response.json.token}}", Enabled: true}},
+					Body: model.Body{Type: model.BodyJSON,
+						Content: "{\n  \"sku\": \"HLN-42\",\n  \"qty\": 2\n}"}},
 			}},
 		},
 	}
@@ -191,6 +213,41 @@ func sendSync(t *testing.T, m *MainUI, sess *session.Session) {
 	})
 }
 
+// sendChainSync resolves the current request's chain (running each prior
+// request) and then the leaf, exactly like a live Send, and pushes the result
+// into the response panel — so a chaining capture shows a real round-trip where
+// the leaf reused a value produced by an earlier request.
+func sendChainSync(t *testing.T, m *MainUI, sess *session.Session) {
+	t.Helper()
+	req := snapshotRequest(*m.currentRequest)
+	req.Auth = sess.EffectiveAuth(m.currentRequestID)
+	client := httpclient.New(sess.Settings())
+	rt := scripting.New(sessionEnvBridge{s: sess})
+	exec := chainExecutor{rt: rt, client: client, sess: sess}
+	var finder chain.RequestFinder = nilFinder{}
+	if snap := sess.SnapshotChainFinder(); snap != nil {
+		finder = snap
+	}
+	noop := func(int, int, string, string) {}
+	chainMap, chainConsole, err := chain.Resolve(context.Background(), req, finder, exec, noop)
+	if err != nil {
+		t.Fatalf("chain resolve: %v", err)
+	}
+	view, leafConsole, err := exec.ExecuteOnce(context.Background(), req, chainMap)
+	if err != nil {
+		t.Fatalf("chain leaf: %v", err)
+	}
+	status := fmt.Sprintf("%s · %s · %s",
+		view.Response.Status, responsefmt.HumanSize(view.Response.Size),
+		responsefmt.HumanDuration(view.Response.Duration))
+	m.applyResponse(&tabResponse{
+		rawBody:     string(view.Response.Body),
+		headersText: responsefmt.FormatHeaders(view.Response.Headers),
+		status:      status,
+		console:     append(chainConsole, leafConsole...),
+	})
+}
+
 // capture renders the window to a PNG under outDir. A short settle Refresh pass
 // flushes any pending widget layout before the snapshot.
 func capture(t *testing.T, w fyne.Window, outDir, name string) {
@@ -252,5 +309,17 @@ func TestGenerateScreenshots(t *testing.T) {
 		sendSync(t, m, sess)
 		m.Response.SelectIndex(0)
 		capture(t, w, outDir, "shot-auth.png")
+	}
+
+	// Chaining: the Chain tab shows a prior request bound as `auth`, and the
+	// response is the order created after reusing the chained login token.
+	{
+		m, w, sess := shotUI(t, dir)
+		sess.SetEnvOverlay("PASSWORD", "demo-password")
+		openByID(t, m, sess, dir, "place-order")
+		m.Request.SelectIndex(6) // Chain
+		sendChainSync(t, m, sess)
+		m.Response.SelectIndex(0) // Body
+		capture(t, w, outDir, "shot-chain.png")
 	}
 }

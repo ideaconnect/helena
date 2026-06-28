@@ -23,6 +23,7 @@ baseurl: "/helena"
 
 repo: "https://github.com/ideaconnect/helena"
 releases: "https://github.com/ideaconnect/helena/releases"
+discord: "https://discord.gg/uYsuaa8HNm"
 
 # Pretty URLs: each page builds to <name>/index.html so the nav's "/features/",
 # "/contact/", … links resolve (GitHub Pages doesn't map "/x/" to "x.html").

@@ -11,6 +11,7 @@ on GitHub Pages' stock Jekyll without extra configuration.
 website/
 ├── _config.yml          # site config + nav
 ├── _layouts/            # default.html (chrome) + page.html (content pages)
+├── _includes/           # inline icon SVGs (icon-github/discord/download)
 ├── index.html           # landing / hero (two-column hero box)
 ├── features.md          # feature catalogue
 ├── roadmap.md           # graphical timeline (shipped / planned)
@@ -25,6 +26,7 @@ website/
         ├── helena-icon.png # the real app icon (favicon + brand)
         ├── author.jpg       # About-page photo of the author
         ├── idct-logo.png    # IDCT brand mark (About page)
+        ├── discord-qr.png   # QR code for the Discord invite (Contact page)
         ├── *-fancy.png      # window-framed hero-box art (baked, see below)
         └── *.png            # real UI captures (see "Screenshots" below)
 ```
@@ -121,3 +123,20 @@ screenshots-fancy` (needs ImageMagick).
 [`contact.md`](contact.md) posts to [Web3Forms](https://web3forms.com) with
 hCaptcha - the same setup as <https://nuts.idct.tech/contact/>. Submissions go
 to the form owner's inbox via the `access_key`; there's no server to run.
+
+The page also links the **Discord** (the invite lives in `_config.yml` as
+`discord:`) and shows a QR code for it. Regenerate the QR with
+[qrencode](https://fukuchi.org/works/qrencode/):
+
+```bash
+qrencode -o assets/img/discord-qr.png -s 8 -m 2 -l M "$(grep -oP 'discord:\s*"\K[^"]+' _config.yml)"
+```
+
+## Icons
+
+The GitHub / Discord / download glyphs are **Font Awesome Free 6** SVGs
+(brands + solid), inlined as Jekyll includes under [`_includes/`](_includes/)
+so they recolour with `currentColor` and need no CDN or web font. Font Awesome
+Free icons are licensed **CC BY 4.0** (the desktop app embeds the same icon set;
+see [`assets/icons/LICENSE-fontawesome.txt`](../assets/icons/LICENSE-fontawesome.txt)).
+The IDCT logo and the author photo are the project owner's own.

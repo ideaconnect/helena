@@ -48,19 +48,37 @@ values), then read the response back as a folding JSON tree with search.
   <figcaption>Request headers including a dynamic <code>{% raw %}{{$guid}}{% endraw %}</code>, and a nested JSON response.</figcaption>
 </figure>
 
-## Log in once, reuse the token
+## Chain requests together
 
-Chain a login request before the leaf and forward its token - no copy-paste:
+A request can run other requests **first**. On the **Chain** tab, name a prior
+request by its path and give it an alias; Helena runs it before the leaf and
+binds the result as `chain.<alias>` for your headers, body, and scripts. So you
+can log in and place an order in a single Send - no copy-paste, no juggling
+tokens by hand.
+
+<figure class="shot">
+  <img src="{{ '/assets/img/shot-chain.png' | relative_url }}" alt="Helena's Chain tab: a Place order request that runs Auth/Login first (aliased auth), with the 201 Created order response">
+  <figcaption>"Place order" runs "Auth/Login" first (aliased <code>auth</code>); the order then reuses the login token and comes back 201 Created.</figcaption>
+</figure>
+
+Reference the chained response anywhere a {% raw %}`{{variable}}`{% endraw %} works - here, the
+token straight into an Authorization header:
+
+{% raw %}
+```
+Authorization: Bearer {{chain.auth.response.json.token}}
+```
+{% endraw %}
+
+...or reach it from a script:
 
 {% raw %}
 ```js
-// Login → post-response
-helena.env.set("TOKEN", response.json.token);
+// Pull a value out of an earlier request's response
+const token = chain.auth.response.json.token;
 
-// Any later request → Auth tab → Bearer
-//   Token:  {{TOKEN}}
-// …or pull a chained result directly in a script:
-request.headers["Authorization"] = "Bearer " + chain.login.response.json.token;
+// Or stash it from the login's own post-response script, then use it by name
+helena.env.set("TOKEN", response.json.token);   // -> {{TOKEN}} anywhere
 ```
 {% endraw %}
 

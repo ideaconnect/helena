@@ -27,8 +27,9 @@
         {% endfor %}
       </nav>
       <div class="nav-cta">
-        <a class="ghost" href="{{ site.repo }}">GitHub</a>
-        <a class="solid" href="{{ '/download/' | relative_url }}">Download</a>
+        <a class="ghost" href="{{ site.repo }}">{% include icon-github.svg %}<span>GitHub</span></a>
+        <a class="ghost icon-only" href="{{ site.discord }}" aria-label="Join the Discord" title="Join the Discord">{% include icon-discord.svg %}</a>
+        <a class="solid" href="{{ '/download/' | relative_url }}">{% include icon-download.svg %}<span>Download</span></a>
       </div>
     </div>
   </header>
@@ -42,6 +43,7 @@
       <span>© {{ 'now' | date: "%Y" }} <a href="{{ site.author_url }}">{{ site.copyright }}</a> · Helena is open source under its repository license.</span>
       <span>
         <a href="{{ site.repo }}">GitHub</a> ·
+        <a href="{{ site.discord }}">Discord</a> ·
         <a href="{{ '/roadmap/' | relative_url }}">Roadmap</a> ·
         <a href="{{ '/contact/' | relative_url }}">Contact</a> ·
         <a href="{{ site.repo }}/issues">Issues</a>

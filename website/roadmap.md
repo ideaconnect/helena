@@ -7,8 +7,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
 ---
 
 <div style="margin:8px 0 30px">
-  <div class="meter"><span style="width:73%"></span></div>
-  <div class="meter-label"><span>8 of 11 tracks shipped</span><span>73%</span></div>
+  <div class="meter"><span style="width:67%"></span></div>
+  <div class="meter-label"><span>8 of 12 tracks shipped</span><span>67%</span></div>
 </div>
 
 <ul class="timeline">
@@ -81,6 +81,14 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
         <li><b>Flatpak / Flathub</b> (the AppStream metadata already lives in the repo), plus AppImage, on Linux</li>
       </ul>
       <div class="chips"><span class="chip">.deb / .rpm</span><span class="chip">winget</span><span class="chip">Scoop</span><span class="chip">Microsoft Store</span><span class="chip">Mac App Store</span><span class="chip">Flatpak</span><span class="chip">Homebrew</span><span class="chip">AppImage</span></div>
+    </div>
+  </li>
+
+  <li class="tl-item active"><span class="tl-dot"></span>
+    <div class="tl-card">
+      <div class="tl-head"><h3>UI beautification</h3><span class="badge progress">In progress</span></div>
+      <p>An ongoing visual refresh: the green accent, the Inter / JetBrains Mono type, and the icon sidebar toolbar are in; refined tabs, a cleaner top bar, and general polish are next - so Helena looks as good as it works.</p>
+      <div class="chips"><span class="chip">green accent</span><span class="chip">custom fonts</span><span class="chip">icon toolbar</span><span class="chip">tab + top-bar polish</span></div>
     </div>
   </li>
 
