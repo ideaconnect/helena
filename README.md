@@ -263,7 +263,13 @@ location.
 Found a vulnerability? Please report it privately — see
 [SECURITY.md](SECURITY.md). Do not open a public issue for security problems.
 
-## User guide
+## Documentation
+
+Full docs are published as a site at **<https://ideaconnect.github.io/helena/>**
+— built from [`docs/`](docs/) with MkDocs Material (see [`mkdocs.yml`](mkdocs.yml)),
+with feature guides for [authentication](docs/guide/auth.md),
+[real-time SSE & WebSocket](docs/guide/realtime.md), and
+[scripting & assertions](docs/guide/scripting.md).
 
 New to Helena? The [User Guide](docs/USER_GUIDE.md) walks through collections,
 sending requests, environments/variables, auth, chaining, scripting, and

@@ -1,0 +1,71 @@
+site_name: Helena
+site_description: >-
+  A super-lightweight, cross-platform API client — a native alternative to
+  Postman and Bruno, built with Go + Fyne.
+site_url: https://ideaconnect.github.io/helena/
+repo_url: https://github.com/ideaconnect/helena
+repo_name: ideaconnect/helena
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Bartosz Pachołek / ideaconnect
+
+# Documentation lives in docs/. This config turns the existing guides plus the
+# per-feature pages into a searchable Material site, deployed to GitHub Pages by
+# .github/workflows/docs.yml. MkDocs Material was chosen as the de-facto standard
+# for developer-tool docs (config + Markdown, no changes to the Go app); swap the
+# theme here if you prefer another generator.
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: green
+      accent: green
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: green
+      accent: green
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.snippets
+  - pymdownx.tabbed:
+      alternate_style: true
+
+plugins:
+  - search
+
+# docs/media/ holds the screenshot capture guide (and, once captured, images),
+# not a site page — keep it out of the nav without a build warning.
+not_in_nav: |
+  /media/README.md
+
+nav:
+  - Home: index.md
+  - Getting started: USER_GUIDE.md
+  - Guides:
+      - Authentication: guide/auth.md
+      - Real-time — SSE & WebSocket: guide/realtime.md
+      - Scripting & assertions: guide/scripting.md
+  - Packaging: PACKAGING.md
