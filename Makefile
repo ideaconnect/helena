@@ -11,7 +11,7 @@ COVERAGE_EXCLUDES := internal/ui,cmd,features,integration,examples
 COVERAGE_PROFILE  := coverage.out
 COVERAGE_HTML     := coverage.html
 
-.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth website website-build
+.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth website website-build screenshots
 
 # The project website is a self-contained Jekyll site under website/ (#64). It
 # builds with dockerized Ruby — no local Ruby toolchain needed. The container
@@ -107,6 +107,14 @@ website-build:
 	@command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker. See $(WEBSITE_DIR)/README.md"; exit 1; }
 	$(DOCKER_RUBY) ruby:3.3 sh -c "bundle install && bundle exec jekyll build --baseurl /helena"
 	@echo "built $(WEBSITE_DIR)/_site"
+
+# screenshots: (re)generate the website screenshots by rendering the real UI
+# against a fake in-memory API with Fyne's software canvas — no display, no
+# running app, no C toolchain. Writes website/assets/img/*.png. The generator is
+# an env-gated test (skipped by the normal suite); see internal/ui/screenshots_test.go.
+screenshots:
+	HELENA_SHOTS="$(CURDIR)/$(WEBSITE_DIR)/assets/img" go test ./internal/ui -run TestGenerateScreenshots -count=1 -v
+	@echo "wrote $(WEBSITE_DIR)/assets/img/*.png"
 
 vet:
 	go vet ./...

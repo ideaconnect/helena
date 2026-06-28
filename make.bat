@@ -1,7 +1,7 @@
 @echo off
 REM Helena dev convenience script — Windows .bat equivalent of the Makefile.
 REM Usage:   make.bat <target>
-REM Targets: run build test coverage coverage-html coverage-gate mutation vet fmt lint tidy clean website website-build
+REM Targets: run build test coverage coverage-html coverage-gate mutation vet fmt lint tidy clean website website-build screenshots
 REM Notes:   building cmd\helena needs a C toolchain (TDM-GCC or MSYS2 mingw-w64)
 REM          on PATH because Fyne uses cgo + OpenGL.
 
@@ -32,6 +32,7 @@ if /I "%~1"=="tidy"            goto :tidy
 if /I "%~1"=="clean"           goto :clean
 if /I "%~1"=="website"         goto :website
 if /I "%~1"=="website-build"   goto :website-build
+if /I "%~1"=="screenshots"     goto :screenshots
 goto :usage
 
 :run
@@ -129,9 +130,17 @@ docker run --rm -e BUNDLE_PATH=/site/.bundle -v "%CD%\website:/site" -w /site ru
 echo built website\_site
 goto :end
 
+REM screenshots: render the real UI against a fake API (Fyne software canvas, no
+REM display / no C toolchain) and write website\assets\img\*.png. Env-gated test.
+:screenshots
+set "HELENA_SHOTS=%CD%\website\assets\img"
+go test .\internal\ui -run TestGenerateScreenshots -count=1 -v
+echo wrote website\assets\img\*.png
+goto :end
+
 :usage
 echo Usage: %~n0 ^<target^>
-echo Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean website website-build
+echo Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean website website-build screenshots
 exit /b 1
 
 :end

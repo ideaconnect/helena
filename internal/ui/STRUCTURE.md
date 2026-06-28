@@ -59,6 +59,7 @@
 | [shortcuts_test.go](shortcuts_test.go) | Shortcut registration, modifier label, dialog open, and nil-window short-circuit. |
 | [theme_test.go](theme_test.go) | `themeName` / `themeFromName` round-trip and `ApplyTheme` panic-safety. |
 | [helena_theme_test.go](helena_theme_test.go) | `helenaTheme`: every overridden colour present in both variants, the green accent pinned, unknown names delegate to base, forced-variant behaviour (Light/Dark ignore the passed variant, System follows it), `Font` style mapping (incl. symbol delegation), `Size` overrides + delegation, and `ApplyTheme` installing `helenaTheme`. |
+| [screenshots_test.go](screenshots_test.go) | **Dev tool, not a unit test** — `TestGenerateScreenshots` renders the real UI (software canvas, real theme + fonts) against a fake in-memory JSON API and writes the project-website PNGs. Skipped unless `HELENA_SHOTS=<dir>` is set; driven by `make screenshots`. |
 
 ## MainUI struct
 

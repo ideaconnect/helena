@@ -11,6 +11,9 @@ description: >-
   alternative to Postman and Bruno, built with Go + Fyne. One self-contained
   binary, plain-text collections, nine auth schemes, scripting, SSE & WebSocket.
 author: Bartosz Pachołek
+# Copyright line + author/company link rendered in the footer and About page.
+copyright: "IDCT · Bartosz Pachołek"
+author_url: "https://idct.tech"
 
 # Update url/baseurl for your deployment. For project pages served at
 # https://<user>.github.io/helena/, keep baseurl: "/helena".
