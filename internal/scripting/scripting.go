@@ -114,7 +114,7 @@ func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Re
 	}
 	vm := goja.New()
 	res := &Result{}
-	if err := rt.bindHelena(vm); err != nil {
+	if err := rt.bindHelena(ctx, vm); err != nil {
 		return *res, err
 	}
 	bindConsole(vm, res)
@@ -148,7 +148,7 @@ func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.R
 	}
 	vm := goja.New()
 	res := &Result{}
-	if err := rt.bindHelena(vm); err != nil {
+	if err := rt.bindHelena(ctx, vm); err != nil {
 		return *res, err
 	}
 	bindConsole(vm, res)

@@ -19,7 +19,7 @@ import (
 // helena.vars.get alias). The same surface is bound in pre- and
 // post-response phases so user scripts can rely on identical APIs in
 // both. The session overlay is the only place script writes land.
-func (rt *Runtime) bindHelena(vm *goja.Runtime) error {
+func (rt *Runtime) bindHelena(ctx context.Context, vm *goja.Runtime) error {
 	helena := vm.NewObject()
 
 	env := vm.NewObject()
@@ -50,7 +50,7 @@ func (rt *Runtime) bindHelena(vm *goja.Runtime) error {
 		return err
 	}
 
-	if err := rt.bindHelpers(vm, helena); err != nil {
+	if err := rt.bindHelpers(ctx, vm, helena); err != nil {
 		return err
 	}
 

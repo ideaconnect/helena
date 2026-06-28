@@ -6,7 +6,7 @@
 | ---- | ------- |
 | [scripting.go](scripting.go) | Package doc, public types (`Runtime`, `Result`, `EnvBridge`, `ResponseInput`), constructor `New`, and the two entry points `RunPreRequest` / `RunPostResponse`. |
 | [bindings.go](bindings.go) | All internal binding helpers: `bindHelena`, `bindConsole`, `stringify`, `runWithTimeout`, `requestToObject` / `writeBackRequest` / `mergeKVFromObject`, `responseToObject`, `tryParseJSON`. |
-| [helpers.go](helpers.go) | `bindHelpers` — the curated, pure-compute `helena.uuid` / `helena.hash.*` / `helena.date.*` surface — and the local `scriptUUID` formatter. |
+| [helpers.go](helpers.go) | `bindHelpers` — the curated, pure-compute `helena.uuid` / `helena.hash.*` / `helena.date.*` / `helena.base64.*` surface plus `helena.sleep` (#92) — and the local `scriptUUID` formatter. |
 | [assert.go](assert.go) | `bindTest` (#87) — the `__helenaRecordTest` collector that appends to `Result.Tests`, plus the JS `testPrelude` that defines the global `test()` runner and the `expect()` matcher chain. |
 | [assert_test.go](assert_test.go) | Pass/fail recording, the matcher subset + `.not`, throw-in-test, and pre-request availability. |
 | [xml.go](xml.go) | `tryParseXML` and the recursive `readXMLElement` helper that converts response XML bodies into a JS-friendly nested map. |
@@ -82,7 +82,7 @@ tests.
 | Helper | What it does |
 | ------ | ------------ |
 | `bindHelena` | Attaches `helena.env.{get,set}` and `helena.vars.get` to the VM (all flow through `Runtime.env`), then calls `bindHelpers` to add the curated helper surface to the same `helena` object. |
-| `bindHelpers` | Attaches `helena.uuid()`, `helena.hash.{md5,sha1,sha256,sha512,hmacSha1,hmacSha256}`, and `helena.date.{now,timestamp}`. Pure-compute (crypto/hash, `crypto/rand`, clock); no I/O, so the sandbox boundary is unchanged. |
+| `bindHelpers` | Attaches `helena.uuid()`, `helena.hash.{md5,sha1,sha256,sha512,hmacSha1,hmacSha256}`, `helena.date.{now,timestamp}`, `helena.base64.{encode,decode}` (#92), and `helena.sleep(ms)` (#92). Pure-compute (crypto/hash, `crypto/rand`, clock); `sleep` only delays the calling script (clamped to `ScriptTimeout`, ctx-aware) and adds no I/O, so the sandbox boundary is unchanged. Takes the run `ctx` so `sleep` aborts on cancel/timeout. |
 | `bindConsole` | Attaches `console.{log,info,warn,error}`. Each emits one space-joined line into `Result.Console`. |
 | `bindTest` | Attaches `test()` / `expect()` (#87): binds the Go `__helenaRecordTest` collector (appends to `Result.Tests`) and runs `testPrelude`, the JS that defines the runner + matcher chain. |
 | `stringify` | Turns a `goja.Value` into a console line: strings pass through, `null` / `undefined` become their names, everything else is JSON-encoded so `console.log({a:1})` shows useful structure. |

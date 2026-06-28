@@ -1,12 +1,14 @@
 package scripting
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/md5"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"hash"
@@ -25,11 +27,14 @@ import (
 //	          hmacSha256(key, text)     -> hex HMAC digest
 //	helena.date.now()                   -> ISO-8601 (RFC 3339) UTC string
 //	helena.date.timestamp()             -> Unix seconds (number)
+//	helena.base64.encode / decode(s)    -> standard-base64 string (#92)
+//	helena.sleep(ms)                    -> block up to ms (capped, ctx-aware) (#92)
 //
 // Everything here is pure-compute — no filesystem, network, or process
 // access — so the helpers respect the scripting sandbox invariant (no new
-// I/O surface; see the package README threat model).
-func (rt *Runtime) bindHelpers(vm *goja.Runtime, helena *goja.Object) error {
+// I/O surface; see the package README threat model). sleep only delays the
+// calling script; it adds no I/O.
+func (rt *Runtime) bindHelpers(ctx context.Context, vm *goja.Runtime, helena *goja.Object) error {
 	if err := helena.Set("uuid", func(goja.FunctionCall) goja.Value {
 		return vm.ToValue(scriptUUID())
 	}); err != nil {
@@ -68,7 +73,48 @@ func (rt *Runtime) bindHelpers(vm *goja.Runtime, helena *goja.Object) error {
 	_ = dateObj.Set("timestamp", func(goja.FunctionCall) goja.Value {
 		return vm.ToValue(time.Now().Unix())
 	})
-	return helena.Set("date", dateObj)
+	if err := helena.Set("date", dateObj); err != nil {
+		return err
+	}
+
+	b64 := vm.NewObject()
+	_ = b64.Set("encode", func(call goja.FunctionCall) goja.Value {
+		return vm.ToValue(base64.StdEncoding.EncodeToString([]byte(call.Argument(0).String())))
+	})
+	_ = b64.Set("decode", func(call goja.FunctionCall) goja.Value {
+		data, err := base64.StdEncoding.DecodeString(call.Argument(0).String())
+		if err != nil {
+			panic(vm.NewTypeError("helena.base64.decode: invalid base64 input"))
+		}
+		return vm.ToValue(string(data))
+	})
+	if err := helena.Set("base64", b64); err != nil {
+		return err
+	}
+
+	// helena.sleep(ms) blocks the calling script for up to ms milliseconds,
+	// clamped to the per-script time budget (ScriptTimeout) and aborting early
+	// if the run's context is cancelled. It only delays this script — no I/O is
+	// added — so the sandbox invariant holds. A non-positive / NaN argument is a
+	// no-op.
+	_ = helena.Set("sleep", func(call goja.FunctionCall) goja.Value {
+		ms := call.Argument(0).ToInteger()
+		if ms <= 0 {
+			return goja.Undefined()
+		}
+		d := time.Duration(ms) * time.Millisecond
+		if d > ScriptTimeout {
+			d = ScriptTimeout
+		}
+		t := time.NewTimer(d)
+		defer t.Stop()
+		select {
+		case <-t.C:
+		case <-ctx.Done():
+		}
+		return goja.Undefined()
+	})
+	return nil
 }
 
 // scriptUUID returns a random RFC 4122 version-4 UUID string. Kept local to
