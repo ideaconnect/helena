@@ -66,6 +66,16 @@ type runConfig struct {
 	interpolate func(string) string
 	requester   func(SendSpec) (ResponseInput, error)
 	cookies     func(rawURL string) []Cookie
+	runner      RunnerControl
+}
+
+// RunnerControl lets a script steer a headless collection run via helena.runner
+// (#92): Stop halts the run after the current request finishes; Skip skips the
+// current request's send (meaningful only in a pre-request script). Both are
+// no-ops in a single UI Send, where no runner is wired.
+type RunnerControl interface {
+	Stop()
+	Skip()
 }
 
 // Cookie is one name/value pair the host's jar would send to a URL, exposed to
@@ -135,6 +145,13 @@ func WithRequester(fn func(SendSpec) (ResponseInput, error)) RunOption {
 // an empty object — reading cookies is a no-op rather than an error.
 func WithCookies(fn func(rawURL string) []Cookie) RunOption {
 	return func(c *runConfig) { c.cookies = fn }
+}
+
+// WithRunner supplies the control surface backing helena.runner (#92). The
+// headless runner injects an implementation; a UI Send leaves it nil so
+// helena.runner.stop()/skip() are harmless no-ops.
+func WithRunner(ctrl RunnerControl) RunOption {
+	return func(c *runConfig) { c.runner = ctrl }
 }
 
 func newRunConfig(opts []RunOption) runConfig {

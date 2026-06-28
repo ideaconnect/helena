@@ -114,6 +114,26 @@ func (rt *Runtime) bindHelena(ctx context.Context, cfg runConfig, vm *goja.Runti
 		return err
 	}
 
+	// helena.runner steers a headless run (#92): stop() halts after this request,
+	// skip() skips this request's send (pre-request only). No-ops when no runner
+	// is wired (a UI Send).
+	runnerObj := vm.NewObject()
+	_ = runnerObj.Set("stop", func(goja.FunctionCall) goja.Value {
+		if cfg.runner != nil {
+			cfg.runner.Stop()
+		}
+		return goja.Undefined()
+	})
+	_ = runnerObj.Set("skip", func(goja.FunctionCall) goja.Value {
+		if cfg.runner != nil {
+			cfg.runner.Skip()
+		}
+		return goja.Undefined()
+	})
+	if err := helena.Set("runner", runnerObj); err != nil {
+		return err
+	}
+
 	if err := rt.bindHelpers(ctx, vm, helena); err != nil {
 		return err
 	}

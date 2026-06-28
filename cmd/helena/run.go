@@ -59,6 +59,9 @@ func printReport(w io.Writer, rep runner.Report) {
 			status = fmt.Sprintf("%d", r.StatusCode)
 		}
 		mark := "ok  "
+		if r.Skipped {
+			mark = "SKIP"
+		}
 		if !r.OK() {
 			mark = "FAIL"
 		}

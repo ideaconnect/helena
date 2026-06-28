@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"strings"
+	"sync/atomic"
 
 	"github.com/idct/helena/internal/chain"
 	"github.com/idct/helena/internal/httpclient"
@@ -46,18 +47,46 @@ type headlessExecutor struct {
 	dotEnvSnap map[string]string
 	colSnap    map[string]string
 	envSnap    map[string]string
+	ctrl       *runControl // backs helena.runner (#92); nil for the chain test path
 }
+
+// stopSignal is the run-level halt flag set by helena.runner.stop() (#92). One
+// per Run; the loop breaks once it is set. atomic so an abandoned (timed-out)
+// script goroutine setting it can't race the loop's read.
+type stopSignal struct{ v atomic.Bool }
+
+func (s *stopSignal) stopped() bool { return s != nil && s.v.Load() }
+
+// runControl is the per-request helena.runner surface (#92). Stop routes to the
+// shared run-level signal; Skip flags the current request to be skipped.
+type runControl struct {
+	stop *stopSignal
+	skip atomic.Bool
+}
+
+func (c *runControl) Stop() {
+	if c.stop != nil {
+		c.stop.v.Store(true)
+	}
+}
+func (c *runControl) Skip()         { c.skip.Store(true) }
+func (c *runControl) skipped() bool { return c.skip.Load() }
+func (c *runControl) resetSkip()    { c.skip.Store(false) }
 
 // ExecuteOnce satisfies chain.Executor for the chain runner (chain steps don't
 // surface their test results to the report; only the leaf's do via executeOnce).
 func (e headlessExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMap map[string]chain.View) (chain.View, []string, error) {
-	view, _, err := e.executeOnce(ctx, r, chainMap)
+	// Chain predecessors never honour skip() (skipping a predecessor would break
+	// the leaf that depends on it); stop() still works via the shared signal.
+	view, _, err := e.executeOnce(ctx, r, chainMap, false)
 	return view, nil, err
 }
 
 // executeOnce is ExecuteOnce plus the recorded test()/expect() results, used
-// for the leaf request so the report can show its assertions.
-func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chainMap map[string]chain.View) (chain.View, []scripting.TestResult, error) {
+// for the leaf request so the report can show its assertions. When honorSkip is
+// true and a pre-request script called helena.runner.skip(), the send (and post
+// script) are short-circuited and the pre-script tests are returned.
+func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chainMap map[string]chain.View, honorSkip bool) (chain.View, []scripting.TestResult, error) {
 	r.Params = append([]model.KeyValue(nil), r.Params...)
 	r.Headers = append([]model.KeyValue(nil), r.Headers...)
 	r.Body.Form = append([]model.KeyValue(nil), r.Body.Form...)
@@ -89,10 +118,17 @@ func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chai
 		scripting.WithRequester(requester),
 		scripting.WithCookies(cookieLookup(e.sess)),
 	}
+	if e.ctrl != nil {
+		scriptOpts = append(scriptOpts, scripting.WithRunner(e.ctrl))
+	}
 
 	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scriptOpts...)
 	if preErr != nil {
 		return chain.View{}, preRes.Tests, preErr
+	}
+	// helena.runner.skip() in the pre-script short-circuits the send (#92).
+	if honorSkip && e.ctrl != nil && e.ctrl.skipped() {
+		return chain.View{}, preRes.Tests, nil
 	}
 
 	// Same scope order as the UI Send: global < .env < collection < env <

@@ -20,7 +20,7 @@ after each request so script-set values don't leak between them.
 
 - `Run(ctx context.Context, sess *session.Session) Report` — execute every request in `sess`'s active collection (depth-first, tree order) and return the `Report`.
 - `Report` — `{Results []RequestResult}` with `Failed() bool` (any request error or failed check) and `Totals() (requests, checksPassed, checksFailed int)`.
-- `RequestResult` — `{Path, Method, URL string; StatusCode int; Duration time.Duration; Err string; Checks []Check}` with `OK() bool` (no error and all checks passed).
+- `RequestResult` — `{Path, Method, URL string; StatusCode int; Duration time.Duration; Err string; Checks []Check; Skipped bool}` with `OK() bool` (no error and all checks passed). `Skipped` is set when a pre-request script calls `helena.runner.skip()` (#92); such a request is not sent and does not fail the run.
 - `Check` — `{Name string; Passed bool; Error string}`: one assertion (#88) or `test()`/`expect()` (#87) outcome.
 
 ## Dependencies

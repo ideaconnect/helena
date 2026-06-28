@@ -261,3 +261,48 @@ func TestRunCookiesFromScript(t *testing.T) {
 		t.Errorf("cookies end-to-end test = %+v", leaf)
 	}
 }
+
+// TestRunnerStopHaltsRun verifies helena.runner.stop() in a request's script
+// halts the run after that request (#92): later requests don't execute.
+func TestRunnerStopHaltsRun(t *testing.T) {
+	srv := testServer(t)
+	col := model.Collection{
+		Name: "C",
+		Requests: []model.Request{
+			{Name: "First", Method: model.GET, URL: srv.URL + "/ok",
+				Scripts: model.Scripts{PostResponse: `helena.runner.stop();`}},
+			{Name: "Second", Method: model.GET, URL: srv.URL + "/ok"},
+			{Name: "Third", Method: model.GET, URL: srv.URL + "/ok"},
+		},
+	}
+	rep := Run(context.Background(), openColl(t, col))
+	if len(rep.Results) != 1 || rep.Results[0].Path != "First" {
+		t.Errorf("stop() should leave only the first result, got %d: %+v", len(rep.Results), rep.Results)
+	}
+}
+
+// TestRunnerSkipSkipsSend verifies helena.runner.skip() in a pre-request script
+// skips the send and marks the request Skipped, while later requests still run.
+func TestRunnerSkipSkipsSend(t *testing.T) {
+	srv := testServer(t)
+	col := model.Collection{
+		Name: "C",
+		Requests: []model.Request{
+			{Name: "Skipped", Method: model.GET, URL: srv.URL + "/ok",
+				Scripts: model.Scripts{PreRequest: `helena.runner.skip();`}},
+			{Name: "Ran", Method: model.GET, URL: srv.URL + "/ok"},
+		},
+	}
+	rep := Run(context.Background(), openColl(t, col))
+	skipped := byPath(rep, "Skipped")
+	if skipped == nil || !skipped.Skipped || skipped.StatusCode != 0 {
+		t.Errorf("Skipped result = %+v, want Skipped=true and no send", skipped)
+	}
+	ran := byPath(rep, "Ran")
+	if ran == nil || ran.StatusCode != 200 {
+		t.Errorf("later request should still run: %+v", ran)
+	}
+	if rep.Failed() {
+		t.Error("a skipped request must not fail the run")
+	}
+}

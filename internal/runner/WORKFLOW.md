@@ -18,7 +18,7 @@ depth-first list of `(nodeID, path, request)`, then `runOne` for each:
 2. **Wiring.** A fresh `httpclient.Client` (with the session cookie jar and a client-credentials OAuth2 resolver — authorization_code is interactive and unavailable headless), a `scripting.Runtime` over an `envBridge`, and the variable-scope snapshots (`global` / `.env` / `collection` / `env`).
 3. **Overlay isolation.** The env overlay is snapshotted and restored (deferred) so a request's `helena.env.set` writes don't leak into the next.
 4. **Chain.** `chain.Resolve` runs the leaf's before-hooks via `headlessExecutor.ExecuteOnce`; a chain error fails the request without sending the leaf.
-5. **Execute.** `executeOnce` runs pre-script → `client.Do` → post-script, building the response view; the leaf's `test()`/`expect()` results come back too.
+5. **Execute.** `executeOnce` runs pre-script → `client.Do` → post-script, building the response view; the leaf's `test()`/`expect()` results come back too. A pre-script `helena.runner.skip()` short-circuits the send and marks the result `Skipped` (#92); a `helena.runner.stop()` (any script) sets the run-level signal so the loop stops after this request.
 6. **Assertions.** `assertion.Evaluate(leaf.Assertions, status, headers, body)` adds the declarative checks (#88).
 7. Test results and assertion results are merged into `RequestResult.Checks`; an execution failure sets `RequestResult.Err`.
 

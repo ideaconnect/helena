@@ -39,9 +39,11 @@ type RequestResult struct {
 	Duration   time.Duration
 	Err        string // non-empty on a pre-script / HTTP / post-script / chain failure
 	Checks     []Check
+	Skipped    bool // the pre-request script called helena.runner.skip() (#92) — no send
 }
 
 // OK reports whether the request executed without error and every check passed.
+// A skipped request is OK as long as nothing failed before it was skipped.
 func (r RequestResult) OK() bool {
 	if r.Err != "" {
 		return false
@@ -91,8 +93,12 @@ func (rp Report) Totals() (requests, checksPassed, checksFailed int) {
 // rolled back after each request so script-set values don't leak between them.
 func Run(ctx context.Context, sess *session.Session) Report {
 	var rep Report
+	stop := &stopSignal{} // set by helena.runner.stop() (#92)
 	for _, rq := range collectRequests(sess.Tree()) {
-		rep.Results = append(rep.Results, runOne(ctx, sess, rq))
+		rep.Results = append(rep.Results, runOne(ctx, sess, rq, stop))
+		if stop.stopped() {
+			break
+		}
 	}
 	return rep
 }
@@ -104,7 +110,7 @@ type reqRef struct {
 	req  model.Request
 }
 
-func runOne(ctx context.Context, sess *session.Session, rq reqRef) RequestResult {
+func runOne(ctx context.Context, sess *session.Session, rq reqRef, stop *stopSignal) RequestResult {
 	res := RequestResult{Path: rq.path, Method: string(rq.req.Method)}
 
 	leaf := rq.req
@@ -116,6 +122,7 @@ func runOne(ctx context.Context, sess *session.Session, rq reqRef) RequestResult
 		sess.TokenCache(), nil, sess.ActiveCollectionDir()))
 
 	envSnap := sess.SnapshotActiveEnvVars()
+	ctrl := &runControl{stop: stop} // backs helena.runner for this request (#92)
 	exec := headlessExecutor{
 		sess:       sess,
 		client:     client,
@@ -124,6 +131,7 @@ func runOne(ctx context.Context, sess *session.Session, rq reqRef) RequestResult
 		dotEnvSnap: sess.SnapshotActiveDotEnvVars(),
 		colSnap:    sess.SnapshotActiveCollectionVars(),
 		envSnap:    envSnap,
+		ctrl:       ctrl,
 	}
 
 	var finder chain.RequestFinder = nilFinder{}
@@ -140,7 +148,17 @@ func runOne(ctx context.Context, sess *session.Session, rq reqRef) RequestResult
 		return res
 	}
 
-	view, tests, err := exec.executeOnce(ctx, leaf, chainMap)
+	// Chain predecessors share ctrl (so their stop() works); clear any skip they
+	// set so it can't carry into the leaf — only the leaf's own pre-script skips.
+	ctrl.resetSkip()
+	view, tests, err := exec.executeOnce(ctx, leaf, chainMap, true)
+	if ctrl.skipped() {
+		res.Skipped = true
+		for _, t := range tests {
+			res.Checks = append(res.Checks, Check{Name: t.Name, Passed: t.Passed, Error: t.Error})
+		}
+		return res
+	}
 	res.URL = view.Request.URL
 	res.StatusCode = view.Response.StatusCode
 	res.Duration = view.Response.Duration

@@ -59,6 +59,7 @@ func (rt *Runtime) RunPostResponse(
 func WithInterpolator(fn func(string) string) RunOption
 func WithRequester(fn func(SendSpec) (ResponseInput, error)) RunOption
 func WithCookies(fn func(rawURL string) []Cookie) RunOption
+func WithRunner(ctrl RunnerControl) RunOption // helena.runner (headless runs)
 
 type EnvBridge interface {
     Get(name string) (string, bool)
@@ -107,6 +108,8 @@ Bound globals in both phases:
 | `helena.sendRequest({url, method, headers, body})` | Performs an ad-hoc HTTP request through the host client (#92) — same cookie jar, TLS settings, and Send context; `{{vars}}` in `url`/`headers`/`body` resolve like a normal request — and returns a response object identical to the post-response `response` global (`status`, `statusText`, `body`, `text`, `json`, `xml`, `headers`). `method` defaults to GET; set a `Content-Type` header for non-text bodies. Throws on a transport error, an invalid spec, or when called outside a Send. |
 | `helena.cookies.get(url, name)` | Value of cookie `name` the host jar would send to `url`, or `undefined` (#92). |
 | `helena.cookies.getAll(url)` | `{ name: value }` of every cookie the host jar would send to `url` (#92). Empty `{}` when none / outside a Send. |
+| `helena.runner.stop()` | In a headless run (`helena run`), halts the run after the current request (#92). No-op in a UI Send. |
+| `helena.runner.skip()` | In a headless run, skips the current request's send (#92) — pre-request only. No-op in a UI Send. |
 | `helena.uuid()` | Returns a random RFC 4122 v4 UUID string. |
 | `helena.hash.md5/sha1/sha256/sha512(text)` | Hex digest of `text`. |
 | `helena.hash.hmacSha1/hmacSha256(key, text)` | Hex HMAC digest of `text` keyed by `key`. |
