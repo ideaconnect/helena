@@ -5,7 +5,7 @@
 | File | Responsibility |
 | --- | --- |
 | [doc.go](doc.go) | Package-level doc comment. |
-| [httpclient.go](httpclient.go) | All implementation: `Client`/`Response`/`New`, the pure `Build`, the per-body-type `buildBody` switch, and the `corsAdvisory` helper. |
+| [httpclient.go](httpclient.go) | All implementation: `Client`/`Response`/`New`, the pure `Build`, the per-body-type `buildBody` switch, the Digest/NTLM challenge handshakes (`ntlmHandshake`/`drainBody`), the SSE `Stream`/`StreamMeta` (#74), and the `corsAdvisory` helper. |
 | [httpclient_test.go](httpclient_test.go) | Black-box behavior tests using `net/http/httptest`: param merging, JSON body + var resolution, unresolved-var errors, redirect policy, form-body fallback, CORS advisory matrix. |
 
 ## Type catalog

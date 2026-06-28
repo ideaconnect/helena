@@ -17,6 +17,7 @@ import (
 
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/model"
+	"github.com/idct/helena/internal/sse"
 	"github.com/idct/helena/internal/vars"
 )
 
@@ -446,6 +447,64 @@ func (c *Client) drainBody(resp *http.Response) {
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, c.maxResponseBytes()))
 	_ = resp.Body.Close()
+}
+
+// StreamMeta carries the response metadata available once an SSE stream opens,
+// before any events arrive (#74).
+type StreamMeta struct {
+	StatusCode int
+	Status     string
+	Headers    http.Header
+	RequestURL string
+}
+
+// Stream sends r and delivers Server-Sent Events to onEvent until the stream
+// ends, onEvent returns false, or ctx is cancelled (#74). The request advertises
+// Accept: text/event-stream (unless the user set Accept). onOpen, if non-nil, is
+// called once with the response metadata before the first event. The response
+// body is read incrementally — not capped like Do — so a long-lived stream
+// works; cancel ctx to stop it. A non-2xx status returns an error without
+// streaming.
+func (c *Client) Stream(ctx context.Context, r model.Request, res *vars.Resolver, onOpen func(StreamMeta), onEvent func(sse.Event) bool) error {
+	req, _, err := Build(ctx, r, res, c.oauth2Resolver)
+	if err != nil {
+		return err
+	}
+	if req.Header.Get("Accept") == "" {
+		req.Header.Set("Accept", "text/event-stream")
+	}
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return sanitizeDoError(err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("sse: server returned %s", resp.Status)
+	}
+	if onOpen != nil {
+		onOpen(StreamMeta{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Header, RequestURL: req.URL.String()})
+	}
+
+	p := sse.NewParser(resp.Body)
+	for {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		ev, err := p.Next()
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			// A read aborted by ctx cancellation surfaces as the ctx error.
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			return fmt.Errorf("sse: %w", err)
+		}
+		if onEvent != nil && !onEvent(ev) {
+			return nil
+		}
+	}
 }
 
 // buildBody serializes r.Body into bytes plus the matching Content-Type. The
