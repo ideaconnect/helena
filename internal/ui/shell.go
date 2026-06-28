@@ -38,6 +38,7 @@ type MainUI struct {
 	urlPreview  *widget.Label
 	Save        *ttwidget.Button
 	Send        *widget.Button
+	Stream      *ttwidget.Button // SSE streaming send (#74); doubles as Stop while streaming
 	Tree        *widget.Tree
 	// Sidebar toolbar: node-action icon buttons operating on the selected tree
 	// node. rename / delete enable with any selection; clone with a folder or
@@ -153,6 +154,10 @@ type MainUI struct {
 	// UI thread only; the cancel func itself is goroutine-safe.
 	sendCancel context.CancelFunc
 
+	// streamCancel is non-nil while an SSE stream is open (#74); the Stream
+	// button doubles as Stop. Set + cleared on the UI thread only.
+	streamCancel context.CancelFunc
+
 	// promptSnap carries the {{?Name}} prompt-variable values (#86) collected
 	// by the Send-time dialog into the re-entered send(); keyed by the prompt
 	// token ("?Name"). Set on dialog-confirm, consumed at the top of send().
@@ -210,6 +215,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// abort mode swaps to text "Abort" with warning importance.
 	m.Send = widget.NewButtonWithIcon("", themedIcon("location-arrow"), nil)
 	m.Send.Importance = widget.HighImportance
+	// Stream (SSE, #74): opens a text/event-stream and appends events live;
+	// doubles as Stop while a stream is open. Icon-only to match Send's size.
+	m.Stream = tipButton("play", "Stream (SSE)", m.streamOrStop)
 
 	m.Tree = m.buildTree()
 
@@ -383,7 +391,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		toolbarTheme{},
 	)
 	exportBtn := tipButton("file-export", "Export…", m.actionExport)
-	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Send)
+	saveSendBox := container.NewHBox(m.Save, exportBtn, m.Stream, m.Send)
 	addressBar := container.NewBorder(nil, nil, m.Method, saveSendBox, m.URL)
 
 	// Editor tab strip above the address bar: one tab per open request (drag to

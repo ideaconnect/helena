@@ -243,6 +243,12 @@ func (m *MainUI) send() {
 		// sendOrAbort and would Abort instead.
 		return
 	}
+	if m.streamCancel != nil {
+		// An SSE stream is open (#74); it shares m.pv / m.Status, so don't start
+		// a normal Send on top of it. The user stops the stream first.
+		m.Status.SetText("Stop the stream first")
+		return
+	}
 	if strings.TrimSpace(m.URL.Text) == "" {
 		m.Status.SetText("Enter a URL first")
 		return
