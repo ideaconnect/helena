@@ -162,6 +162,10 @@ func TestRunChainScriptsAndError(t *testing.T) {
 					test("env + chain", function () {
 						expect(helena.env.get("x")).toBe("1");
 						expect(chain.pre.response.status).toBe(200);
+						// helena.interpolate resolves the request variable v (#92)
+						// and reflects the just-set overlay value x.
+						expect(helena.interpolate("{{v}}")).toBe("1");
+						expect(helena.interpolate("{{x}}")).toBe("1");
 					});`},
 			},
 			{Name: "Boom", Method: model.GET, URL: srv.URL + "/ok",

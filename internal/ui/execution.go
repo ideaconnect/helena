@@ -81,7 +81,17 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	scriptChain := chainViewToScripting(chainMap)
 	var console []string
 
-	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain)
+	// interp backs helena.interpolate (#92): resolve {{var}} references with the
+	// same scope chain the request send uses. Built fresh per call so an in-script
+	// helena.env.set write is reflected (SnapshotEnvOverlay is re-read each time).
+	interp := func(s string) string {
+		rr := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.promptSnap, e.sess.SnapshotEnvOverlay()).
+			WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
+		out, _ := rr.Resolve(s)
+		return out
+	}
+
+	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scripting.WithInterpolator(interp))
 	console = append(console, preRes.Console...)
 	if preErr != nil {
 		return chain.View{}, console, fmt.Errorf("pre-script: %w", preErr)
@@ -119,7 +129,7 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 
 	postRes, postErr := e.rt.RunPostResponse(ctx, r.Scripts.PostResponse, r,
 		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
-		scriptChain)
+		scriptChain, scripting.WithInterpolator(interp))
 	console = append(console, postRes.Console...)
 	// Surface test()/expect() outcomes (#87) plus declarative assertions (#88)
 	// in the Scripts console, combining pre-request and post-response script

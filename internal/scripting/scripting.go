@@ -56,6 +56,33 @@ func New(env EnvBridge) *Runtime {
 	return &Runtime{env: env}
 }
 
+// RunOption configures a single Run* invocation. Options are additive, so
+// existing callers that pass none keep their behaviour.
+type RunOption func(*runConfig)
+
+// runConfig holds the per-call settings assembled from the RunOptions.
+type runConfig struct {
+	interpolate func(string) string
+}
+
+// WithInterpolator supplies the function backing helena.interpolate(template)
+// (#92): the host resolves `{{var}}` references in a string exactly as it does
+// for a request's URL / headers / body. Callers typically pass a closure over
+// the request's variable resolver (rebuilt with a fresh env-overlay snapshot per
+// call so in-script helena.env.set writes are visible). When no interpolator is
+// supplied, helena.interpolate returns its argument unchanged.
+func WithInterpolator(fn func(string) string) RunOption {
+	return func(c *runConfig) { c.interpolate = fn }
+}
+
+func newRunConfig(opts []RunOption) runConfig {
+	var c runConfig
+	for _, o := range opts {
+		o(&c)
+	}
+	return c
+}
+
 // Result captures script-emitted console output and test() assertions.
 // Errors thrown inside the script are returned via err from Run*, but any
 // console lines and test results recorded before the throw are still in
@@ -108,13 +135,13 @@ type ChainRequestView struct {
 // body, headers, params, and form are merged back into r before
 // returning. An empty (or whitespace-only) script returns a zero
 // Result with no error. A nil chain map binds an empty `chain` global.
-func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Request, chain map[string]ChainView) (Result, error) {
+func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Request, chain map[string]ChainView, opts ...RunOption) (Result, error) {
 	if strings.TrimSpace(script) == "" {
 		return Result{}, nil
 	}
 	vm := goja.New()
 	res := &Result{}
-	if err := rt.bindHelena(ctx, vm); err != nil {
+	if err := rt.bindHelena(ctx, newRunConfig(opts), vm); err != nil {
 		return *res, err
 	}
 	bindConsole(vm, res)
@@ -142,13 +169,13 @@ func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Re
 // the request object are ignored: the request has already gone over
 // the wire. An empty (or whitespace-only) script returns a zero
 // Result with no error.
-func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.Request, in ResponseInput, chain map[string]ChainView) (Result, error) {
+func (rt *Runtime) RunPostResponse(ctx context.Context, script string, r model.Request, in ResponseInput, chain map[string]ChainView, opts ...RunOption) (Result, error) {
 	if strings.TrimSpace(script) == "" {
 		return Result{}, nil
 	}
 	vm := goja.New()
 	res := &Result{}
-	if err := rt.bindHelena(ctx, vm); err != nil {
+	if err := rt.bindHelena(ctx, newRunConfig(opts), vm); err != nil {
 		return *res, err
 	}
 	bindConsole(vm, res)

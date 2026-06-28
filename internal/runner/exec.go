@@ -42,7 +42,17 @@ func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chai
 
 	scriptChain := chainViewToScripting(chainMap)
 
-	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain)
+	// interp backs helena.interpolate (#92): same scope chain as the request send,
+	// rebuilt per call so in-script helena.env.set writes are reflected. No prompt
+	// scope — a headless run can't ask.
+	interp := func(s string) string {
+		rr := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledVars(r.Variables), e.sess.SnapshotEnvOverlay()).
+			WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
+		out, _ := rr.Resolve(s)
+		return out
+	}
+
+	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scripting.WithInterpolator(interp))
 	if preErr != nil {
 		return chain.View{}, preRes.Tests, preErr
 	}
@@ -65,7 +75,7 @@ func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chai
 	}
 	postRes, postErr := e.rt.RunPostResponse(ctx, r.Scripts.PostResponse, r,
 		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
-		scriptChain)
+		scriptChain, scripting.WithInterpolator(interp))
 	tests := append(append([]scripting.TestResult(nil), preRes.Tests...), postRes.Tests...)
 	if postErr != nil {
 		return view, tests, postErr

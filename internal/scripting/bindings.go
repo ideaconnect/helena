@@ -19,7 +19,7 @@ import (
 // helena.vars.get alias). The same surface is bound in pre- and
 // post-response phases so user scripts can rely on identical APIs in
 // both. The session overlay is the only place script writes land.
-func (rt *Runtime) bindHelena(ctx context.Context, vm *goja.Runtime) error {
+func (rt *Runtime) bindHelena(ctx context.Context, cfg runConfig, vm *goja.Runtime) error {
 	helena := vm.NewObject()
 
 	env := vm.NewObject()
@@ -47,6 +47,19 @@ func (rt *Runtime) bindHelena(ctx context.Context, vm *goja.Runtime) error {
 		return err
 	}
 	if err := helena.Set("vars", varsObj); err != nil {
+		return err
+	}
+
+	// helena.interpolate(template) resolves {{var}} references the same way the
+	// host resolves a request's URL / headers / body (#92). The resolver is
+	// injected per-call via WithInterpolator; with none supplied it is identity.
+	if err := helena.Set("interpolate", func(call goja.FunctionCall) goja.Value {
+		s := call.Argument(0).String()
+		if cfg.interpolate != nil {
+			s = cfg.interpolate(s)
+		}
+		return vm.ToValue(s)
+	}); err != nil {
 		return err
 	}
 
