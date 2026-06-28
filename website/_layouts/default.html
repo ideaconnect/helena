@@ -22,7 +22,7 @@
         {% for item in site.nav %}
           <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
         {% endfor %}
-        <a class="cta" href="{{ site.releases }}">Download</a>
+        <a class="cta" href="{{ '/download/' | relative_url }}">Download</a>
       </nav>
     </div>
   </header>
