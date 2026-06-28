@@ -17,9 +17,10 @@ description: About Helena and its author, Bartosz Pachołek.
 
 ## Why Helena exists
 
-Postman and Bruno are great, but they ship a browser engine inside their
-binaries (hundreds of MB on disk) and store collections in formats that don't
-diff cleanly. Helena makes three deliberate trade-offs in the other direction:
+Most desktop API clients are capable, but they ship a browser engine inside
+their binaries (hundreds of MB on disk) and store collections in formats that
+don't diff cleanly. Helena makes three deliberate trade-offs in the other
+direction:
 
 1. **Native, no Electron.** Fyne renders the UI through OpenGL; the binary is
    ~35&nbsp;MB and starts instantly.

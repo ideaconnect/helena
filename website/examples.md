@@ -1,5 +1,7 @@
 ---
 layout: page
+hero_image: /assets/img/shot-chain-fancy.png
+hero_alt: Helena's Chain tab running a login request before the leaf
 title: Examples
 eyebrow: See it in action
 lead: A few representative workflows, captured from the real app running against a local demo API.

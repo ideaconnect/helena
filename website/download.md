@@ -1,5 +1,7 @@
 ---
 layout: page
+hero_image: /assets/img/shot-request-fancy.png
+hero_alt: Helena showing request headers and a nested JSON response
 title: Download &amp; install
 eyebrow: Get Helena
 lead: Grab a pre-built binary, or build from source in a couple of commands.

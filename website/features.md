@@ -1,5 +1,7 @@
 ---
 layout: page
+hero_image: /assets/img/app-hero-fancy.png
+hero_alt: The Helena app showing a request and its JSON response
 title: Features
 eyebrow: What Helena does
 lead: A full-featured API client in one small native binary - without the browser engine or the lock-in.
@@ -67,9 +69,9 @@ collection from the GUI, or **headlessly from the CLI** with `helena run` for CI
 
 ## Import &amp; export
 
-Import **OpenAPI 3 / Swagger 2 / WSDL / Postman** from a file or URL. Export any
-request to **cURL, wget, JavaScript fetch, Python requests, or Go net/http**, or
-paste a cURL command to build a request.
+Import **OpenAPI 3 / Swagger 2 / WSDL** and other collection exports from a file
+or URL. Export any request to **cURL, wget, JavaScript fetch, Python requests, or
+Go net/http**, or paste a cURL command to build a request.
 
 ## Storage &amp; privacy
 

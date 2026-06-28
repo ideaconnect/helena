@@ -1,5 +1,7 @@
 ---
 layout: page
+hero_image: /assets/img/app-hero-fancy.png
+hero_alt: The Helena app showing a request and its JSON response
 title: Contact
 eyebrow: Say hello
 lead: Questions, ideas, bug reports, or just want to chat about Helena? Send a message.

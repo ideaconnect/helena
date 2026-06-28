@@ -8,7 +8,7 @@ title: Helena
 tagline: A native, lightweight API client
 description: >-
   Helena is a fast, native API client for Linux, macOS, and Windows - a
-  lightweight alternative to Postman and Bruno, built with Go and Fyne. One
+  lightweight take on the usual desktop API clients, built with Go and Fyne. One
   small binary, plain-text collections, nine auth schemes, scripting, SSE, and
   WebSocket.
 author: Bartosz Pachołek

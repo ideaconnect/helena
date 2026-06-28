@@ -143,6 +143,21 @@ a:hover { text-decoration: underline; }
 .hero-divider .mark img { width: 28px; height: 28px; display: block; animation: float-soft 6s ease-in-out infinite; }
 @keyframes float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
+/* ---- Per-page hero: a two-column header with a framed screenshot on the
+   right, so every page opens with a visual instead of an empty gap ---- */
+.page-hero { overflow: hidden; }
+.page-hero-grid { display: grid; grid-template-columns: 1.05fr .95fr; gap: 40px; align-items: center; }
+.page-hero-grid.no-art { display: block; }
+.page-title { font-size: clamp(30px, 5vw, 44px); letter-spacing: -.01em; margin: .15em 0 .3em; }
+.page-lead { color: var(--muted); max-width: 560px; font-size: 18px; margin: 0; }
+.no-art .page-lead { max-width: 720px; }
+.page-hero-art { position: relative; }
+.page-hero-art .glow { position: absolute; inset: -10% -6% -14% -6%; z-index: 0;
+  background: radial-gradient(60% 60% at 60% 40%, rgba(34, 197, 94, .26), transparent 70%); filter: blur(10px); }
+.page-hero-art img { position: relative; z-index: 1; width: 100%; height: auto; display: block;
+  transform: rotate(-1.5deg); animation: page-float 7s ease-in-out infinite; }
+@keyframes page-float { 0%, 100% { transform: rotate(-1.5deg) translateY(0); } 50% { transform: rotate(-1.5deg) translateY(-9px); } }
+
 /* ---- Section ---- */
 section { padding: 56px 0; }
 .section-head { margin-bottom: 28px; }
@@ -279,6 +294,9 @@ pre code { background: none; padding: 0; }
   .hero-box .win-back { display: none; }
   .hero-box .win-front { top: 0; left: 0; }
   .contact-grid { grid-template-columns: 1fr; gap: 22px; }
+  .page-hero-grid { grid-template-columns: 1fr; gap: 22px; }
+  .page-hero-art { max-width: 460px; }
+  .page-hero-art img { transform: none; animation: none; }
 }
 
 @media (max-width: 640px) {

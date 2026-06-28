@@ -10,7 +10,7 @@ on GitHub Pages' stock Jekyll without extra configuration.
 ```
 website/
 ├── _config.yml          # site config + nav
-├── _layouts/            # default.html (chrome) + page.html (content pages)
+├── _layouts/            # default.html (chrome) + page.html (set hero_image: for a top hero box)
 ├── _includes/           # inline icon SVGs (icon-github/discord/download)
 ├── index.html           # landing / hero (two-column hero box)
 ├── features.md          # feature catalogue

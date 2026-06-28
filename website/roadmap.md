@@ -1,5 +1,7 @@
 ---
 layout: page
+hero_image: /assets/img/shot-auth-fancy.png
+hero_alt: Helena's Auth tab with a Bearer token and a JSON response
 title: Roadmap
 eyebrow: Where Helena is going
 lead: Most of the client is already shipped. Here's the picture by track, and what's still planned.
@@ -53,7 +55,7 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h3>Import / export / codegen</h3><span class="badge shipped">Shipped</span></div>
-      <p>Import OpenAPI / Swagger / WSDL / Postman; export to cURL, wget, fetch, Python, or Go; paste-cURL to build a request.</p>
+      <p>Import OpenAPI / Swagger / WSDL and other collection exports; export to cURL, wget, fetch, Python, or Go; paste-cURL to build a request.</p>
     </div>
   </li>
 
