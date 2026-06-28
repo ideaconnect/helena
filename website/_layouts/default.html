@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% if page.title %}{{ page.title }} · {{ site.title }}{% else %}{{ site.title }} — {{ site.tagline }}{% endif %}</title>
+  <meta name="description" content="{{ page.description | default: site.description }}">
+  <link rel="icon" href="{{ '/assets/img/logo.svg' | relative_url }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
+  <meta property="og:title" content="{{ page.title | default: site.title }}">
+  <meta property="og:description" content="{{ page.description | default: site.description }}">
+  <meta property="og:type" content="website">
+</head>
+<body>
+  <header class="nav">
+    <div class="wrap">
+      <a class="brand" href="{{ '/' | relative_url }}">
+        <img src="{{ '/assets/img/logo.svg' | relative_url }}" alt="">
+        <span>Helena</span>
+      </a>
+      <nav class="nav-links">
+        {% for item in site.nav %}
+          <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
+        {% endfor %}
+        <a class="cta" href="{{ site.releases }}">Download</a>
+      </nav>
+    </div>
+  </header>
+
+  <main>
+    {{ content }}
+  </main>
+
+  <footer class="footer">
+    <div class="wrap">
+      <span>© {{ 'now' | date: "%Y" }} {{ site.author }} · Helena is open source under its repository license.</span>
+      <span>
+        <a href="{{ site.repo }}">GitHub</a> ·
+        <a href="{{ '/roadmap/' | relative_url }}">Roadmap</a> ·
+        <a href="{{ site.repo }}/issues">Issues</a>
+      </span>
+    </div>
+  </footer>
+</body>
+</html>

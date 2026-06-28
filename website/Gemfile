@@ -1,0 +1,8 @@
+source "https://rubygems.org"
+
+# The Helena project website is a self-contained Jekyll site (custom layouts +
+# CSS, no gem theme, no plugins) so it builds on GitHub Pages' stock Jekyll.
+gem "jekyll", "~> 4.3"
+
+# Windows / JRuby timezone data, harmless elsewhere.
+gem "tzinfo-data", platforms: [:mingw, :mswin, :x64_mingw, :jruby]

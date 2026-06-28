@@ -1,0 +1,35 @@
+# Jekyll configuration for the Helena project website (#64).
+# Self-contained: custom layouts + CSS, no gem theme, no plugins — so it builds
+# on GitHub Pages' stock Jekyll. Lives in website/ so it can be deployed later
+# (e.g. a GitHub Action that builds this folder, or by moving it to the Pages
+# source). See website/README.md for deployment.
+
+title: Helena
+tagline: A native, lightweight API client
+description: >-
+  Helena is a super-lightweight, cross-platform API client — a native
+  alternative to Postman and Bruno, built with Go + Fyne. One self-contained
+  binary, plain-text collections, nine auth schemes, scripting, SSE & WebSocket.
+author: Bartosz Pachołek
+
+# Update url/baseurl for your deployment. For project pages served at
+# https://<user>.github.io/helena/, keep baseurl: "/helena".
+url: "https://ideaconnect.github.io"
+baseurl: "/helena"
+
+repo: "https://github.com/ideaconnect/helena"
+releases: "https://github.com/ideaconnect/helena/releases"
+
+# Built with custom layouts under _layouts/; no remote theme.
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - README.md
+  - vendor
+
+# Nav order is defined here and rendered by _layouts/default.html.
+nav:
+  - { title: "Features", url: "/features/" }
+  - { title: "Roadmap", url: "/roadmap/" }
+  - { title: "Examples", url: "/examples/" }
+  - { title: "About", url: "/about/" }

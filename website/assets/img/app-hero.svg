@@ -1,0 +1,84 @@
+<svg width="1000" height="620" viewBox="0 0 1000 620" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Helena application window: a request and its JSON response">
+  <defs>
+    <style>
+      .t { font-family: 'Segoe UI', Inter, system-ui, sans-serif; }
+      .mono { font-family: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace; }
+    </style>
+  </defs>
+  <!-- window -->
+  <rect x="0" y="0" width="1000" height="620" rx="16" fill="#0d1117"/>
+  <rect x="0.5" y="0.5" width="999" height="619" rx="16" fill="none" stroke="#243044"/>
+  <!-- titlebar -->
+  <rect x="0" y="0" width="1000" height="44" rx="16" fill="#131a24"/>
+  <rect x="0" y="28" width="1000" height="16" fill="#131a24"/>
+  <circle cx="24" cy="22" r="6" fill="#ff5f57"/>
+  <circle cx="44" cy="22" r="6" fill="#febc2e"/>
+  <circle cx="64" cy="22" r="6" fill="#28c840"/>
+  <text x="500" y="27" text-anchor="middle" class="t" font-size="13" fill="#9aa7b8">Helena — Acme API</text>
+
+  <!-- sidebar -->
+  <rect x="0" y="44" width="240" height="576" fill="#0f1620"/>
+  <line x1="240" y1="44" x2="240" y2="620" stroke="#243044"/>
+  <text x="20" y="78" class="t" font-size="12" fill="#6b7a8d" letter-spacing="1">COLLECTIONS</text>
+  <g class="t" font-size="14" fill="#e6edf3">
+    <text x="28" y="110">📁 Acme API</text>
+    <text x="48" y="138" fill="#22c55e">● Login</text>
+    <text x="48" y="166">○ Get profile</text>
+    <text x="48" y="194">○ List orders</text>
+    <text x="48" y="222">○ Stream events</text>
+    <text x="28" y="252">📁 Webhooks</text>
+    <text x="48" y="280" fill="#9aa7b8">○ Subscribe</text>
+  </g>
+
+  <!-- request bar -->
+  <g class="t">
+    <rect x="260" y="62" width="70" height="34" rx="8" fill="#1c2533" stroke="#243044"/>
+    <text x="278" y="84" font-size="14" fill="#22c55e" font-weight="700">GET</text>
+    <rect x="340" y="62" width="470" height="34" rx="8" fill="#161d29" stroke="#243044"/>
+    <text x="354" y="84" class="mono" font-size="13" fill="#e6edf3">https://api.acme.dev/v1/profile?id={{userId}}</text>
+    <rect x="822" y="62" width="92" height="34" rx="8" fill="#22c55e"/>
+    <text x="868" y="84" text-anchor="middle" font-size="14" fill="#04210f" font-weight="700">Send ➤</text>
+  </g>
+
+  <!-- request tabs -->
+  <g class="t" font-size="13">
+    <text x="262" y="128" fill="#9aa7b8">Params</text>
+    <text x="330" y="128" fill="#9aa7b8">Headers</text>
+    <text x="405" y="128" fill="#e6edf3" font-weight="700">Auth</text>
+    <rect x="399" y="136" width="44" height="3" rx="2" fill="#22c55e"/>
+    <text x="460" y="128" fill="#9aa7b8">Body</text>
+    <text x="515" y="128" fill="#9aa7b8">Scripts</text>
+    <text x="585" y="128" fill="#9aa7b8">Tests</text>
+  </g>
+
+  <!-- auth panel -->
+  <g class="t" font-size="13">
+    <rect x="262" y="150" width="652" height="120" rx="10" fill="#10161f" stroke="#243044"/>
+    <text x="280" y="178" fill="#9aa7b8">Type</text>
+    <rect x="360" y="164" width="200" height="26" rx="6" fill="#1c2533" stroke="#243044"/>
+    <text x="372" y="182" fill="#e6edf3">Bearer Token ▾</text>
+    <text x="280" y="218" fill="#9aa7b8">Token</text>
+    <rect x="360" y="204" width="420" height="26" rx="6" fill="#161d29" stroke="#243044"/>
+    <text x="372" y="222" class="mono" fill="#e6edf3">{{TOKEN}}</text>
+    <text x="280" y="252" fill="#6b7a8d" font-size="12">Secrets are kept out of the committed YAML — externalized to your config dir.</text>
+  </g>
+
+  <!-- response -->
+  <g class="t">
+    <line x1="262" y1="294" x2="914" y2="294" stroke="#243044"/>
+    <text x="262" y="320" font-size="13" fill="#9aa7b8">Response</text>
+    <rect x="690" y="304" width="224" height="24" rx="12" fill="#10220f" stroke="#1c5a2a"/>
+    <text x="706" y="321" class="mono" font-size="12" fill="#22c55e">200 OK · 642 B · 84 ms</text>
+  </g>
+  <rect x="262" y="338" width="652" height="252" rx="10" fill="#080b10" stroke="#243044"/>
+  <g class="mono" font-size="13">
+    <text x="282" y="366" fill="#9aa7b8">{</text>
+    <text x="306" y="392" fill="#7ee2a8">"id"</text><text x="346" y="392" fill="#9aa7b8">:</text><text x="360" y="392" fill="#e6edf3">"usr_91f2"</text><text x="450" y="392" fill="#9aa7b8">,</text>
+    <text x="306" y="418" fill="#7ee2a8">"name"</text><text x="362" y="418" fill="#9aa7b8">:</text><text x="376" y="418" fill="#e6edf3">"Ada Lovelace"</text><text x="500" y="418" fill="#9aa7b8">,</text>
+    <text x="306" y="444" fill="#7ee2a8">"plan"</text><text x="356" y="444" fill="#9aa7b8">:</text><text x="370" y="444" fill="#e6edf3">"pro"</text><text x="410" y="444" fill="#9aa7b8">,</text>
+    <text x="306" y="470" fill="#7ee2a8">"verified"</text><text x="394" y="470" fill="#9aa7b8">:</text><text x="408" y="470" fill="#f0a35e">true</text><text x="446" y="470" fill="#9aa7b8">,</text>
+    <text x="306" y="496" fill="#7ee2a8">"roles"</text><text x="366" y="496" fill="#9aa7b8">:</text><text x="380" y="496" fill="#e6edf3">["admin", "billing"]</text>
+    <text x="282" y="522" fill="#9aa7b8">}</text>
+    <text x="282" y="560" fill="#6b7a8d" font-size="12">PASS  status is 200   ·   PASS  response.json.verified is true</text>
+  </g>
+</svg>

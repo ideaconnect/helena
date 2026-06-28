@@ -1,0 +1,15 @@
+---
+layout: default
+---
+<section style="padding-bottom:0">
+  <div class="wrap">
+    {% if page.eyebrow %}<p class="eyebrow">{{ page.eyebrow }}</p>{% endif %}
+    <h1 style="font-size:clamp(30px,5vw,44px);letter-spacing:-.01em;margin:.15em 0 .3em">{{ page.title }}</h1>
+    {% if page.lead %}<p style="color:var(--muted);max-width:720px;font-size:18px;margin:0">{{ page.lead }}</p>{% endif %}
+  </div>
+</section>
+<section>
+  <div class="wrap prose">
+    {{ content }}
+  </div>
+</section>

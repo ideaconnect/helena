@@ -1,0 +1,67 @@
+---
+layout: default
+title: Helena — a native, lightweight API client
+---
+
+<section class="hero">
+  <div class="wrap">
+    <span class="pill"><span class="dot"></span> One ~35 MB binary · no Electron · plain-text collections</span>
+    <h1>The API client that's <span class="accent">native</span>,<br>lean, and version-controllable.</h1>
+    <p class="lead">
+      Helena is a super-lightweight, cross-platform API client — a native
+      alternative to Postman and Bruno, built with Go&nbsp;+&nbsp;Fyne. Diffable
+      Open&nbsp;Collection YAML, nine auth schemes, scripting, real-time SSE
+      &amp; WebSocket, and a headless runner.
+    </p>
+    <div class="actions">
+      <a class="btn btn-primary" href="{{ site.releases }}">Download</a>
+      <a class="btn btn-ghost" href="{{ '/features/' | relative_url }}">Explore features</a>
+      <a class="btn btn-ghost" href="{{ site.repo }}">GitHub ★</a>
+    </div>
+    <div class="hero-art">
+      <img src="{{ '/assets/img/app-hero.svg' | relative_url }}" alt="Helena sending a request and showing the JSON response">
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">Why Helena</p>
+      <h2>Built around three trade-offs</h2>
+      <p>Postman and Bruno ship a browser engine and store collections in formats that don't diff cleanly. Helena goes the other way.</p>
+    </div>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="ico">⚡</span> Native, no Electron</h3>
+        <p>Fyne renders through OpenGL. The binary is ~35&nbsp;MB and starts instantly — no bundled Chromium.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🗂️</span> Diffable YAML</h3>
+        <p>Workspaces, collections, and requests are plain Open Collection YAML you can review and merge like any source. Secrets stay out of it.</p>
+      </div>
+      <div class="card">
+        <h3><span class="ico">🧪</span> Boring, debuggable Go</h3>
+        <p>No JS sandbox to babysit, no exotic concurrency. The runtime is <code>go test</code>-able end to end.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section style="padding-top:0">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="eyebrow">What's inside</p>
+      <h2>A lot of client, very little weight</h2>
+    </div>
+    <div class="grid">
+      <div class="card"><h3><span class="ico">🔐</span> Nine auth schemes</h3><p>Basic, Bearer, API Key, OAuth&nbsp;2.0 (incl. auth-code + PKCE), OAuth&nbsp;1.0a, WSSE, AWS&nbsp;SigV4, Digest, NTLM.</p></div>
+      <div class="card"><h3><span class="ico">📡</span> Real-time</h3><p>Stream Server-Sent Events and open bidirectional WebSocket sessions — both hand-rolled on the standard library.</p></div>
+      <div class="card"><h3><span class="ico">🔣</span> Variables everywhere</h3><p>A layered <code>{% raw %}{{var}}{% endraw %}</code> scope chain across URL, query, headers, and body, with a live resolved-URL preview.</p></div>
+      <div class="card"><h3><span class="ico">📜</span> Scripting &amp; tests</h3><p>Pre/post JavaScript hooks with a curated <code>helena.*</code> API, plus <code>test()</code>/<code>expect()</code> and no-code assertions.</p></div>
+      <div class="card"><h3><span class="ico">🔗</span> Chaining &amp; runner</h3><p>Run other requests first and feed results forward; run a whole collection headlessly with <code>helena run</code>.</p></div>
+      <div class="card"><h3><span class="ico">🔄</span> Import &amp; export</h3><p>Import OpenAPI / Swagger / WSDL / Postman; export to cURL, wget, fetch, Python, or Go.</p></div>
+    </div>
+    <p style="margin-top:24px"><a class="btn btn-ghost" href="{{ '/roadmap/' | relative_url }}">See the roadmap →</a></p>
+  </div>
+</section>
