@@ -13,6 +13,11 @@ coverage.html
 /covergate
 /cmd_gojatest_main.go
 
+# Jekyll project website build artifacts (website/)
+/website/_site/
+/website/.jekyll-cache/
+/website/.bundle/
+
 # OS / editor
 .DS_Store
 *.swp

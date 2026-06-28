@@ -1,7 +1,7 @@
 @echo off
 REM Helena dev convenience script — Windows .bat equivalent of the Makefile.
 REM Usage:   make.bat <target>
-REM Targets: run build test coverage coverage-html coverage-gate mutation vet fmt lint tidy clean
+REM Targets: run build test coverage coverage-html coverage-gate mutation vet fmt lint tidy clean website website-build
 REM Notes:   building cmd\helena needs a C toolchain (TDM-GCC or MSYS2 mingw-w64)
 REM          on PATH because Fyne uses cgo + OpenGL.
 
@@ -30,6 +30,9 @@ if /I "%~1"=="fmt"             goto :fmt
 if /I "%~1"=="lint"            goto :lint
 if /I "%~1"=="tidy"            goto :tidy
 if /I "%~1"=="clean"           goto :clean
+if /I "%~1"=="website"         goto :website
+if /I "%~1"=="website-build"   goto :website-build
+if /I "%~1"=="website-docker"  goto :website-docker
 goto :usage
 
 :run
@@ -107,11 +110,42 @@ if exist bin  rmdir /S /Q bin
 if exist dist rmdir /S /Q dist
 if exist %COVERAGE_PROFILE% del /Q %COVERAGE_PROFILE%
 if exist %COVERAGE_HTML% del /Q %COVERAGE_HTML%
+if exist website\_site rmdir /S /Q website\_site
+if exist website\.jekyll-cache rmdir /S /Q website\.jekyll-cache
+goto :end
+
+REM Project website (Jekyll, website\). Needs Ruby + Bundler on PATH.
+:website
+where bundle >nul 2>&1
+if errorlevel 1 ( echo bundler not found - install Ruby, then "gem install bundler" ^(see website\README.md^) & exit /b 1 )
+echo Serving website at http://localhost:4000/helena/ - Ctrl-C to stop
+pushd website
+cmd /c "bundle check >nul 2>&1 || bundle install"
+bundle exec jekyll serve --livereload
+popd
+goto :end
+
+:website-build
+where bundle >nul 2>&1
+if errorlevel 1 ( echo bundler not found - install Ruby, then "gem install bundler" ^(or use "make.bat website-docker"^) & exit /b 1 )
+pushd website
+cmd /c "bundle check >nul 2>&1 || bundle install"
+bundle exec jekyll build
+popd
+echo built website\_site
+goto :end
+
+REM Serve the website with no local Ruby, via the official ruby Docker image.
+:website-docker
+where docker >nul 2>&1
+if errorlevel 1 ( echo docker not found - install Docker, or use "make.bat website" with Ruby & exit /b 1 )
+echo Serving website via Docker at http://localhost:4000/helena/ - Ctrl-C to stop
+docker run --rm -it -p 4000:4000 -v "%CD%\website:/site" -w /site ruby:3.3 sh -c "bundle install && bundle exec jekyll serve -H 0.0.0.0 --livereload --force_polling"
 goto :end
 
 :usage
 echo Usage: %~n0 ^<target^>
-echo Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean
+echo Targets: run build test coverage coverage-html coverage-gate vet fmt lint tidy clean website website-build
 exit /b 1
 
 :end
