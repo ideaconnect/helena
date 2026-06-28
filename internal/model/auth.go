@@ -20,6 +20,7 @@ const (
 	AuthOAuth1  AuthType = "oauth1" // OAuth 1.0a, HMAC-SHA1 (#77)
 	AuthAWSV4   AuthType = "awsv4"  // AWS Signature Version 4 (#76)
 	AuthDigest  AuthType = "digest" // HTTP Digest access auth, challenge/response (#75)
+	AuthNTLM    AuthType = "ntlm"   // NTLMv2, multi-round connection handshake (#78)
 )
 
 // APIKeyPlacement chooses whether the API-Key credential rides on a request
@@ -57,6 +58,19 @@ type Auth struct {
 	OAuth1 *OAuth1Auth `json:"oauth1,omitempty"`
 	AWSV4  *AWSV4Auth  `json:"awsV4,omitempty"`
 	Digest *DigestAuth `json:"digest,omitempty"`
+	NTLM   *NTLMAuth   `json:"ntlm,omitempty"`
+}
+
+// NTLMAuth carries NTLMv2 credentials (#78). Like Digest it is challenge/response,
+// but multi-round: the client and server exchange NEGOTIATE → CHALLENGE →
+// AUTHENTICATE messages over a single connection before the request succeeds.
+// Domain and Workstation are optional. All fields run through the variable
+// resolver. The handshake is driven by internal/httpclient.
+type NTLMAuth struct {
+	Username    string `json:"username"`
+	Password    string `json:"password"`
+	Domain      string `json:"domain,omitempty"`
+	Workstation string `json:"workstation,omitempty"`
 }
 
 // DigestAuth carries HTTP Digest access-authentication credentials (#75). Unlike

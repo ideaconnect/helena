@@ -34,7 +34,7 @@ the output on marshal. This is the heart of the lossless round-trip.
 | `ocFolderFile` | one `folder.yml` (info + auth + vars + Extra) | `model.Folder` (name + auth + `Variables` #81; folders/requests are read from the surrounding directory) |
 | `ocCollectionFile` | the root `opencollection.yml` (info + auth + Extra) | the top-level `model.Collection` (name + auth; the rest comes from the directory) |
 | `ocAuth` | the `auth:` block on requests / folders / collections (`type`, one sub-block, + Extra) | `model.Auth` |
-| `ocAuthBasic` / `ocAuthBearer` / `ocAuthAPIKey` / `ocAuthOAuth2` / `ocAuthWSSE` / `ocAuthOAuth1` / `ocAuthAWSV4` / `ocAuthDigest` | the credential sub-blocks under `auth.<type>` | `model.BasicAuth` / `BearerAuth` / `APIKeyAuth` / `OAuth2Auth` / `WSSEAuth` (#79) / `OAuth1Auth` (#77) / `AWSV4Auth` (#76) / `DigestAuth` (#75) |
+| `ocAuthBasic` / `ocAuthBearer` / `ocAuthAPIKey` / `ocAuthOAuth2` / `ocAuthWSSE` / `ocAuthOAuth1` / `ocAuthAWSV4` / `ocAuthDigest` / `ocAuthNTLM` | the credential sub-blocks under `auth.<type>` | `model.BasicAuth` / `BearerAuth` / `APIKeyAuth` / `OAuth2Auth` / `WSSEAuth` (#79) / `OAuth1Auth` (#77) / `AWSV4Auth` (#76) / `DigestAuth` (#75) / `NTLMAuth` (#78) |
 | `ocEnvVar` | one entry in `environments/*.yml` `vars:` (name/value/disabled/secret + Extra) | `model.Variable` |
 | `ocEnvironmentFile` | one `environments/*.yml` (info + vars + Extra) | `model.Environment` |
 

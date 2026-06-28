@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/md5"
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 	"unicode/utf16"
+
+	"github.com/idct/helena/internal/model"
 )
 
 // NTLM (NTLMv2) message + crypto primitives (#78). NTLM is challenge/response
@@ -212,6 +218,64 @@ func ntlmAuthenticate(domain, user, workstation string, lmResp, ntResp []byte, f
 	binary.Write(&b, le, flags)
 	b.Write(payload.Bytes())
 	return b.Bytes()
+}
+
+// NTLMOffered reports whether a 401 response's WWW-Authenticate headers invite
+// an NTLM handshake (#78).
+func NTLMOffered(wwwAuthenticate []string) bool {
+	for _, h := range wwwAuthenticate {
+		f := strings.Fields(h)
+		if len(f) > 0 && strings.EqualFold(f[0], "NTLM") {
+			return true
+		}
+	}
+	return false
+}
+
+// NTLMNegotiateHeader returns the Authorization header value carrying the
+// type-1 NEGOTIATE message (#78). The client sends this after the initial 401.
+func NTLMNegotiateHeader() string {
+	return "NTLM " + base64.StdEncoding.EncodeToString(ntlmNegotiate())
+}
+
+// NTLMChallenge extracts the base64-decoded type-2 CHALLENGE blob from a 401
+// response's WWW-Authenticate headers (the `NTLM <base64>` form). ok is false
+// when no challenge token is present.
+func NTLMChallenge(wwwAuthenticate []string) (challenge []byte, ok bool) {
+	for _, h := range wwwAuthenticate {
+		f := strings.Fields(h)
+		if len(f) == 2 && strings.EqualFold(f[0], "NTLM") {
+			if b, err := base64.StdEncoding.DecodeString(f[1]); err == nil {
+				return b, true
+			}
+		}
+	}
+	return nil, false
+}
+
+// NTLMAuthenticateHeader builds the Authorization header carrying the type-3
+// AUTHENTICATE message computed from the server CHALLENGE and the credentials
+// (#78). A fresh random client challenge and the current time are used.
+func NTLMAuthenticateHeader(challenge []byte, a model.NTLMAuth) (string, error) {
+	cc := make([]byte, 8)
+	if _, err := rand.Read(cc); err != nil {
+		return "", fmt.Errorf("ntlm: client challenge: %w", err)
+	}
+	msg, err := ntlmType3(a.Username, a.Password, a.Domain, a.Workstation, challenge, cc, ntlmTimestamp())
+	if err != nil {
+		return "", err
+	}
+	return "NTLM " + base64.StdEncoding.EncodeToString(msg), nil
+}
+
+// ntlmTimestamp returns the current time as a Windows FILETIME (100ns ticks
+// since 1601-01-01), little-endian, 8 bytes — the form NTLMv2 embeds.
+func ntlmTimestamp() []byte {
+	const epochDelta = 116444736000000000 // 100ns ticks between 1601 and 1970
+	ticks := uint64(time.Now().UnixNano()/100) + epochDelta
+	b := make([]byte, 8)
+	le.PutUint64(b, ticks)
+	return b
 }
 
 // ntlmType3 ties the handshake together: given the server's CHALLENGE and the

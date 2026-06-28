@@ -12,7 +12,7 @@ import (
 
 // authTypeLabels keeps a stable display order for the auth Type dropdown
 // and maps human-friendly labels to model.AuthType values.
-var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Digest Auth", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security", "AWS Signature v4"}
+var authTypeLabels = []string{"None", "Inherit from parent", "Basic Auth", "Digest Auth", "NTLM", "Bearer Token", "API Key", "OAuth 1.0a", "OAuth 2.0", "WS-Security", "AWS Signature v4"}
 
 var authTypeByLabel = map[string]model.AuthType{
 	"None":                model.AuthNone,
@@ -25,6 +25,7 @@ var authTypeByLabel = map[string]model.AuthType{
 	"WS-Security":         model.AuthWSSE,
 	"AWS Signature v4":    model.AuthAWSV4,
 	"Digest Auth":         model.AuthDigest,
+	"NTLM":                model.AuthNTLM,
 }
 
 var authLabelByType = map[model.AuthType]string{
@@ -38,6 +39,7 @@ var authLabelByType = map[model.AuthType]string{
 	model.AuthWSSE:    "WS-Security",
 	model.AuthAWSV4:   "AWS Signature v4",
 	model.AuthDigest:  "Digest Auth",
+	model.AuthNTLM:    "NTLM",
 }
 
 var apiKeyPlacementLabels = []string{"Header", "Query"}
@@ -94,6 +96,20 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.ensureDigest().Password = s
 	})
 	m.authDigestPassword.Password = true
+
+	m.authNTLMUsername = m.newAuthEntry("username", func(s string) {
+		m.ensureNTLM().Username = s
+	})
+	m.authNTLMPassword = m.newAuthEntry("password", func(s string) {
+		m.ensureNTLM().Password = s
+	})
+	m.authNTLMPassword.Password = true
+	m.authNTLMDomain = m.newAuthEntry("domain (optional)", func(s string) {
+		m.ensureNTLM().Domain = s
+	})
+	m.authNTLMWorkstation = m.newAuthEntry("workstation (optional)", func(s string) {
+		m.ensureNTLM().Workstation = s
+	})
 
 	m.authWSSEUsername = m.newAuthEntry("username", func(s string) {
 		m.ensureWSSE().Username = s
@@ -202,6 +218,12 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		widget.NewFormItem("Username", m.authDigestUsername),
 		widget.NewFormItem("Password", m.authDigestPassword),
 	)
+	m.authNTLMPanel = widget.NewForm(
+		widget.NewFormItem("Username", m.authNTLMUsername),
+		widget.NewFormItem("Password", m.authNTLMPassword),
+		widget.NewFormItem("Domain", m.authNTLMDomain),
+		widget.NewFormItem("Workstation", m.authNTLMWorkstation),
+	)
 	m.authAPIKeyPanel = widget.NewForm(
 		widget.NewFormItem("Name", m.authAPIKeyName),
 		widget.NewFormItem("Value", m.authAPIKeyValue),
@@ -242,7 +264,7 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
 		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel, m.authAWSV4Panel,
-		m.authDigestPanel,
+		m.authDigestPanel, m.authNTLMPanel,
 	)
 
 	top := container.NewBorder(nil, nil, widget.NewLabel("Type:"), nil, m.authType)
@@ -283,6 +305,13 @@ func (m *MainUI) ensureDigest() *model.DigestAuth {
 		m.currentRequest.Auth.Digest = &model.DigestAuth{}
 	}
 	return m.currentRequest.Auth.Digest
+}
+
+func (m *MainUI) ensureNTLM() *model.NTLMAuth {
+	if m.currentRequest.Auth.NTLM == nil {
+		m.currentRequest.Auth.NTLM = &model.NTLMAuth{}
+	}
+	return m.currentRequest.Auth.NTLM
 }
 
 func (m *MainUI) ensureWSSE() *model.WSSEAuth {
@@ -331,7 +360,7 @@ func (m *MainUI) refreshAuthVisibility() {
 		m.authNonePanel, m.authInheritPanel,
 		m.authBasicPanel, m.authBearerPanel,
 		m.authAPIKeyPanel, m.authOAuth2Panel, m.authWSSEPanel, m.authOAuth1Panel, m.authAWSV4Panel,
-		m.authDigestPanel,
+		m.authDigestPanel, m.authNTLMPanel,
 	}
 	for _, p := range panels {
 		p.Hide()
@@ -346,6 +375,8 @@ func (m *MainUI) refreshAuthVisibility() {
 		active = m.authBasicPanel
 	case model.AuthDigest:
 		active = m.authDigestPanel
+	case model.AuthNTLM:
+		active = m.authNTLMPanel
 	case model.AuthBearer:
 		active = m.authBearerPanel
 	case model.AuthAPIKey:
@@ -401,6 +432,10 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 		m.authBasicPassword.SetText("")
 		m.authDigestUsername.SetText("")
 		m.authDigestPassword.SetText("")
+		m.authNTLMUsername.SetText("")
+		m.authNTLMPassword.SetText("")
+		m.authNTLMDomain.SetText("")
+		m.authNTLMWorkstation.SetText("")
 		m.authBearerToken.SetText("")
 		m.authWSSEUsername.SetText("")
 		m.authWSSEPassword.SetText("")
@@ -451,6 +486,17 @@ func (m *MainUI) loadAuthTab(req *model.Request) {
 	} else {
 		m.authDigestUsername.SetText("")
 		m.authDigestPassword.SetText("")
+	}
+	if n := req.Auth.NTLM; n != nil {
+		m.authNTLMUsername.SetText(n.Username)
+		m.authNTLMPassword.SetText(n.Password)
+		m.authNTLMDomain.SetText(n.Domain)
+		m.authNTLMWorkstation.SetText(n.Workstation)
+	} else {
+		m.authNTLMUsername.SetText("")
+		m.authNTLMPassword.SetText("")
+		m.authNTLMDomain.SetText("")
+		m.authNTLMWorkstation.SetText("")
 	}
 	if br := req.Auth.Bearer; br != nil {
 		m.authBearerToken.SetText(br.Token)

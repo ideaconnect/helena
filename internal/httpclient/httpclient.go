@@ -350,6 +350,26 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 			}
 		}
 	}
+
+	// NTLM (#78) is a multi-round connection handshake: on a 401 inviting NTLM,
+	// send the type-1 NEGOTIATE, read the type-2 CHALLENGE from the next 401, and
+	// re-send with the type-3 AUTHENTICATE. The three exchanges must reuse one
+	// keep-alive connection, so each intermediate body is drained to EOF + closed
+	// to return the connection to the transport's pool.
+	if resp.StatusCode == http.StatusUnauthorized && r.Auth.Type == model.AuthNTLM && r.Auth.NTLM != nil &&
+		auth.NTLMOffered(resp.Header.Values("Www-Authenticate")) {
+		resolve := func(s string) string {
+			if res == nil {
+				return s
+			}
+			v, _ := res.Resolve(s)
+			return v
+		}
+		creds := auth.ResolveValues(r.Auth, resolve).NTLM
+		if resp2, body2, ok := c.ntlmHandshake(ctx, r, res, resp, *creds); ok {
+			resp, body = resp2, body2
+		}
+	}
 	defer func() { _ = resp.Body.Close() }()
 
 	// Bound the read so an oversized/hostile body can't OOM the app.
@@ -375,6 +395,57 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 		out.CORSWarning = corsAdvisory(req.Header.Get("Origin"), req.Header.Get("Cookie") != "", resp.Header)
 	}
 	return out, nil
+}
+
+// ntlmHandshake runs the NTLMv2 NEGOTIATE → CHALLENGE → AUTHENTICATE exchange
+// (#78) after an initial 401 invited NTLM. Returns the final response + replayed
+// body, or ok=false (leaving the caller to surface the original 401) if any step
+// fails. Each request is freshly built via Build so its body replays; the
+// transport reuses the same keep-alive connection across the steps.
+func (c *Client) ntlmHandshake(ctx context.Context, r model.Request, res *vars.Resolver, initial *http.Response, creds model.NTLMAuth) (*http.Response, []byte, bool) {
+	c.drainBody(initial) // return the connection to the pool before reusing it
+
+	req1, _, err := Build(ctx, r, res, c.oauth2Resolver)
+	if err != nil {
+		return nil, nil, false
+	}
+	req1.Header.Set("Authorization", auth.NTLMNegotiateHeader())
+	resp1, err := c.http.Do(req1)
+	if err != nil {
+		return nil, nil, false
+	}
+	challenge, ok := auth.NTLMChallenge(resp1.Header.Values("Www-Authenticate"))
+	c.drainBody(resp1)
+	if !ok {
+		return nil, nil, false
+	}
+
+	hdr, err := auth.NTLMAuthenticateHeader(challenge, creds)
+	if err != nil {
+		return nil, nil, false
+	}
+	req2, body2, err := Build(ctx, r, res, c.oauth2Resolver)
+	if err != nil {
+		return nil, nil, false
+	}
+	req2.Header.Set("Authorization", hdr)
+	resp2, err := c.http.Do(req2)
+	if err != nil {
+		return nil, nil, false
+	}
+	return resp2, body2, true
+}
+
+// drainBody reads an intermediate response to EOF (bounded) and closes it so the
+// transport can reuse the underlying connection — required for the NTLM
+// handshake's connection affinity. A body larger than the cap is left unread
+// (the connection won't be reused, and the handshake degrades to the 401).
+func (c *Client) drainBody(resp *http.Response) {
+	if resp == nil || resp.Body == nil {
+		return
+	}
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, c.maxResponseBytes()))
+	_ = resp.Body.Close()
 }
 
 // buildBody serializes r.Body into bytes plus the matching Content-Type. The

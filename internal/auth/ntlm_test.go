@@ -2,10 +2,42 @@ package auth
 
 import (
 	"bytes"
+	"context"
+	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/idct/helena/internal/model"
 )
+
+// TestNTLMResolveAndApply verifies {{vars}} substitution on NTLM credentials and
+// that Apply is a no-op (the handshake is the httpclient's job).
+func TestNTLMResolveAndApply(t *testing.T) {
+	a := ResolveValues(model.Auth{Type: model.AuthNTLM, NTLM: &model.NTLMAuth{
+		Username: "{{u}}", Password: "p", Domain: "{{d}}",
+	}}, func(s string) string {
+		switch s {
+		case "{{u}}":
+			return "alice"
+		case "{{d}}":
+			return "CORP"
+		}
+		return s
+	})
+	if a.NTLM.Username != "alice" || a.NTLM.Domain != "CORP" {
+		t.Errorf("resolve = %+v", a.NTLM)
+	}
+	req, _ := http.NewRequest(http.MethodGet, "https://x/", nil)
+	if err := Apply(context.Background(), req, a, nil); err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if req.Header.Get("Authorization") != "" {
+		t.Error("NTLM Apply must not set Authorization (handshake is in httpclient)")
+	}
+}
 
 // TestMD4RFC1320 pins the hand-rolled MD4 against the RFC 1320 §A.5 test suite.
 func TestMD4RFC1320(t *testing.T) {
@@ -118,6 +150,49 @@ func TestNTLMType3(t *testing.T) {
 	// A malformed CHALLENGE surfaces as an error rather than a bogus message.
 	if _, err := ntlmType3("User", "Password", "Domain", "WS", []byte("bad"), msClientChallenge, msTimestamp); err == nil {
 		t.Error("expected error for malformed challenge")
+	}
+}
+
+// TestNTLMExportedHelpers covers the handshake API the httpclient calls:
+// offer detection, the type-1 header, challenge extraction, and the type-3
+// header (decoded back to verify it is a valid AUTHENTICATE for the creds).
+func TestNTLMExportedHelpers(t *testing.T) {
+	if !NTLMOffered([]string{"Basic realm=x", "NTLM"}) {
+		t.Error("NTLMOffered should detect a bare NTLM offer")
+	}
+	if NTLMOffered([]string{"Negotiate", "Basic"}) {
+		t.Error("NTLMOffered should not match non-NTLM schemes")
+	}
+
+	neg := NTLMNegotiateHeader()
+	if !strings.HasPrefix(neg, "NTLM ") {
+		t.Fatalf("negotiate header = %q", neg)
+	}
+	t1, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(neg, "NTLM "))
+	if string(t1[:8]) != ntlmSignature || le.Uint32(t1[8:]) != 1 {
+		t.Errorf("type-1 message malformed: %x", t1[:12])
+	}
+
+	chMsg := buildChallenge(msServerChallenge, msTargetInfo)
+	b64 := base64.StdEncoding.EncodeToString(chMsg)
+	challenge, ok := NTLMChallenge([]string{"NTLM " + b64})
+	if !ok || !bytes.Equal(challenge, chMsg) {
+		t.Fatalf("NTLMChallenge ok=%v", ok)
+	}
+	if _, ok := NTLMChallenge([]string{"NTLM"}); ok {
+		t.Error("a bare NTLM (no token) is not a challenge")
+	}
+
+	hdr, err := NTLMAuthenticateHeader(challenge, model.NTLMAuth{Username: "User", Password: "Password", Domain: "Domain"})
+	if err != nil || !strings.HasPrefix(hdr, "NTLM ") {
+		t.Fatalf("authenticate header = %q err=%v", hdr, err)
+	}
+	t3, _ := base64.StdEncoding.DecodeString(strings.TrimPrefix(hdr, "NTLM "))
+	if string(t3[:8]) != ntlmSignature || le.Uint32(t3[8:]) != 3 {
+		t.Errorf("type-3 message malformed: %x", t3[:12])
+	}
+	if usr := readField(t3, 36); !bytes.Equal(usr, utf16le("User")) {
+		t.Errorf("type-3 user field = %x", usr)
 	}
 }
 

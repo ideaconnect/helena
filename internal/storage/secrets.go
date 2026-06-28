@@ -210,6 +210,9 @@ func authSecrets(prefix string, a *model.Auth, fn func(string, *string)) {
 	if a.Digest != nil {
 		fn(prefix+"/auth/digest.password", &a.Digest.Password)
 	}
+	if a.NTLM != nil {
+		fn(prefix+"/auth/ntlm.password", &a.NTLM.Password)
+	}
 }
 
 // cloneForSecretSplit deep-copies exactly the parts splitSecrets mutates — the
@@ -260,6 +263,10 @@ func cloneAuth(a model.Auth) model.Auth {
 	if a.Digest != nil {
 		b := *a.Digest
 		a.Digest = &b
+	}
+	if a.NTLM != nil {
+		b := *a.NTLM
+		a.NTLM = &b
 	}
 	return a
 }

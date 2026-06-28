@@ -126,6 +126,15 @@ func ResolveValues(a model.Auth, resolve func(string) string) model.Auth {
 			cp.Password = resolve(cp.Password)
 			out.Digest = &cp
 		}
+	case model.AuthNTLM:
+		if a.NTLM != nil {
+			cp := *a.NTLM
+			cp.Username = resolve(cp.Username)
+			cp.Password = resolve(cp.Password)
+			cp.Domain = resolve(cp.Domain)
+			cp.Workstation = resolve(cp.Workstation)
+			out.NTLM = &cp
+		}
 	}
 	return out
 }
@@ -261,6 +270,11 @@ func Apply(ctx context.Context, req *http.Request, a model.Auth, resolver OAuth2
 		// credentials so the server returns its 401 challenge. The retry with the
 		// computed response header is driven by internal/httpclient (DigestRespond).
 		// Apply is a deliberate no-op here.
+		return nil
+	case model.AuthNTLM:
+		// NTLM is a multi-round connection handshake (#78), driven by
+		// internal/httpclient (NTLMNegotiateHeader / NTLMAuthenticateHeader).
+		// Apply is a deliberate no-op.
 		return nil
 	default:
 		return fmt.Errorf("auth.Apply: unknown auth type %q", a.Type)

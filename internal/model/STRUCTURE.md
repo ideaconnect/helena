@@ -6,7 +6,7 @@
 | --- | --- |
 | [doc.go](doc.go) | Package-level godoc only. |
 | [model.go](model.go) | Core domain types (`Workspace`, `Collection`, `Folder`, `Request`, `Environment`, `Variable`, `Settings`), enum constants (`Method`, `BodyType`, `Theme`), and helpers (`NewID`, `EnabledPairs`, `DefaultSettings`). |
-| [auth.go](auth.go) | `Auth` plus its sub-structs (`BasicAuth`, `BearerAuth`, `APIKeyAuth`, `OAuth2Auth`, `WSSEAuth` #79, `OAuth1Auth` #77, `AWSV4Auth` #76, `DigestAuth` #75) and the related enums (`AuthType`, `APIKeyPlacement`, `OAuth2Grant`). Applied by [internal/auth](../auth/). |
+| [auth.go](auth.go) | `Auth` plus its sub-structs (`BasicAuth`, `BearerAuth`, `APIKeyAuth`, `OAuth2Auth`, `WSSEAuth` #79, `OAuth1Auth` #77, `AWSV4Auth` #76, `DigestAuth` #75, `NTLMAuth` #78) and the related enums (`AuthType`, `APIKeyPlacement`, `OAuth2Grant`). Applied by [internal/auth](../auth/). |
 | [model_test.go](model_test.go) | Unit tests for method/body validation, content-type mapping, `EnabledPairs`, ID uniqueness, a `Collection` JSON round-trip, and `Scripts.IsEmpty`. |
 
 ## Type catalog
@@ -70,7 +70,7 @@ A root tree.
 ### `Auth` — [auth.go](auth.go)
 Authentication configuration carried on `Request`, `Folder`, and `Collection`.
 - `Type` — selects which sub-struct is in use; see `AuthType` constants.
-- `Basic` / `Bearer` / `APIKey` / `OAuth2` / `WSSE` / `OAuth1` / `AWSV4` / `Digest` — pointer fields; exactly one is non-nil for a concrete auth.
+- `Basic` / `Bearer` / `APIKey` / `OAuth2` / `WSSE` / `OAuth1` / `AWSV4` / `Digest` / `NTLM` — pointer fields; exactly one is non-nil for a concrete auth.
 - The zero value (`Type == ""`) is treated as `Inherit` at load time so freshly created requests inherit from their parent without the caller having to set anything.
 
 ### `BasicAuth` / `BearerAuth` / `APIKeyAuth` / `OAuth2Auth` — [auth.go](auth.go)
@@ -81,11 +81,12 @@ The credential sub-structs. Every string field runs through the `{{var}}` resolv
 - `OAuth2Auth` — `Grant`, `TokenURL`, `AuthURL`, `ClientID`, `ClientSecret`, `Scope`, `RedirectURI`, `UsePKCE`, `Audience`.
 - `OAuth1Auth` — `ConsumerKey`, `ConsumerSecret`, `Token`, `TokenSecret` (#77). Each send is signed with HMAC-SHA1 (RFC 5849) into an `Authorization: OAuth …` header.
 - `WSSEAuth` — `Username`, `Password` (#79). On each send a fresh nonce + timestamp produce an `X-WSSE: UsernameToken …` header with `PasswordDigest = Base64(SHA1(nonce + created + password))`.
-- `DigestAuth` — `Username`, `Password` (#75). Challenge/response: the first request is sent unauthenticated, the server's 401 `WWW-Authenticate: Digest` challenge is answered with a computed response hash (MD5 / SHA-256, qop=auth), driven by [internal/httpclient](../httpclient/).
+- `DigestAuth` — `Username`, `Password` (#75). Challenge/response.
+- `NTLMAuth` — `Username`, `Password`, `Domain`, `Workstation` (#78). NTLMv2; a multi-round NEGOTIATE→CHALLENGE→AUTHENTICATE handshake over one connection, driven by [internal/httpclient](../httpclient/). Challenge/response: the first request is sent unauthenticated, the server's 401 `WWW-Authenticate: Digest` challenge is answered with a computed response hash (MD5 / SHA-256, qop=auth), driven by [internal/httpclient](../httpclient/).
 - `AWSV4Auth` — `AccessKeyID`, `SecretAccessKey`, `Region`, `Service`, `SessionToken` (#76). Each send is signed AWS4-HMAC-SHA256 into an `Authorization: AWS4-HMAC-SHA256 …` header + `X-Amz-Date`; a `SessionToken` rides on `X-Amz-Security-Token` and is folded into the signature. Region/Service default to `us-east-1`/`service` when blank.
 
 ### `AuthType` / `APIKeyPlacement` / `OAuth2Grant` — [auth.go](auth.go)
-Typed string enums. `AuthType` covers `none`, `inherit`, `basic`, `bearer`, `apikey`, `oauth2`, `wsse`, `oauth1`, `awsv4`, `digest`. `APIKeyPlacement` is `header` or `query`. `OAuth2Grant` is `client_credentials` or `authorization_code`.
+Typed string enums. `AuthType` covers `none`, `inherit`, `basic`, `bearer`, `apikey`, `oauth2`, `wsse`, `oauth1`, `awsv4`, `digest`, `ntlm`. `APIKeyPlacement` is `header` or `query`. `OAuth2Grant` is `client_credentials` or `authorization_code`.
 
 ### `Workspace` — [model.go:139](model.go#L139)
 A bag of collections; only metadata lives here — actual collections are referenced by path in the persisted config.

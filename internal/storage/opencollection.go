@@ -124,6 +124,7 @@ type ocAuth struct {
 	OAuth1 *ocAuthOAuth1        `yaml:"oauth1,omitempty"` // OAuth 1.0a HMAC-SHA1 (#77)
 	AWSV4  *ocAuthAWSV4         `yaml:"awsv4,omitempty"`  // AWS Signature v4 (#76)
 	Digest *ocAuthDigest        `yaml:"digest,omitempty"` // HTTP Digest access auth (#75)
+	NTLM   *ocAuthNTLM          `yaml:"ntlm,omitempty"`   // NTLMv2 (#78)
 	Extra  map[string]yaml.Node `yaml:",inline"`
 }
 
@@ -131,6 +132,14 @@ type ocAuthDigest struct {
 	Username string               `yaml:"username"`
 	Password string               `yaml:"password"`
 	Extra    map[string]yaml.Node `yaml:",inline"`
+}
+
+type ocAuthNTLM struct {
+	Username    string               `yaml:"username"`
+	Password    string               `yaml:"password"`
+	Domain      string               `yaml:"domain,omitempty"`
+	Workstation string               `yaml:"workstation,omitempty"`
+	Extra       map[string]yaml.Node `yaml:",inline"`
 }
 
 type ocAuthAWSV4 struct {
@@ -448,6 +457,15 @@ func authToFile(a model.Auth) *ocAuth {
 		if a.Digest != nil {
 			out.Digest = &ocAuthDigest{Username: a.Digest.Username, Password: a.Digest.Password}
 		}
+	case model.AuthNTLM:
+		if a.NTLM != nil {
+			out.NTLM = &ocAuthNTLM{
+				Username:    a.NTLM.Username,
+				Password:    a.NTLM.Password,
+				Domain:      a.NTLM.Domain,
+				Workstation: a.NTLM.Workstation,
+			}
+		}
 	}
 	return out
 }
@@ -508,6 +526,14 @@ func fileToAuth(f *ocAuth) model.Auth {
 	}
 	if f.Digest != nil {
 		a.Digest = &model.DigestAuth{Username: f.Digest.Username, Password: f.Digest.Password}
+	}
+	if f.NTLM != nil {
+		a.NTLM = &model.NTLMAuth{
+			Username:    f.NTLM.Username,
+			Password:    f.NTLM.Password,
+			Domain:      f.NTLM.Domain,
+			Workstation: f.NTLM.Workstation,
+		}
 	}
 	return a
 }
