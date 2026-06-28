@@ -2,6 +2,7 @@ package runner
 
 import (
 	"context"
+	"net/url"
 	"strings"
 
 	"github.com/idct/helena/internal/chain"
@@ -11,6 +12,27 @@ import (
 	"github.com/idct/helena/internal/session"
 	"github.com/idct/helena/internal/vars"
 )
+
+// cookieLookup returns the helena.cookies backing function (#92): the name/value
+// cookies the session jar would send to rawURL. A bad URL or absent jar yields
+// none.
+func cookieLookup(sess *session.Session) func(string) []scripting.Cookie {
+	return func(rawURL string) []scripting.Cookie {
+		jar := sess.CookieJar()
+		if jar == nil {
+			return nil
+		}
+		u, err := url.Parse(rawURL)
+		if err != nil || u.Host == "" {
+			return nil
+		}
+		var out []scripting.Cookie
+		for _, c := range jar.Cookies(u) {
+			out = append(out, scripting.Cookie{Name: c.Name, Value: c.Value})
+		}
+		return out
+	}
+}
 
 // headlessExecutor runs pre-script → http → post-script for one request and
 // packages the response as a chain.View. It mirrors the UI's chainExecutor
@@ -62,7 +84,11 @@ func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chai
 		}
 		return scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body}, nil
 	}
-	scriptOpts := []scripting.RunOption{scripting.WithInterpolator(interp), scripting.WithRequester(requester)}
+	scriptOpts := []scripting.RunOption{
+		scripting.WithInterpolator(interp),
+		scripting.WithRequester(requester),
+		scripting.WithCookies(cookieLookup(e.sess)),
+	}
 
 	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scriptOpts...)
 	if preErr != nil {

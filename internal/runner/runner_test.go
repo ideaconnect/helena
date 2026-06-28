@@ -43,6 +43,12 @@ func byPath(rep Report, path string) *RequestResult {
 func testServer(t *testing.T) *httptest.Server {
 	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/setcookie" {
+			http.SetCookie(w, &http.Cookie{Name: "session", Value: "xyz", Path: "/"})
+			w.WriteHeader(200)
+			_, _ = w.Write([]byte(`{"ok":true}`))
+			return
+		}
 		if r.URL.Path == "/ok" {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(200)
@@ -228,5 +234,30 @@ func TestRunSendRequestFromScript(t *testing.T) {
 	leaf := byPath(rep, "Leaf")
 	if leaf == nil || len(leaf.Checks) != 1 || !leaf.Checks[0].Passed {
 		t.Errorf("sendRequest end-to-end test = %+v", leaf)
+	}
+}
+
+// TestRunCookiesFromScript exercises helena.cookies end-to-end (#92): a first
+// request receives a Set-Cookie that lands in the shared jar, and a later
+// request's script reads it back for the server URL.
+func TestRunCookiesFromScript(t *testing.T) {
+	srv := testServer(t)
+	col := model.Collection{
+		Name: "C",
+		Requests: []model.Request{
+			{Name: "SetIt", Method: model.GET, URL: srv.URL + "/setcookie"},
+			{
+				Name: "Leaf", Method: model.GET, URL: srv.URL + "/ok",
+				Scripts: model.Scripts{PostResponse: `
+					test("cookie", function () {
+						expect(helena.cookies.get("` + srv.URL + `/ok", "session")).toBe("xyz");
+					});`},
+			},
+		},
+	}
+	rep := Run(context.Background(), openColl(t, col))
+	leaf := byPath(rep, "Leaf")
+	if leaf == nil || len(leaf.Checks) != 1 || !leaf.Checks[0].Passed {
+		t.Errorf("cookies end-to-end test = %+v", leaf)
 	}
 }

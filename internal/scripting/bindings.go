@@ -84,6 +84,36 @@ func (rt *Runtime) bindHelena(ctx context.Context, cfg runConfig, vm *goja.Runti
 		return err
 	}
 
+	// helena.cookies reads the host cookie jar (#92): get(url, name) -> value or
+	// undefined; getAll(url) -> { name: value }. Injected via WithCookies; with
+	// none wired both return empty (reading cookies is a no-op, never an error).
+	lookupCookies := func(rawURL string) []Cookie {
+		if cfg.cookies == nil {
+			return nil
+		}
+		return cfg.cookies(rawURL)
+	}
+	cookiesObj := vm.NewObject()
+	_ = cookiesObj.Set("get", func(call goja.FunctionCall) goja.Value {
+		name := call.Argument(1).String()
+		for _, c := range lookupCookies(call.Argument(0).String()) {
+			if c.Name == name {
+				return vm.ToValue(c.Value)
+			}
+		}
+		return goja.Undefined()
+	})
+	_ = cookiesObj.Set("getAll", func(call goja.FunctionCall) goja.Value {
+		obj := vm.NewObject()
+		for _, c := range lookupCookies(call.Argument(0).String()) {
+			_ = obj.Set(c.Name, c.Value)
+		}
+		return obj
+	})
+	if err := helena.Set("cookies", cookiesObj); err != nil {
+		return err
+	}
+
 	if err := rt.bindHelpers(ctx, vm, helena); err != nil {
 		return err
 	}

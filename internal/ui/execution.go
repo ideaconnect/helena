@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"fmt"
+	"net/url"
 
 	"github.com/idct/helena/internal/assertion"
 	"github.com/idct/helena/internal/chain"
@@ -101,7 +102,11 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		}
 		return scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body}, nil
 	}
-	scriptOpts := []scripting.RunOption{scripting.WithInterpolator(interp), scripting.WithRequester(requester)}
+	scriptOpts := []scripting.RunOption{
+		scripting.WithInterpolator(interp),
+		scripting.WithRequester(requester),
+		scripting.WithCookies(cookieLookup(e.sess)),
+	}
 
 	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scriptOpts...)
 	console = append(console, preRes.Console...)
@@ -158,6 +163,27 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 		return view, console, fmt.Errorf("post-script: %w", postErr)
 	}
 	return view, console, nil
+}
+
+// cookieLookup returns the helena.cookies backing function (#92): the name/value
+// cookies the session jar would send to rawURL. A bad URL or absent jar yields
+// none.
+func cookieLookup(sess *session.Session) func(string) []scripting.Cookie {
+	return func(rawURL string) []scripting.Cookie {
+		jar := sess.CookieJar()
+		if jar == nil {
+			return nil
+		}
+		u, err := url.Parse(rawURL)
+		if err != nil || u.Host == "" {
+			return nil
+		}
+		var out []scripting.Cookie
+		for _, c := range jar.Cookies(u) {
+			out = append(out, scripting.Cookie{Name: c.Name, Value: c.Value})
+		}
+		return out
+	}
 }
 
 // formatTestResults renders test()/expect() outcomes (#87) as console-style

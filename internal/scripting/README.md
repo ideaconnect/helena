@@ -41,6 +41,7 @@ func (rt *Runtime) RunPreRequest(
     script string,
     r *model.Request,
     chain map[string]ChainView,
+    opts ...RunOption,
 ) (Result, error)
 
 func (rt *Runtime) RunPostResponse(
@@ -49,7 +50,15 @@ func (rt *Runtime) RunPostResponse(
     r model.Request,
     in ResponseInput,
     chain map[string]ChainView,
+    opts ...RunOption,
 ) (Result, error)
+
+// RunOptions wire host capabilities into a single run (#92). All are
+// optional — with none supplied, helena.interpolate is identity,
+// helena.sendRequest throws, and helena.cookies reads empty.
+func WithInterpolator(fn func(string) string) RunOption
+func WithRequester(fn func(SendSpec) (ResponseInput, error)) RunOption
+func WithCookies(fn func(rawURL string) []Cookie) RunOption
 
 type EnvBridge interface {
     Get(name string) (string, bool)
@@ -58,6 +67,7 @@ type EnvBridge interface {
 
 type Result struct {
     Console []string
+    Tests   []TestResult // test()/expect() outcomes (#87)
 }
 
 type ResponseInput struct {
@@ -95,6 +105,8 @@ Bound globals in both phases:
 | `helena.vars.get(name)` | Alias for `helena.env.get`. |
 | `helena.interpolate(template)` | Resolves `{{var}}` references in `template` with the same scope chain a request send uses (global < .env < collection < env < folder/request vars < overlay < chain < dynamic) (#92). Reflects `helena.env.set` writes made earlier in the same script. Unresolved names are left best-effort by the resolver. Identity when run outside a Send (no resolver wired). |
 | `helena.sendRequest({url, method, headers, body})` | Performs an ad-hoc HTTP request through the host client (#92) — same cookie jar, TLS settings, and Send context; `{{vars}}` in `url`/`headers`/`body` resolve like a normal request — and returns a response object identical to the post-response `response` global (`status`, `statusText`, `body`, `text`, `json`, `xml`, `headers`). `method` defaults to GET; set a `Content-Type` header for non-text bodies. Throws on a transport error, an invalid spec, or when called outside a Send. |
+| `helena.cookies.get(url, name)` | Value of cookie `name` the host jar would send to `url`, or `undefined` (#92). |
+| `helena.cookies.getAll(url)` | `{ name: value }` of every cookie the host jar would send to `url` (#92). Empty `{}` when none / outside a Send. |
 | `helena.uuid()` | Returns a random RFC 4122 v4 UUID string. |
 | `helena.hash.md5/sha1/sha256/sha512(text)` | Hex digest of `text`. |
 | `helena.hash.hmacSha1/hmacSha256(key, text)` | Hex HMAC digest of `text` keyed by `key`. |

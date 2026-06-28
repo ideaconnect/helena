@@ -65,6 +65,14 @@ type RunOption func(*runConfig)
 type runConfig struct {
 	interpolate func(string) string
 	requester   func(SendSpec) (ResponseInput, error)
+	cookies     func(rawURL string) []Cookie
+}
+
+// Cookie is one name/value pair the host's jar would send to a URL, exposed to
+// scripts via helena.cookies (#92).
+type Cookie struct {
+	Name  string
+	Value string
 }
 
 // SendSpec is an ad-hoc HTTP request a script asks the host to perform via
@@ -119,6 +127,14 @@ func WithInterpolator(fn func(string) string) RunOption {
 // is supplied, helena.sendRequest throws — it has no meaning outside a Send.
 func WithRequester(fn func(SendSpec) (ResponseInput, error)) RunOption {
 	return func(c *runConfig) { c.requester = fn }
+}
+
+// WithCookies supplies the function backing helena.cookies (#92): given a URL it
+// returns the name/value cookies the host's jar would send there. When no
+// function is supplied, helena.cookies.get returns undefined and getAll returns
+// an empty object — reading cookies is a no-op rather than an error.
+func WithCookies(fn func(rawURL string) []Cookie) RunOption {
+	return func(c *runConfig) { c.cookies = fn }
 }
 
 func newRunConfig(opts []RunOption) runConfig {
