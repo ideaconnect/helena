@@ -27,7 +27,7 @@ those land. Run `helena --version` to see your build.
 
 **Requirements**
 
-- **Go 1.23+** (the toolchain is pinned in `go.mod`).
+- **Go 1.26+** (the toolchain is pinned in `go.mod`).
 - A **C compiler** - Fyne uses cgo + OpenGL.
 - **Linux:** `sudo apt-get install -y libgl1-mesa-dev xorg-dev`
 - **Windows:** TDM-GCC or MSYS2 mingw-w64 on `PATH`

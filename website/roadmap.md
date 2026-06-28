@@ -7,8 +7,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
 ---
 
 <div style="margin:8px 0 30px">
-  <div class="meter"><span style="width:80%"></span></div>
-  <div class="meter-label"><span>8 of 10 tracks shipped</span><span>80%</span></div>
+  <div class="meter"><span style="width:73%"></span></div>
+  <div class="meter-label"><span>8 of 11 tracks shipped</span><span>73%</span></div>
 </div>
 
 <ul class="timeline">
@@ -68,6 +68,19 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
     <div class="tl-card">
       <div class="tl-head"><h3>Documentation</h3><span class="badge shipped">Shipped</span></div>
       <p>This site plus reference docs and a per-module design-notes set living alongside the code.</p>
+    </div>
+  </li>
+
+  <li class="tl-item active"><span class="tl-dot"></span>
+    <div class="tl-card">
+      <div class="tl-head"><h3>Packaging &amp; app stores</h3><span class="badge progress">In progress</span></div>
+      <p>Today there's a native binary for every release (with checksums, an SBOM, and build provenance), Linux <code>.deb</code>/<code>.rpm</code> packages, and winget/Scoop manifests plus an Inno Setup installer on Windows. macOS is built in CI but not yet signed. Next, so each OS can install and update Helena the way it expects:</p>
+      <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:14px">
+        <li><b>Microsoft Store</b> (MSIX) on Windows</li>
+        <li><b>Mac App Store</b> and a <b>Homebrew</b> cask on macOS, signed and notarized</li>
+        <li><b>Flatpak / Flathub</b> (the AppStream metadata already lives in the repo), plus AppImage, on Linux</li>
+      </ul>
+      <div class="chips"><span class="chip">.deb / .rpm</span><span class="chip">winget</span><span class="chip">Scoop</span><span class="chip">Microsoft Store</span><span class="chip">Mac App Store</span><span class="chip">Flatpak</span><span class="chip">Homebrew</span><span class="chip">AppImage</span></div>
     </div>
   </li>
 

@@ -23,6 +23,8 @@ website/
     ├── js/site.js          # tiny vanilla enhancements (reveal-on-scroll, nav)
     └── img/
         ├── helena-icon.png # the real app icon (favicon + brand)
+        ├── author.jpg       # About-page photo of the author
+        ├── idct-logo.png    # IDCT brand mark (About page)
         ├── *-fancy.png      # window-framed hero-box art (baked, see below)
         └── *.png            # real UI captures (see "Screenshots" below)
 ```

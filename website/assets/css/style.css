@@ -53,17 +53,15 @@ a:hover { text-decoration: underline; }
 .nav .wrap { display: flex; align-items: center; gap: 16px; height: 64px; }
 .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; font-size: 18px; color: var(--text); letter-spacing: -.01em; }
 .brand:hover { text-decoration: none; }
-/* Logo badge: the real app icon (transparent PNG) sits on a soft light tile so
-   the light-grey mascot reads clearly against the dark header. */
+/* Logo: the real app icon (transparent PNG) shown directly on the header, no
+   tile behind it. */
 .brand .logo {
-  width: 36px; height: 36px; border-radius: 10px; flex: 0 0 auto;
-  background: radial-gradient(120% 120% at 50% 25%, #ffffff, #dde6f0);
-  display: grid; place-items: center; overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, .35), inset 0 0 0 1px rgba(255, 255, 255, .5);
-  transition: transform .2s ease, box-shadow .2s ease;
+  width: 44px; height: 44px; flex: 0 0 auto;
+  display: grid; place-items: center;
+  transition: transform .2s ease;
 }
-.brand:hover .logo { transform: translateY(-1px) rotate(-3deg); box-shadow: 0 6px 16px rgba(34, 197, 94, .35); }
-.brand .logo img { width: 30px; height: 30px; display: block; }
+.brand:hover .logo { transform: translateY(-1px) rotate(-4deg) scale(1.04); }
+.brand .logo img { width: 44px; height: 44px; display: block; }
 
 .nav-links { margin-left: auto; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; }
 .nav-links a {
@@ -232,7 +230,15 @@ pre code { background: none; padding: 0; }
 
 /* ---- About ---- */
 .author { display: flex; gap: 18px; align-items: center; flex-wrap: wrap; }
-.avatar { width: 84px; height: 84px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; font-size: 40px; }
+.avatar { width: 96px; height: 96px; border-radius: 20px; border: 1px solid var(--line); background: var(--surface); display: grid; place-items: center; font-size: 40px; }
+.avatar.photo { overflow: hidden; padding: 0; }
+.avatar.photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* IDCT brand lockup: the logo is black-on-white, so it sits on a white chip. */
+.idct-badge { display: inline-flex; align-items: center; margin-top: 12px; background: #fff;
+  border-radius: 10px; padding: 7px 12px; box-shadow: 0 2px 12px rgba(0, 0, 0, .3);
+  transition: transform .15s ease, box-shadow .15s ease; }
+.idct-badge:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
+.idct-badge img { height: 30px; width: auto; display: block; }
 
 /* ---- Scroll reveal (progressive enhancement; visible by default) ---- */
 .reveal { opacity: 1; }
