@@ -32,7 +32,6 @@ if /I "%~1"=="tidy"            goto :tidy
 if /I "%~1"=="clean"           goto :clean
 if /I "%~1"=="website"         goto :website
 if /I "%~1"=="website-build"   goto :website-build
-if /I "%~1"=="website-docker"  goto :website-docker
 goto :usage
 
 :run
@@ -114,33 +113,20 @@ if exist website\_site rmdir /S /Q website\_site
 if exist website\.jekyll-cache rmdir /S /Q website\.jekyll-cache
 goto :end
 
-REM Project website (Jekyll, website\). Needs Ruby + Bundler on PATH.
+REM Project website (Jekyll, website\) — builds with dockerized Ruby, no local
+REM Ruby needed (only Docker). Gem cache persists in website\.bundle.
 :website
-where bundle >nul 2>&1
-if errorlevel 1 ( echo bundler not found - install Ruby, then "gem install bundler" ^(see website\README.md^) & exit /b 1 )
-echo Serving website at http://localhost:4000/helena/ - Ctrl-C to stop
-pushd website
-cmd /c "bundle check >nul 2>&1 || bundle install"
-bundle exec jekyll serve --livereload
-popd
+where docker >nul 2>&1
+if errorlevel 1 ( echo docker not found - install Docker ^(the website builds with dockerized Ruby^) & exit /b 1 )
+echo Serving website at http://localhost:4000/helena/ - Ctrl-C to stop ^(first run pulls ruby:3.3^)
+docker run --rm -it -p 4000:4000 -e BUNDLE_PATH=/site/.bundle -v "%CD%\website:/site" -w /site ruby:3.3 sh -c "bundle install && bundle exec jekyll serve -H 0.0.0.0 --livereload --force_polling"
 goto :end
 
 :website-build
-where bundle >nul 2>&1
-if errorlevel 1 ( echo bundler not found - install Ruby, then "gem install bundler" ^(or use "make.bat website-docker"^) & exit /b 1 )
-pushd website
-cmd /c "bundle check >nul 2>&1 || bundle install"
-bundle exec jekyll build
-popd
-echo built website\_site
-goto :end
-
-REM Serve the website with no local Ruby, via the official ruby Docker image.
-:website-docker
 where docker >nul 2>&1
-if errorlevel 1 ( echo docker not found - install Docker, or use "make.bat website" with Ruby & exit /b 1 )
-echo Serving website via Docker at http://localhost:4000/helena/ - Ctrl-C to stop
-docker run --rm -it -p 4000:4000 -v "%CD%\website:/site" -w /site ruby:3.3 sh -c "bundle install && bundle exec jekyll serve -H 0.0.0.0 --livereload --force_polling"
+if errorlevel 1 ( echo docker not found - install Docker & exit /b 1 )
+docker run --rm -e BUNDLE_PATH=/site/.bundle -v "%CD%\website:/site" -w /site ruby:3.3 sh -c "bundle install && bundle exec jekyll build --baseurl /helena"
+echo built website\_site
 goto :end
 
 :usage

@@ -11,10 +11,17 @@ COVERAGE_EXCLUDES := internal/ui,cmd,features,integration,examples
 COVERAGE_PROFILE  := coverage.out
 COVERAGE_HTML     := coverage.html
 
-.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth website website-build website-docker
+.PHONY: run build test vet fmt lint tidy clean coverage coverage-html coverage-gate mutation mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth website website-build
 
-# The project website is a self-contained Jekyll site under website/ (#64).
-WEBSITE_DIR := website
+# The project website is a self-contained Jekyll site under website/ (#64). It
+# builds with dockerized Ruby — no local Ruby toolchain needed. The container
+# runs as the host user (so generated files stay user-owned and `make clean`
+# can remove them) with the gem cache in website/.bundle (gitignored, persisted
+# between runs so only the first build installs gems).
+WEBSITE_DIR  := website
+WEBSITE_PORT := 4000
+DOCKER_RUBY  := docker run --rm -u $$(id -u):$$(id -g) -e HOME=/tmp \
+	-e BUNDLE_PATH=/site/.bundle -v "$(CURDIR)/$(WEBSITE_DIR):/site" -w /site
 
 # Phase 8.6 mutation testing: run gremlins against the five load-bearing
 # packages. Each target is invokable individually for iteration; the
@@ -83,29 +90,23 @@ mutation-auth: $(GREMLINS)
 	$(GREMLINS) unleash $(GREMLINS_FLAGS) ./internal/auth
 mutation: mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth
 
-# website: build and serve the Jekyll project site with live reload so you can
-# see it in a browser. Needs Ruby + Bundler (gem install bundler); the gems are
-# installed on first run. Serves at http://localhost:4000/helena/ (the baseurl
-# in website/_config.yml). Ctrl-C to stop.
+# website: build and serve the Jekyll site with live reload, via dockerized
+# Ruby — no local Ruby needed (only Docker). Reachable at
+# http://localhost:4000/helena/ (the baseurl in website/_config.yml). The first
+# run pulls ruby:3.3 and installs the gems into website/.bundle; later runs are
+# fast. Ctrl-C to stop.
 website:
-	@command -v bundle >/dev/null 2>&1 || { echo "bundler not found — install Ruby + 'gem install bundler', or run 'make website-docker' (no Ruby needed). See $(WEBSITE_DIR)/README.md"; exit 1; }
-	@echo "Serving $(WEBSITE_DIR) at http://localhost:4000/helena/ — Ctrl-C to stop"
-	cd $(WEBSITE_DIR) && { bundle check >/dev/null 2>&1 || bundle install; } && bundle exec jekyll serve --livereload
-
-# website-build: build the static site into website/_site without serving.
-website-build:
-	@command -v bundle >/dev/null 2>&1 || { echo "bundler not found — install Ruby + 'gem install bundler', or run 'make website-docker'. See $(WEBSITE_DIR)/README.md"; exit 1; }
-	cd $(WEBSITE_DIR) && { bundle check >/dev/null 2>&1 || bundle install; } && bundle exec jekyll build
-	@echo "built $(WEBSITE_DIR)/_site"
-
-# website-docker: serve the site with no local Ruby — uses the official ruby
-# image to install the gems and run jekyll serve, reachable at
-# http://localhost:4000/helena/. Ctrl-C to stop. First run pulls the image.
-website-docker:
-	@command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker, or use 'make website' with Ruby"; exit 1; }
-	@echo "Serving $(WEBSITE_DIR) via Docker at http://localhost:4000/helena/ — Ctrl-C to stop"
-	docker run --rm -it -p 4000:4000 -v "$(CURDIR)/$(WEBSITE_DIR):/site" -w /site ruby:3.3 \
+	@command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker (the website builds with dockerized Ruby). See $(WEBSITE_DIR)/README.md"; exit 1; }
+	@echo "Serving $(WEBSITE_DIR) at http://localhost:$(WEBSITE_PORT)/helena/ — Ctrl-C to stop (first run pulls ruby:3.3)"
+	$(DOCKER_RUBY) -it -p $(WEBSITE_PORT):4000 ruby:3.3 \
 		sh -c "bundle install && bundle exec jekyll serve -H 0.0.0.0 --livereload --force_polling"
+
+# website-build: build the static site into website/_site (dockerized Ruby), no
+# server. Useful for CI-style checks or inspecting the generated HTML.
+website-build:
+	@command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker. See $(WEBSITE_DIR)/README.md"; exit 1; }
+	$(DOCKER_RUBY) ruby:3.3 sh -c "bundle install && bundle exec jekyll build --baseurl /helena"
+	@echo "built $(WEBSITE_DIR)/_site"
 
 vet:
 	go vet ./...

@@ -23,27 +23,22 @@ website/
 
 ## Run locally
 
-From the repo root, the Makefile has shortcuts that install the gems on first
-run and serve with live reload at <http://localhost:4000/helena/>:
+The site builds with **dockerized Ruby** — you only need **Docker**, no local
+Ruby toolchain. From the repo root:
 
 ```bash
-make website          # serve with live reload (needs Ruby + Bundler)
+make website          # serve with live reload → http://localhost:4000/helena/  (Ctrl-C to stop)
 make website-build    # build the static site into website/_site
-make website-docker   # serve with NO local Ruby — uses the official ruby Docker image
 ```
 
-`make website` / `website-build` need **Ruby + Bundler** (`gem install
-bundler`); `make website-docker` needs only **Docker**. On Windows use
-`make.bat website` (or `make.bat website-docker`).
+The first run pulls `ruby:3.3` and installs the gems into `website/.bundle`
+(gitignored); later runs are fast. The container runs as your user, so the
+generated files stay yours and `make clean` removes them. On Windows use
+`make.bat website`.
 
-Or drive Jekyll directly:
-
-```bash
-cd website
-bundle install
-bundle exec jekyll serve --livereload
-# → http://localhost:4000/helena/
-```
+> **Prefer a native Ruby?** With Ruby + Bundler installed you can also run
+> Jekyll directly — `cd website && bundle install && bundle exec jekyll serve
+> --livereload`.
 
 (`baseurl: "/helena"` in `_config.yml` matches GitHub **project** pages served
 at `https://<user>.github.io/helena/`. Set it to `""` for a user/org or

@@ -13,10 +13,13 @@ coverage.html
 /covergate
 /cmd_gojatest_main.go
 
-# Jekyll project website build artifacts (website/)
+# Jekyll project website build artifacts (website/). The site builds with
+# dockerized Ruby, so the gem cache + lock are per-environment (the lock would
+# otherwise pin a single container arch, e.g. x86_64 vs Apple-Silicon arm64).
 /website/_site/
 /website/.jekyll-cache/
 /website/.bundle/
+/website/Gemfile.lock
 
 # OS / editor
 .DS_Store
