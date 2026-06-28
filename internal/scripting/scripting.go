@@ -14,6 +14,7 @@ package scripting
 import (
 	"context"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -63,6 +64,43 @@ type RunOption func(*runConfig)
 // runConfig holds the per-call settings assembled from the RunOptions.
 type runConfig struct {
 	interpolate func(string) string
+	requester   func(SendSpec) (ResponseInput, error)
+}
+
+// SendSpec is an ad-hoc HTTP request a script asks the host to perform via
+// helena.sendRequest (#92). Method defaults to GET when empty; URL and header
+// values are {{var}}-resolved by the host before sending, exactly like a normal
+// request. Body is sent verbatim (text); set a Content-Type header for JSON etc.
+type SendSpec struct {
+	Method  string
+	URL     string
+	Headers map[string]string
+	Body    string
+}
+
+// ToRequest converts the spec into a model.Request the host can send. Method
+// defaults to GET; a non-empty Body becomes a text body (set a Content-Type
+// header for other media types). Headers are emitted in sorted key order so the
+// produced request is deterministic.
+func (s SendSpec) ToRequest() model.Request {
+	method := model.Method(strings.ToUpper(s.Method))
+	if method == "" {
+		method = model.GET
+	}
+	keys := make([]string, 0, len(s.Headers))
+	for k := range s.Headers {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	headers := make([]model.KeyValue, 0, len(keys))
+	for _, k := range keys {
+		headers = append(headers, model.KeyValue{Enabled: true, Key: k, Value: s.Headers[k]})
+	}
+	req := model.Request{Method: method, URL: s.URL, Headers: headers}
+	if s.Body != "" {
+		req.Body = model.Body{Type: model.BodyText, Content: s.Body}
+	}
+	return req
 }
 
 // WithInterpolator supplies the function backing helena.interpolate(template)
@@ -73,6 +111,14 @@ type runConfig struct {
 // supplied, helena.interpolate returns its argument unchanged.
 func WithInterpolator(fn func(string) string) RunOption {
 	return func(c *runConfig) { c.interpolate = fn }
+}
+
+// WithRequester supplies the function backing helena.sendRequest(spec) (#92):
+// the host performs the ad-hoc request (resolving {{vars}}, applying the cookie
+// jar, honouring the Send context) and returns its response. When no requester
+// is supplied, helena.sendRequest throws — it has no meaning outside a Send.
+func WithRequester(fn func(SendSpec) (ResponseInput, error)) RunOption {
+	return func(c *runConfig) { c.requester = fn }
 }
 
 func newRunConfig(opts []RunOption) runConfig {

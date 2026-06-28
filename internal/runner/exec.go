@@ -42,17 +42,29 @@ func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chai
 
 	scriptChain := chainViewToScripting(chainMap)
 
-	// interp backs helena.interpolate (#92): same scope chain as the request send,
-	// rebuilt per call so in-script helena.env.set writes are reflected. No prompt
-	// scope — a headless run can't ask.
-	interp := func(s string) string {
-		rr := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledVars(r.Variables), e.sess.SnapshotEnvOverlay()).
+	// newResolver rebuilds the request resolver with a fresh env-overlay snapshot
+	// (same scope chain as the send; no prompt scope — a headless run can't ask)
+	// so script helpers reflect in-script helena.env.set writes.
+	newResolver := func() *vars.Resolver {
+		return vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledVars(r.Variables), e.sess.SnapshotEnvOverlay()).
 			WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
-		out, _ := rr.Resolve(s)
+	}
+	// interp backs helena.interpolate (#92); requester backs helena.sendRequest
+	// (#92) — an ad-hoc request through the same client and scope chain.
+	interp := func(s string) string {
+		out, _ := newResolver().Resolve(s)
 		return out
 	}
+	requester := func(spec scripting.SendSpec) (scripting.ResponseInput, error) {
+		resp, err := e.client.Do(ctx, spec.ToRequest(), newResolver())
+		if err != nil {
+			return scripting.ResponseInput{}, err
+		}
+		return scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body}, nil
+	}
+	scriptOpts := []scripting.RunOption{scripting.WithInterpolator(interp), scripting.WithRequester(requester)}
 
-	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scripting.WithInterpolator(interp))
+	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scriptOpts...)
 	if preErr != nil {
 		return chain.View{}, preRes.Tests, preErr
 	}
@@ -75,7 +87,7 @@ func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chai
 	}
 	postRes, postErr := e.rt.RunPostResponse(ctx, r.Scripts.PostResponse, r,
 		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
-		scriptChain, scripting.WithInterpolator(interp))
+		scriptChain, scriptOpts...)
 	tests := append(append([]scripting.TestResult(nil), preRes.Tests...), postRes.Tests...)
 	if postErr != nil {
 		return view, tests, postErr

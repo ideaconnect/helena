@@ -63,6 +63,27 @@ func (rt *Runtime) bindHelena(ctx context.Context, cfg runConfig, vm *goja.Runti
 		return err
 	}
 
+	// helena.sendRequest(spec) performs an ad-hoc HTTP request through the host
+	// and returns a response object identical in shape to the post-response
+	// `response` global (#92). It is injected per-call via WithRequester; with
+	// none wired (e.g. unit tests with no client) it throws.
+	if err := helena.Set("sendRequest", func(call goja.FunctionCall) goja.Value {
+		if cfg.requester == nil {
+			panic(vm.NewTypeError("helena.sendRequest is unavailable in this context"))
+		}
+		spec, err := parseSendSpec(vm, call.Argument(0))
+		if err != nil {
+			panic(vm.NewTypeError("helena.sendRequest: " + err.Error()))
+		}
+		resp, err := cfg.requester(spec)
+		if err != nil {
+			panic(vm.ToValue(vm.NewGoError(err)))
+		}
+		return responseToObject(vm, resp)
+	}); err != nil {
+		return err
+	}
+
 	if err := rt.bindHelpers(ctx, vm, helena); err != nil {
 		return err
 	}
@@ -94,6 +115,39 @@ func bindConsole(vm *goja.Runtime, res *Result) {
 	_ = console.Set("error", emit("ERROR: "))
 	_ = console.Set("warn", emit("WARN: "))
 	_ = vm.Set("console", console)
+}
+
+// parseSendSpec reads a helena.sendRequest argument object into a SendSpec.
+// Only `url` is required; `method` defaults later to GET, `headers` is an
+// optional name→value object, and `body` is an optional string.
+func parseSendSpec(vm *goja.Runtime, arg goja.Value) (SendSpec, error) {
+	obj, ok := arg.(*goja.Object)
+	if !ok || obj == nil {
+		return SendSpec{}, errors.New("argument must be an object like {url, method, headers, body}")
+	}
+	spec := SendSpec{Headers: map[string]string{}}
+	if s, ok := safeString(obj.Get("url")); ok {
+		spec.URL = s
+	}
+	if spec.URL == "" {
+		return SendSpec{}, errors.New("url is required")
+	}
+	if s, ok := safeString(obj.Get("method")); ok {
+		spec.Method = strings.ToUpper(s)
+	}
+	if s, ok := safeString(obj.Get("body")); ok {
+		spec.Body = s
+	}
+	if h := obj.Get("headers"); h != nil {
+		if ho, ok := h.(*goja.Object); ok && ho != nil {
+			for _, k := range ho.Keys() {
+				if v, ok := safeString(ho.Get(k)); ok {
+					spec.Headers[k] = v
+				}
+			}
+		}
+	}
+	return spec, nil
 }
 
 // stringify renders a goja.Value the way `console.log` would: strings

@@ -94,6 +94,7 @@ Bound globals in both phases:
 | `helena.env.set(name, value)` | Writes to the in-memory overlay. Never persisted. |
 | `helena.vars.get(name)` | Alias for `helena.env.get`. |
 | `helena.interpolate(template)` | Resolves `{{var}}` references in `template` with the same scope chain a request send uses (global < .env < collection < env < folder/request vars < overlay < chain < dynamic) (#92). Reflects `helena.env.set` writes made earlier in the same script. Unresolved names are left best-effort by the resolver. Identity when run outside a Send (no resolver wired). |
+| `helena.sendRequest({url, method, headers, body})` | Performs an ad-hoc HTTP request through the host client (#92) — same cookie jar, TLS settings, and Send context; `{{vars}}` in `url`/`headers`/`body` resolve like a normal request — and returns a response object identical to the post-response `response` global (`status`, `statusText`, `body`, `text`, `json`, `xml`, `headers`). `method` defaults to GET; set a `Content-Type` header for non-text bodies. Throws on a transport error, an invalid spec, or when called outside a Send. |
 | `helena.uuid()` | Returns a random RFC 4122 v4 UUID string. |
 | `helena.hash.md5/sha1/sha256/sha512(text)` | Hex digest of `text`. |
 | `helena.hash.hmacSha1/hmacSha256(key, text)` | Hex HMAC digest of `text` keyed by `key`. |
@@ -194,7 +195,10 @@ What this means in practice:
 - **The sandbox boundary stops at the network.** goja blocks
   filesystem, process-spawn, and arbitrary native calls — but it
   cannot stop a script from telling Helena's own HTTP client where to
-  send the request.
+  send the request. `helena.sendRequest` (#92) makes this explicit: it
+  performs a host-mediated request through the same client + cookie jar,
+  so it does not widen the boundary beyond what `request.url` rewriting
+  already allowed — it just exposes it directly to scripts.
 - **The curated helpers add no I/O surface.** `helena.uuid`,
   `helena.hash.*`, `helena.date.*`, `helena.base64.*`, and `helena.sleep`
   (which only delays the calling script, clamped + ctx-aware) are pure-compute (crypto/hash,

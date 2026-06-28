@@ -81,17 +81,29 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	scriptChain := chainViewToScripting(chainMap)
 	var console []string
 
-	// interp backs helena.interpolate (#92): resolve {{var}} references with the
-	// same scope chain the request send uses. Built fresh per call so an in-script
-	// helena.env.set write is reflected (SnapshotEnvOverlay is re-read each time).
-	interp := func(s string) string {
-		rr := vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.promptSnap, e.sess.SnapshotEnvOverlay()).
+	// newResolver rebuilds the request's variable resolver with a fresh env-
+	// overlay snapshot, so script helpers reflect in-script helena.env.set writes.
+	newResolver := func() *vars.Resolver {
+		return vars.New(e.globalSnap, e.dotEnvSnap, e.colSnap, e.envSnap, enabledRequestVars(r.Variables), e.promptSnap, e.sess.SnapshotEnvOverlay()).
 			WithFallback(vars.Compose(chain.VarLookup(chainMap), vars.Dynamic))
-		out, _ := rr.Resolve(s)
+	}
+	// interp backs helena.interpolate (#92); requester backs helena.sendRequest
+	// (#92) — an ad-hoc request through the same client (cookies + ctx) and the
+	// same scope chain, returning the host response to the script.
+	interp := func(s string) string {
+		out, _ := newResolver().Resolve(s)
 		return out
 	}
+	requester := func(spec scripting.SendSpec) (scripting.ResponseInput, error) {
+		resp, err := e.client.Do(ctx, spec.ToRequest(), newResolver())
+		if err != nil {
+			return scripting.ResponseInput{}, err
+		}
+		return scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body}, nil
+	}
+	scriptOpts := []scripting.RunOption{scripting.WithInterpolator(interp), scripting.WithRequester(requester)}
 
-	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scripting.WithInterpolator(interp))
+	preRes, preErr := e.rt.RunPreRequest(ctx, r.Scripts.PreRequest, &r, scriptChain, scriptOpts...)
 	console = append(console, preRes.Console...)
 	if preErr != nil {
 		return chain.View{}, console, fmt.Errorf("pre-script: %w", preErr)
@@ -129,7 +141,7 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 
 	postRes, postErr := e.rt.RunPostResponse(ctx, r.Scripts.PostResponse, r,
 		scripting.ResponseInput{StatusCode: resp.StatusCode, Status: resp.Status, Headers: resp.Headers, Body: resp.Body},
-		scriptChain, scripting.WithInterpolator(interp))
+		scriptChain, scriptOpts...)
 	console = append(console, postRes.Console...)
 	// Surface test()/expect() outcomes (#87) plus declarative assertions (#88)
 	// in the Scripts console, combining pre-request and post-response script

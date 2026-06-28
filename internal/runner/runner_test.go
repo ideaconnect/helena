@@ -206,3 +206,27 @@ func TestRunEnvVarResolution(t *testing.T) {
 		t.Errorf("env var should resolve and request succeed: %+v", rep.Results)
 	}
 }
+
+// TestRunSendRequestFromScript exercises helena.sendRequest end-to-end (#92): a
+// post-response script fires an ad-hoc request through the host client and
+// asserts on the returned response object.
+func TestRunSendRequestFromScript(t *testing.T) {
+	srv := testServer(t)
+	col := model.Collection{
+		Name: "C",
+		Requests: []model.Request{{
+			Name: "Leaf", Method: model.GET, URL: srv.URL + "/ok",
+			Scripts: model.Scripts{PostResponse: `
+				var r = helena.sendRequest({ url: "` + srv.URL + `/ok" });
+				test("sendRequest", function () {
+					expect(r.status).toBe(200);
+					expect(r.json.id).toBe(7);
+				});`},
+		}},
+	}
+	rep := Run(context.Background(), openColl(t, col))
+	leaf := byPath(rep, "Leaf")
+	if leaf == nil || len(leaf.Checks) != 1 || !leaf.Checks[0].Passed {
+		t.Errorf("sendRequest end-to-end test = %+v", leaf)
+	}
+}

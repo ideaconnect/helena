@@ -4,8 +4,8 @@
 
 | File | Purpose |
 | ---- | ------- |
-| [scripting.go](scripting.go) | Package doc, public types (`Runtime`, `Result`, `EnvBridge`, `ResponseInput`), constructor `New`, the two entry points `RunPreRequest` / `RunPostResponse` (both accept `...RunOption`), and `RunOption` / `WithInterpolator` (#92). |
-| [bindings.go](bindings.go) | All internal binding helpers: `bindHelena`, `bindConsole`, `stringify`, `runWithTimeout`, `requestToObject` / `writeBackRequest` / `mergeKVFromObject`, `responseToObject`, `tryParseJSON`. |
+| [scripting.go](scripting.go) | Package doc, public types (`Runtime`, `Result`, `EnvBridge`, `ResponseInput`), constructor `New`, the two entry points `RunPreRequest` / `RunPostResponse` (both accept `...RunOption`), `RunOption` / `WithInterpolator` / `WithRequester` (#92), and the `SendSpec` (with `ToRequest`) type. |
+| [bindings.go](bindings.go) | All internal binding helpers: `bindHelena`, `bindConsole`, `stringify`, `runWithTimeout`, `requestToObject` / `writeBackRequest` / `mergeKVFromObject`, `responseToObject`, `tryParseJSON`, `parseSendSpec` (#92). |
 | [helpers.go](helpers.go) | `bindHelpers` — the curated, pure-compute `helena.uuid` / `helena.hash.*` / `helena.date.*` / `helena.base64.*` surface plus `helena.sleep` (#92) — and the local `scriptUUID` formatter. |
 | [assert.go](assert.go) | `bindTest` (#87) — the `__helenaRecordTest` collector that appends to `Result.Tests`, plus the JS `testPrelude` that defines the global `test()` runner and the `expect()` matcher chain. |
 | [assert_test.go](assert_test.go) | Pass/fail recording, the matcher subset + `.not`, throw-in-test, and pre-request availability. |
@@ -81,7 +81,7 @@ tests.
 
 | Helper | What it does |
 | ------ | ------------ |
-| `bindHelena` | Attaches `helena.env.{get,set}`, `helena.vars.get`, and `helena.interpolate` (#92 — backed by the per-call `WithInterpolator`, identity when none is supplied) to the VM (env flows through `Runtime.env`), then calls `bindHelpers` to add the curated helper surface to the same `helena` object. |
+| `bindHelena` | Attaches `helena.env.{get,set}`, `helena.vars.get`, `helena.interpolate` (#92 — backed by the per-call `WithInterpolator`, identity when none is supplied), and `helena.sendRequest` (#92 — backed by `WithRequester`; throws when unwired; `parseSendSpec` reads the arg object) to the VM (env flows through `Runtime.env`), then calls `bindHelpers` to add the curated helper surface to the same `helena` object. |
 | `bindHelpers` | Attaches `helena.uuid()`, `helena.hash.{md5,sha1,sha256,sha512,hmacSha1,hmacSha256}`, `helena.date.{now,timestamp}`, `helena.base64.{encode,decode}` (#92), and `helena.sleep(ms)` (#92). Pure-compute (crypto/hash, `crypto/rand`, clock); `sleep` only delays the calling script (clamped to `ScriptTimeout`, ctx-aware) and adds no I/O, so the sandbox boundary is unchanged. Takes the run `ctx` so `sleep` aborts on cancel/timeout. |
 | `bindConsole` | Attaches `console.{log,info,warn,error}`. Each emits one space-joined line into `Result.Console`. |
 | `bindTest` | Attaches `test()` / `expect()` (#87): binds the Go `__helenaRecordTest` collector (appends to `Result.Tests`) and runs `testPrelude`, the JS that defines the runner + matcher chain. |
