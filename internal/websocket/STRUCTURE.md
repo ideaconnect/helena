@@ -6,6 +6,8 @@
 | --- | --- |
 | [frame.go](frame.go) | Package doc + the frame layer: the `Frame` type and opcodes, `WriteFrame` / `ReadFrame`, and the unexported `maskPayload`. `maxFramePayload` (64 MiB) caps an inbound declared length. |
 | [handshake.go](handshake.go) | The opening-handshake key math: `AcceptKey` (server's `Sec-WebSocket-Accept`) and `GenerateKey` (client's `Sec-WebSocket-Key`), plus the `acceptGUID` constant. |
+| [conn.go](conn.go) | `Dial` (URL parse → TCP/TLS dial → `writeUpgrade`/`verifyUpgrade` HTTP handshake) and `Conn` (`WriteMessage`, `ReadMessage` with continuation reassembly + inline ping/pong/close, `writeControl`, `Close`). A write mutex serializes frames so a control echo can't interleave a data frame. |
+| [conn_test.go](conn_test.go) | End-to-end against a hijacking echo server that speaks the same codec: handshake + masked send / unmasked echo, ping→pong, fragmentation, close→EOF, unsolicited pong, reserved opcode, over-125 ping, extra headers, and the handshake-rejection / bad-accept / missing-upgrade / TLS-failure / default-port paths. |
 | [frame_test.go](frame_test.go) | RFC 6455 known-answer tests: the §5.7 unmasked / masked "Hello" frames, payload-length round-trips across the 7/16/64-bit encodings, the MASK-bit + no-plaintext check, control-frame classification, the decoder error paths (truncated header / length / mask / body, oversize length), and the §1.3 accept key + key generation. |
 
 ## Frame layout (RFC 6455 §5.2)
@@ -23,9 +25,7 @@ payload (XOR-masked with the key when MASK is set)
 the extended length if present, the mask key if `MASK`, then the payload, and
 unmasks in place.
 
-## Not yet here (later increments)
+## Not yet here (next increment)
 
-- `Conn` / `Dial`: the HTTP/1.1 `Upgrade` handshake over a hijacked TCP/TLS
-  connection, then message-level read/write with fragmentation reassembly and
-  automatic ping→pong + close handling.
-- UI: a bidirectional message panel (send a message, see the transcript).
+- UI: a bidirectional message panel (a Connect/Send action, the live transcript
+  of sent + received messages) wiring `Dial`/`Conn` into the request editor.

@@ -86,8 +86,8 @@ func TestReadFrameErrors(t *testing.T) {
 		"truncated 16-len": {0x82, 126, 0x00}, // says 16-bit len but only 1 byte follows
 		"truncated 64-len": {0x82, 127, 0x00, 0x00},
 		"oversize":         {0x82, 127, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, // length ~ max uint64
-		"truncated mask":   {0x81, 0x85, 0x37, 0xfa}, // MASK set, key truncated
-		"truncated body":   {0x81, 0x05, 'H', 'e'},   // says 5 bytes, only 2
+		"truncated mask":   {0x81, 0x85, 0x37, 0xfa},                                    // MASK set, key truncated
+		"truncated body":   {0x81, 0x05, 'H', 'e'},                                      // says 5 bytes, only 2
 	}
 	for name, raw := range cases {
 		if _, err := ReadFrame(bytes.NewReader(raw)); err == nil {
