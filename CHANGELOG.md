@@ -30,6 +30,13 @@ label via [`.github/release.yml`](.github/release.yml).
 - `storage.Save` is now atomic (stage-and-swap); a failed save leaves the
   on-disk collection untouched and the in-memory model rolls back to match.
 - Sends reuse a per-session HTTP transport (connection-pool reuse).
+- Dependencies bumped to latest, notably the response/request body viewer
+  `go-fyne-pretty-view` v2.2.0-alpha → v2.3.0-alpha. As a result, pressing
+  **Tab** in the request-body or GraphQL-variables editor now inserts a tab
+  character instead of moving focus to the next field (use the mouse to leave
+  the editor). The pre/post-request scripting engine (goja) also gained
+  ES2018 named capture groups, so `$<name>` backreferences and `.groups` work
+  in user scripts.
 
 ### Security
 - Bearer-token, API-key, and Secret environment values are masked in the UI.
