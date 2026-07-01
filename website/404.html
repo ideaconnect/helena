@@ -1,0 +1,25 @@
+---
+layout: default
+title: Page not found
+description: The page you were looking for could not be found.
+permalink: /404.html
+sitemap: false
+---
+
+<section class="hero">
+  <div class="wrap">
+    <div class="hero-copy" style="max-width:640px;margin:0 auto;text-align:center">
+      <span class="pill"><span class="dot"></span> Error 404</span>
+      <h1>This request came back <span class="accent">404 Not&nbsp;Found</span>.</h1>
+      <p class="lead">
+        The page you were after isn't here - it may have moved or never existed.
+        Let's get you back on a good route.
+      </p>
+      <div class="actions" style="justify-content:center">
+        <a class="btn btn-primary" href="{{ '/' | relative_url }}">Back home</a>
+        <a class="btn btn-ghost" href="{{ '/features/' | relative_url }}">Features</a>
+        <a class="btn btn-ghost" href="{{ site.repo }}">GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>

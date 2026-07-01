@@ -3,25 +3,72 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% if page.title %}{{ page.title }} · {{ site.title }}{% else %}{{ site.title }} - {{ site.tagline }}{% endif %}</title>
-  <meta name="description" content="{{ page.description | default: site.description }}">
+  {% capture page_title %}{% if page.title %}{{ page.title }} · {{ site.title }}{% else %}{{ site.title }} - {{ site.tagline }}{% endif %}{% endcapture %}
+  {% assign page_desc = page.description | default: site.description | strip_newlines %}
+  {% assign social_image = '/assets/img/app-hero.png' | absolute_url %}
+  <title>{{ page_title }}</title>
+  <meta name="description" content="{{ page_desc }}">
+  <meta name="author" content="{{ site.author }}">
+  <link rel="canonical" href="{{ page.url | absolute_url }}">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="color-scheme" content="dark light">
   <link rel="icon" href="{{ '/assets/img/helena-icon.png' | relative_url }}" type="image/png">
+  <link rel="apple-touch-icon" href="{{ '/assets/img/helena-icon.png' | relative_url }}">
   <link rel="stylesheet" href="{{ '/assets/css/style.css' | relative_url }}">
-  <meta property="og:title" content="{{ page.title | default: site.title }}">
-  <meta property="og:description" content="{{ page.description | default: site.description }}">
-  <meta property="og:image" content="{{ '/assets/img/app-hero.png' | absolute_url }}">
+
+  <meta property="og:site_name" content="{{ site.title }}">
+  <meta property="og:title" content="{{ page_title }}">
+  <meta property="og:description" content="{{ page_desc }}">
   <meta property="og:type" content="website">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:url" content="{{ page.url | absolute_url }}">
+  <meta property="og:image" content="{{ social_image }}">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="2360">
+  <meta property="og:image:height" content="1520">
+  <meta property="og:image:alt" content="The Helena desktop app: a collection sidebar, a POST request with a JSON body, and the 201 Created response">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ page_title }}">
+  <meta name="twitter:description" content="{{ page_desc }}">
+  <meta name="twitter:image" content="{{ social_image }}">
+  <meta name="twitter:image:alt" content="The Helena desktop app: a collection sidebar, a POST request with a JSON body, and the 201 Created response">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "{{ site.title }}",
+    "description": "{{ site.description | strip_newlines }}",
+    "applicationCategory": "DeveloperApplication",
+    "operatingSystem": "Linux, macOS, Windows",
+    "url": "{{ '/' | absolute_url }}",
+    "downloadUrl": "{{ site.releases }}",
+    "image": "{{ social_image }}",
+    "license": "{{ site.repo }}/blob/main/LICENSE",
+    "codeRepository": "{{ site.repo }}",
+    "isAccessibleForFree": true,
+    "screenshot": [
+      "{{ '/assets/img/app-hero.png' | absolute_url }}",
+      "{{ '/assets/img/shot-auth.png' | absolute_url }}",
+      "{{ '/assets/img/shot-chain.png' | absolute_url }}"
+    ],
+    "featureList": "Nine authentication schemes (Basic, Bearer, API Key, OAuth 2.0 + PKCE, OAuth 1.0a, WSSE, AWS SigV4, Digest, NTLM); JavaScript pre/post scripting with tests and assertions; request chaining; Server-Sent Events and WebSocket; headless CLI runner; OpenAPI, Swagger, and WSDL import; export to cURL, wget, fetch, Python, and Go; plain-YAML diffable collections",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "author": { "@type": "Organization", "name": "{{ site.author }}", "url": "{{ site.author_url }}" }
+  }
+  </script>
   <script>document.documentElement.className += ' js';</script>
   <noscript><style>.js .reveal{opacity:1!important;transform:none!important}</style></noscript>
 </head>
 <body>
+  <a class="skip-link" href="#main">Skip to content</a>
   <header class="nav" id="nav">
     <div class="wrap">
       <a class="brand" href="{{ '/' | relative_url }}">
-        <span class="logo"><img src="{{ '/assets/img/helena-icon.png' | relative_url }}" alt=""></span>
+        <span class="logo"><img src="{{ '/assets/img/helena-icon.png' | relative_url }}" alt="" width="44" height="44"></span>
         <span>Helena</span>
       </a>
-      <nav class="nav-links">
+      <nav class="nav-links" aria-label="Primary">
         {% for item in site.nav %}
           <a href="{{ item.url | relative_url }}">{{ item.title }}</a>
         {% endfor %}
@@ -29,12 +76,14 @@
       <div class="nav-cta">
         <a class="ghost icon-only" href="{{ site.repo }}" aria-label="GitHub" title="GitHub">{% include icon-github.svg %}</a>
         <a class="ghost icon-only" href="{{ site.discord }}" aria-label="Join the Discord" title="Join the Discord">{% include icon-discord.svg %}</a>
+        <a class="ghost icon-only sponsor" href="{{ site.sponsor }}" aria-label="Sponsor Helena on GitHub" title="Sponsor on GitHub" rel="noopener">{% include icon-sponsor.svg %}</a>
+        <a class="ghost icon-only coffee" href="{{ site.coffee }}" aria-label="Buy me a coffee" title="Buy me a coffee" rel="noopener">{% include icon-coffee.svg %}</a>
         <a class="solid" href="{{ '/download/' | relative_url }}">{% include icon-download.svg %}<span>Download</span></a>
       </div>
     </div>
   </header>
 
-  <main>
+  <main id="main">
     {{ content }}
   </main>
 
@@ -44,6 +93,8 @@
       <span>
         <a href="{{ site.repo }}">GitHub</a> ·
         <a href="{{ site.discord }}">Discord</a> ·
+        <a href="{{ site.sponsor }}" rel="noopener">Sponsor</a> ·
+        <a href="{{ site.coffee }}" rel="noopener">Buy me a coffee</a> ·
         <a href="{{ '/roadmap/' | relative_url }}">Roadmap</a> ·
         <a href="{{ '/contact/' | relative_url }}">Contact</a> ·
         <a href="{{ site.repo }}/issues">Issues</a>

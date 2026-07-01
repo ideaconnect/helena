@@ -39,6 +39,22 @@ body {
 a { color: var(--green-bright); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* Keyboard focus ring (only for keyboard nav, not mouse clicks). WCAG 2.4.7;
+   green-bright on the dark bg is ~8.3:1, well past the 3:1 UI-component floor. */
+:focus-visible { outline: 2px solid var(--green-bright); outline-offset: 2px; }
+
+/* Skip-to-content link: off-screen until focused, then pinned top-left. WCAG 2.4.1. */
+.skip-link { position: absolute; left: -9999px; top: 0; z-index: 100; }
+.skip-link:focus {
+  left: 8px; top: 8px; padding: 8px 14px; border-radius: 10px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--green);
+}
+#main { scroll-margin-top: 72px; }
+
+/* <picture> wraps responsive <img> (webp source + png fallback); keep it a
+   plain block so the existing `.win/.shot/.page-hero-art img` rules govern size. */
+picture { display: block; }
+
 .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 20px; }
 
 /* ---- Top nav ---- */
@@ -78,6 +94,9 @@ a:hover { text-decoration: underline; }
 .nav-cta a.icon-only .ic { font-size: 17px; }
 .nav-cta .ghost { color: var(--text); border: 1px solid var(--line); background: var(--surface); }
 .nav-cta .ghost:hover { border-color: var(--green); color: var(--green-bright); }
+/* Brand-tinted hovers for the support links so the heart/coffee read at a glance. */
+.nav-cta .sponsor:hover { border-color: #db61a2; color: #db61a2; }
+.nav-cta .coffee:hover { border-color: #e2b100; color: #ffcc00; }
 .nav-cta .solid { color: #04210f; background: var(--green-bright); box-shadow: 0 6px 18px rgba(34, 197, 94, .25); }
 .nav-cta .solid:hover { background: var(--green); }
 
@@ -204,7 +223,7 @@ section { padding: 56px 0; }
 .tl-item .tl-card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; transition: transform .2s ease, border-color .2s ease; }
 .tl-item .tl-card:hover { transform: translateX(4px); border-color: rgba(34, 197, 94, .4); }
 .tl-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.tl-head h3 { margin: 0; font-size: 17px; }
+.tl-head h2, .tl-head h3 { margin: 0; font-size: 17px; }
 .badge { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
 .badge.shipped { background: rgba(34,197,94,.16); color: var(--green-bright); }
 .badge.progress { background: rgba(245,158,11,.16); color: #fbbf24; }

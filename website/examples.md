@@ -15,7 +15,10 @@ body, hit **Send**. The response panel pretty-prints JSON with structured
 folding, search, and a raw view - and shows the status, size, and timing.
 
 <figure class="shot">
-  <img src="{{ '/assets/img/app-hero.png' | relative_url }}" alt="The Helena desktop app: a collection sidebar, a POST request with a JSON body, and the 201 Created response">
+  <picture>
+    <source srcset="{{ '/assets/img/app-hero.webp' | relative_url }}" type="image/webp">
+    <img src="{{ '/assets/img/app-hero.png' | relative_url }}" alt="The Helena desktop app: a collection sidebar, a POST request with a JSON body, and the 201 Created response" width="2360" height="1520" loading="lazy" decoding="async">
+  </picture>
   <figcaption>A <code>POST</code> with a JSON body and the <code>201&nbsp;Created</code> response, alongside the collection sidebar.</figcaption>
 </figure>
 
@@ -27,7 +30,10 @@ Credentials can come from {% raw %}`{{variables}}`{% endraw %}, so secrets stay
 out of the collection YAML.
 
 <figure class="shot">
-  <img src="{{ '/assets/img/shot-auth.png' | relative_url }}" alt="The Helena Auth tab set to Bearer Token, with the token sourced from a variable, and a 200 OK response">
+  <picture>
+    <source srcset="{{ '/assets/img/shot-auth.webp' | relative_url }}" type="image/webp">
+    <img src="{{ '/assets/img/shot-auth.png' | relative_url }}" alt="The Helena Auth tab set to Bearer Token, with the token sourced from a variable, and a 200 OK response" width="2360" height="1520" loading="lazy" decoding="async">
+  </picture>
   <figcaption>A Bearer token sourced from <code>{% raw %}{{TOKEN}}{% endraw %}</code> - resolved on the wire, never written to disk.</figcaption>
 </figure>
 
@@ -46,7 +52,10 @@ Add request headers (with {% raw %}`{{$guid}}`{% endraw %} and other dynamic
 values), then read the response back as a folding JSON tree with search.
 
 <figure class="shot">
-  <img src="{{ '/assets/img/shot-request.png' | relative_url }}" alt="The Helena Headers tab with an Accept and an X-Request-Id header, and a nested JSON response">
+  <picture>
+    <source srcset="{{ '/assets/img/shot-request.webp' | relative_url }}" type="image/webp">
+    <img src="{{ '/assets/img/shot-request.png' | relative_url }}" alt="The Helena Headers tab with an Accept and an X-Request-Id header, and a nested JSON response" width="2360" height="1520" loading="lazy" decoding="async">
+  </picture>
   <figcaption>Request headers including a dynamic <code>{% raw %}{{$guid}}{% endraw %}</code>, and a nested JSON response.</figcaption>
 </figure>
 
@@ -59,7 +68,10 @@ can log in and place an order in a single Send - no copy-paste, no juggling
 tokens by hand.
 
 <figure class="shot">
-  <img src="{{ '/assets/img/shot-chain.png' | relative_url }}" alt="Helena's Chain tab: a Place order request that runs Auth/Login first (aliased auth), with the 201 Created order response">
+  <picture>
+    <source srcset="{{ '/assets/img/shot-chain.webp' | relative_url }}" type="image/webp">
+    <img src="{{ '/assets/img/shot-chain.png' | relative_url }}" alt="Helena's Chain tab: a Place order request that runs Auth/Login first (aliased auth), with the 201 Created order response" width="2360" height="1520" loading="lazy" decoding="async">
+  </picture>
   <figcaption>"Place order" runs "Auth/Login" first (aliased <code>auth</code>); the order then reuses the login token and comes back 201 Created.</figcaption>
 </figure>
 

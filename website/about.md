@@ -7,11 +7,11 @@ description: About Helena and its author, Bartosz Pachołek.
 ---
 
 <div class="author" style="margin:6px 0 26px">
-  <div class="avatar photo"><img src="{{ '/assets/img/author.jpg' | relative_url }}" alt="Bartosz Pachołek"></div>
+  <div class="avatar photo"><img src="{{ '/assets/img/author.jpg' | relative_url }}" alt="Bartosz Pachołek" width="256" height="256" loading="lazy" decoding="async"></div>
   <div>
     <h2 style="margin:.1em 0">Bartosz Pachołek</h2>
     <p style="margin:0;color:var(--muted)">Author &amp; maintainer · <a href="{{ site.repo }}">ideaconnect/helena</a></p>
-    <a class="idct-badge" href="{{ site.author_url }}" title="IDCT - idct.tech"><img src="{{ '/assets/img/idct-logo.png' | relative_url }}" alt="IDCT - idct.tech"></a>
+    <a class="idct-badge" href="{{ site.author_url }}" title="IDCT - idct.tech"><img src="{{ '/assets/img/idct-logo.png' | relative_url }}" alt="IDCT - idct.tech" width="229" height="240" loading="lazy" decoding="async"></a>
   </div>
 </div>
 

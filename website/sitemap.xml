@@ -1,0 +1,20 @@
+---
+permalink: /sitemap.xml
+sitemap: false
+---
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+{%- assign pages = site.html_pages | sort: "url" -%}
+{%- for p in pages -%}
+{%- unless p.sitemap == false -%}
+  <url>
+    <loc>{{ p.url | absolute_url }}</loc>
+{%- if p.last_modified_at or p.date %}
+    <lastmod>{{ p.last_modified_at | default: p.date | date_to_xmlschema }}</lastmod>
+{%- endif %}
+    <changefreq>{% if p.url == '/' %}weekly{% else %}monthly{% endif %}</changefreq>
+    <priority>{% if p.url == '/' %}1.0{% else %}0.7{% endif %}</priority>
+  </url>
+{%- endunless -%}
+{%- endfor %}
+</urlset>
