@@ -46,9 +46,9 @@ jobs:
             artifact: helena-darwin-arm64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -89,7 +89,7 @@ jobs:
 
       - name: Upload coverage profile (Linux)
         if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-profile
           path: coverage.out
@@ -118,7 +118,7 @@ jobs:
         run: go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
@@ -148,8 +148,8 @@ jobs:
           - {pkg: ./internal/auth,       name: FuzzResolveValuesOAuth2}
           - {pkg: ./internal/auth,       name: FuzzResolveValuesAPIKey}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -166,8 +166,8 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -192,8 +192,8 @@ jobs:
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -215,8 +215,8 @@ jobs:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
@@ -228,7 +228,7 @@ jobs:
         run: make mutation 2>&1 | tee mutation.log
         continue-on-error: true
       - name: Upload mutation log
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: mutation-log
           path: mutation.log
@@ -244,14 +244,14 @@ jobs:
       id-token: write     # OIDC for keyless provenance attestation
       attestations: write # record the build provenance attestation
     steps:
-      - uses: actions/checkout@v4 # source for the SBOM scan + nfpm config
+      - uses: actions/checkout@v7 # source for the SBOM scan + nfpm config
 
-      - uses: actions/setup-go@v5 # to `go install nfpm`
+      - uses: actions/setup-go@v6 # to `go install nfpm`
         with:
           go-version-file: go.mod
           cache: true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -294,12 +294,12 @@ jobs:
       # release archives — the signing + provenance of #27/#35 without managing
       # long-lived keys.
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: dist/helena-*.tar.gz dist/helena-*.zip dist/helena*.deb dist/helena*.rpm
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true
