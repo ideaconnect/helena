@@ -146,13 +146,13 @@ func lmv2Response(ntowf, serverChallenge, clientChallenge []byte) []byte {
 func ntlmNegotiate() []byte {
 	var b bytes.Buffer
 	b.WriteString(ntlmSignature)
-	binary.Write(&b, le, uint32(1)) // MessageType
-	binary.Write(&b, le, uint32(ntlmNegotiateUnicode|ntlmRequestTarget|ntlmNegotiateNTLM|ntlmNegotiateAlwaysSign|ntlmNegotiateExtendedSecurity))
+	_ = binary.Write(&b, le, uint32(1)) // MessageType
+	_ = binary.Write(&b, le, uint32(ntlmNegotiateUnicode|ntlmRequestTarget|ntlmNegotiateNTLM|ntlmNegotiateAlwaysSign|ntlmNegotiateExtendedSecurity))
 	// DomainNameFields + WorkstationFields: empty (len 0, offset = header size 32).
-	binary.Write(&b, le, uint32(0)) // domain len+maxlen
-	binary.Write(&b, le, uint32(32))
-	binary.Write(&b, le, uint32(0)) // workstation len+maxlen
-	binary.Write(&b, le, uint32(32))
+	_ = binary.Write(&b, le, uint32(0)) // domain len+maxlen
+	_ = binary.Write(&b, le, uint32(32))
+	_ = binary.Write(&b, le, uint32(0)) // workstation len+maxlen
+	_ = binary.Write(&b, le, uint32(32))
 	return b.Bytes()
 }
 
@@ -208,14 +208,14 @@ func ntlmAuthenticate(domain, user, workstation string, lmResp, ntResp []byte, f
 
 	var b bytes.Buffer
 	b.WriteString(ntlmSignature)
-	binary.Write(&b, le, uint32(3)) // MessageType
+	_ = binary.Write(&b, le, uint32(3)) // MessageType
 	b.Write(lmF[:])
 	b.Write(ntF[:])
 	b.Write(domF[:])
 	b.Write(usrF[:])
 	b.Write(wsF[:])
 	b.Write(skF[:])
-	binary.Write(&b, le, flags)
+	_ = binary.Write(&b, le, flags)
 	b.Write(payload.Bytes())
 	return b.Bytes()
 }

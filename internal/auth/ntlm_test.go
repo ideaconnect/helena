@@ -201,17 +201,17 @@ func buildChallenge(serverChallenge, targetInfo []byte) []byte {
 	const headerLen = 48
 	var b bytes.Buffer
 	b.WriteString(ntlmSignature)
-	binary.Write(&b, le, uint32(2)) // type 2
+	_ = binary.Write(&b, le, uint32(2)) // type 2
 	// TargetNameFields (empty) at 12.
-	binary.Write(&b, le, uint32(0))
-	binary.Write(&b, le, uint32(headerLen))
-	binary.Write(&b, le, uint32(ntlmNegotiateUnicode|ntlmNegotiateTargetInfo)) // flags at 20
-	b.Write(serverChallenge)                                                   // 24..32
-	b.Write(make([]byte, 8))                                                   // reserved 32..40
+	_ = binary.Write(&b, le, uint32(0))
+	_ = binary.Write(&b, le, uint32(headerLen))
+	_ = binary.Write(&b, le, uint32(ntlmNegotiateUnicode|ntlmNegotiateTargetInfo)) // flags at 20
+	b.Write(serverChallenge)                                                       // 24..32
+	b.Write(make([]byte, 8))                                                       // reserved 32..40
 	// TargetInfoFields at 40.
-	binary.Write(&b, le, uint16(len(targetInfo)))
-	binary.Write(&b, le, uint16(len(targetInfo)))
-	binary.Write(&b, le, uint32(headerLen))
+	_ = binary.Write(&b, le, uint16(len(targetInfo)))
+	_ = binary.Write(&b, le, uint16(len(targetInfo)))
+	_ = binary.Write(&b, le, uint32(headerLen))
 	b.Write(targetInfo)
 	return b.Bytes()
 }
