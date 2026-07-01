@@ -4,7 +4,7 @@ A super-lightweight, cross-platform API client — a native alternative to
 Postman and Bruno — built with **Go + [Fyne](https://fyne.io)**. One
 self-contained binary, no Electron.
 
-[![CI](https://github.com/idct/helena/actions/workflows/ci.yml/badge.svg)](https://github.com/idct/helena/actions/workflows/ci.yml)
+[![CI](https://github.com/ideaconnect/helena/actions/workflows/ci.yml/badge.svg)](https://github.com/ideaconnect/helena/actions/workflows/ci.yml)
 
 ## Features
 
@@ -15,18 +15,30 @@ self-contained binary, no Electron.
   carries no cleartext secret (see [Privacy](#privacy)).
 - **Environments per collection** with `{{variable}}` resolution everywhere
   (URL, query params, headers, body) plus a live preview of the resolved URL.
-- **Scripting & request chaining** — per-request pre/post JavaScript hooks, and
-  before-hooks that run other requests first and feed their results into the
-  next one. See [Request chaining](#request-chaining).
+- **Authentication — nine schemes**, all with `{{variable}}` substitution and
+  credentials kept out of the committed YAML: Basic, Bearer, API Key,
+  OAuth 2.0 (client-credentials and authorization-code + PKCE, with token
+  caching), OAuth 1.0a, WSSE, AWS Signature v4, HTTP Digest, and NTLM. See the
+  [authentication guide](docs/guide/auth.md).
+- **Scripting, tests & request chaining** — per-request pre/post JavaScript
+  hooks (pure-Go goja) with a curated `helena.*` API, a `test()`/`expect()`
+  framework and a no-code Assertions tab, plus before-hooks that run other
+  requests first and feed their results into the next one. See
+  [Request chaining](#request-chaining).
+- **Real-time — SSE & WebSocket** — stream Server-Sent Events into the response
+  view, or open a two-way WebSocket (`ws://` / `wss://`) session with a live
+  transcript. Both are hand-rolled on the Go standard library.
 - **Request builder** — method, URL, query params, headers, body
-  (JSON / XML / text / form-urlencoded / multipart). Validate + Format
-  buttons for JSON and XML.
+  (JSON / XML / text / GraphQL / form-urlencoded / multipart / file). Validate +
+  Format buttons for JSON and XML.
 - **Response viewer** — raw, pretty JSON, pretty XML, headers. Status line
   shows `200 OK · 1.2 KB · 87 ms`.
 - **CORS advisory.** Helena always sends the request (it isn't a browser),
   but flags responses a browser would have blocked.
-- **Import** OpenAPI 3, Swagger 2, or WSDL — from a local file or a URL.
-- **Export** to cURL or wget, with Copy-to-clipboard.
+- **Import** OpenAPI 3, Swagger 2, WSDL, or Postman — from a local file or a
+  URL — or paste a cURL command to build a request.
+- **Export** any request to cURL, wget, JavaScript fetch, Python requests, or
+  Go net/http, with Copy-to-clipboard.
 - **Settings** — invalid-SSL toggle, CORS warning, follow-redirects, request
   timeout, max response size (MiB), light/dark/system theme. Persisted in your OS's standard config
   dir (`AppData\Roaming` on Windows, `~/Library/Application Support` on
@@ -40,7 +52,7 @@ self-contained binary, no Electron.
 
 Pre-built Linux (amd64), Windows (amd64), and macOS (arm64) binaries are
 attached to each
-[GitHub Release](https://github.com/idct/helena/releases). macOS binaries are
+[GitHub Release](https://github.com/ideaconnect/helena/releases). macOS binaries are
 built in CI but not yet signed/notarized for Gatekeeper — see
 [docs/PACKAGING.md](docs/PACKAGING.md).
 
@@ -52,14 +64,14 @@ distribution status.
 
 ## Screenshots
 
-<!-- Images live in docs/media/ (see its README for the capture guide, #60).
-     Until they're captured these links show a broken-image icon. -->
+<!-- Captures are generated headlessly from the real UI with `make screenshots`
+     and live in website/assets/img/ (shared with the project website). -->
 
-![Helena sending a request and showing the response](docs/media/hero.gif)
+![Helena sending a POST request and showing the 201 Created response](website/assets/img/app-hero.png)
 
-| Request editor | Response | Environments |
+| Authentication | Headers & response | Request chaining |
 | --- | --- | --- |
-| ![Request editor](docs/media/request.png) | ![Response view](docs/media/response.png) | ![Environment manager](docs/media/environments.png) |
+| ![Auth tab with a Bearer token](website/assets/img/shot-auth.png) | ![Headers and a nested JSON response](website/assets/img/shot-request.png) | ![Chain tab running a login request first](website/assets/img/shot-chain.png) |
 
 ## Quickstart
 
@@ -142,7 +154,7 @@ object shapes — is documented in
 
 Requirements:
 
-- Go 1.23+ to build. The exact build toolchain is pinned in `go.mod`
+- Go 1.26+ to build. The exact build toolchain is pinned in `go.mod`
   (`go 1.26` language version, `toolchain go1.26.4`); `go` auto-selects that
   toolchain, and CI locks it with `GOTOOLCHAIN=local` so it never silently
   drifts.
@@ -211,14 +223,20 @@ Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
 | `internal/storage` | Open Collection YAML load/save |
 | `internal/vars` | `{{var}}` resolver |
 | `internal/httpclient` | request execution + CORS advisory |
+| `internal/auth` | nine auth schemes (Basic, Bearer, API Key, OAuth 2.0/1.0a, WSSE, AWS SigV4, Digest, NTLM) |
 | `internal/responsefmt` | pretty-printing + content-type sniffing |
-| `internal/importer` | OpenAPI / Swagger / WSDL (file or URL) |
-| `internal/exporter` | cURL / wget export |
+| `internal/importer` | OpenAPI / Swagger / WSDL / Postman / cURL (file or URL) |
+| `internal/exporter` | cURL / wget / fetch / Python / Go code generation |
+| `internal/scripting` | pre/post JavaScript hooks (goja) + assertions |
+| `internal/chain` | before-hook request chaining |
+| `internal/runner` | headless `helena run` collection runner |
+| `internal/sse` | Server-Sent Events streaming |
+| `internal/websocket` | WebSocket sessions |
 | `internal/config` | settings + UI state persistence |
 | `internal/session` | runtime workspace + collection state |
 | `internal/ui` | Fyne views |
 | `assets` | embedded app icon |
-| `.github/workflows` | CI: native Linux + Windows build matrix |
+| `.github/workflows` | CI: native Linux + Windows + macOS build matrix |
 
 ## Architecture notes
 
@@ -265,7 +283,7 @@ Found a vulnerability? Please report it privately — see
 
 ## Documentation
 
-Full docs are published as a site at **<https://ideaconnect.github.io/helena/>**
+Full docs are published at **<https://helena.idct.tech/docs/>**
 — built from [`docs/`](docs/) with MkDocs Material (see [`mkdocs.yml`](mkdocs.yml)),
 with feature guides for [authentication](docs/guide/auth.md),
 [real-time SSE & WebSocket](docs/guide/realtime.md), and
