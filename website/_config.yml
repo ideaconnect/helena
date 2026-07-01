@@ -16,14 +16,18 @@ author: Bartosz Pachołek
 copyright: "IDCT · Bartosz Pachołek"
 author_url: "https://idct.tech"
 
-# Update url/baseurl for your deployment. For project pages served at
-# https://<user>.github.io/helena/, keep baseurl: "/helena".
-url: "https://ideaconnect.github.io"
-baseurl: "/helena"
+# Deployed to the custom domain helena.idct.tech (see .github/workflows/pages.yml
+# and website/CNAME), so the site lives at the domain root: baseurl is empty.
+# (For github.io project pages instead, set url to https://<user>.github.io and
+# baseurl to "/helena".)
+url: "https://helena.idct.tech"
+baseurl: ""
 
 repo: "https://github.com/ideaconnect/helena"
 releases: "https://github.com/ideaconnect/helena/releases"
 discord: "https://discord.gg/uYsuaa8HNm"
+sponsor: "https://github.com/sponsors/ideaconnect"
+coffee: "https://buymeacoffee.com/idct"
 
 # Pretty URLs: each page builds to <name>/index.html so the nav's "/features/",
 # "/contact/", … links resolve (GitHub Pages doesn't map "/x/" to "x.html").

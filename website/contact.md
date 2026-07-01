@@ -21,7 +21,7 @@ description: Get in touch about Helena - questions, ideas, and bug reports.
 
     <a class="discord-cta" href="{{ site.discord }}">{% include icon-discord.svg %} Join the Discord</a>
     <div class="qr-card">
-      <img src="{{ '/assets/img/discord-qr.png' | relative_url }}" alt="QR code for the Helena Discord invite">
+      <img src="{{ '/assets/img/discord-qr.png' | relative_url }}" alt="QR code for the Helena Discord invite" width="264" height="264" loading="lazy" decoding="async">
       <span>Scan to join the Discord</span>
     </div>
   </div>

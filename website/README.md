@@ -11,7 +11,7 @@ on GitHub Pages' stock Jekyll without extra configuration.
 website/
 ├── _config.yml          # site config + nav
 ├── _layouts/            # default.html (chrome) + page.html (set hero_image: for a top hero box)
-├── _includes/           # inline icon SVGs (icon-github/discord/download)
+├── _includes/           # inline icon SVGs (github/discord/download/sponsor/coffee)
 ├── index.html           # landing / hero (two-column hero box)
 ├── features.md          # feature catalogue
 ├── roadmap.md           # graphical timeline (shipped / planned)
@@ -50,49 +50,34 @@ generated files stay yours and `make clean` removes them. On Windows use
 > Jekyll directly - `cd website && bundle install && bundle exec jekyll serve
 > --livereload`.
 
-(`baseurl: "/helena"` in `_config.yml` matches GitHub **project** pages served
-at `https://<user>.github.io/helena/`. Set it to `""` for a user/org or
-custom-domain site.)
+(`baseurl` in `_config.yml` is `""` because the site deploys to the
+**helena.idct.tech** root. Local `make website` serves it at
+`http://localhost:4000/`. Set `baseurl` to `"/helena"` only if you switch to
+github.io project pages.)
 
 ## Deploy to GitHub Pages
 
-GitHub Pages can't build from a subfolder directly, so build it in CI and
-publish the result. Add this workflow (and set **Settings → Pages → Source:
-GitHub Actions**):
+Deployment is handled by [`.github/workflows/pages.yml`](../.github/workflows/pages.yml).
+Because a repo has a **single** GitHub Pages site, that one workflow builds and
+publishes *both* public sites into one deployment on the custom domain
+**helena.idct.tech**:
 
-```yaml
-name: Website
-on:
-  push:
-    branches: [main]
-    paths: [website/**, .github/workflows/website.yml]
-  workflow_dispatch:
-permissions: { contents: read, pages: write, id-token: write }
-concurrency: { group: pages, cancel-in-progress: false }
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    defaults: { run: { working-directory: website } }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ruby/setup-ruby@v1
-        with: { ruby-version: "3.3", bundler-cache: true, working-directory: website }
-      - run: bundle exec jekyll build --baseurl "/helena"
-      - uses: actions/upload-pages-artifact@v3
-        with: { path: website/_site }
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment: { name: github-pages, url: "${{ steps.d.outputs.page_url }}" }
-    steps:
-      - id: d
-        uses: actions/deploy-pages@v4
-```
+- `/` — this Jekyll marketing site (built with `baseurl: ""`)
+- `/docs/` — the MkDocs reference docs (`docs/` + `mkdocs.yml`)
 
-> **Heads-up:** a repo has a single GitHub Pages site. The repo also ships a
-> MkDocs reference-docs deploy (`.github/workflows/docs.yml`). Only **one** can
-> own Pages - pick this Jekyll site *or* the MkDocs docs as the Pages source and
-> disable the other workflow (or publish one to a custom domain / separate repo).
+It builds on every PR (validation) and deploys on push to `main`. The custom
+domain comes from [`CNAME`](CNAME) (copied to the site root by Jekyll).
+
+**One-time setup:**
+
+1. **Settings → Pages → Source: GitHub Actions.**
+2. Add a DNS record at the `idct.tech` zone: `helena` **CNAME** →
+   `ideaconnect.github.io.` (subdomain), then confirm the custom domain and
+   enable *Enforce HTTPS* under **Settings → Pages**.
+
+Until DNS resolves, the deploy still succeeds — the site just isn't reachable at
+the domain yet. To preview the built output locally, run `make website-build`
+(Jekyll only) from the repo root; the docs half is a standard `mkdocs build`.
 
 ## Screenshots
 
