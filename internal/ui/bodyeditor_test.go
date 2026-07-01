@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"fyne.io/fyne/v2"
 	prettyview "github.com/ideaconnect/go-fyne-pretty-view/v2"
 
 	"github.com/idct/helena/internal/model"
@@ -106,6 +107,33 @@ func TestFormatBodyPrettifiesThroughEditor(t *testing.T) {
 	}
 	if m.Status.Text != "Formatted" {
 		t.Errorf("status = %q, want Formatted", m.Status.Text)
+	}
+}
+
+// TestBodyEditorsCaptureTab pins the Tab-key behavior introduced by the
+// go-fyne-pretty-view v2.3 bump: *PrettyView is now a fyne.Tabbable whose
+// AcceptsTab() reports its editable flag, so Fyne routes Tab into the buffer
+// (insert a literal tab) instead of moving focus. The editable request-body and
+// GraphQL-variables editors must capture Tab; the read-only response viewer must
+// not. This is a deliberate, user-visible consequence of the bump — there is no
+// longer a keyboard focus-escape from these editors.
+func TestBodyEditorsCaptureTab(t *testing.T) {
+	m := newResponseUI(t)
+	if !m.BodyContent.AcceptsTab() {
+		t.Error("BodyContent.AcceptsTab() = false, want true (editable editor must capture Tab)")
+	}
+	if !m.bodyGraphQLVars.AcceptsTab() {
+		t.Error("bodyGraphQLVars.AcceptsTab() = false, want true")
+	}
+	if m.pv.AcceptsTab() {
+		t.Error("read-only response viewer pv.AcceptsTab() = true, want false (Tab should still move focus)")
+	}
+
+	// End-to-end: a Tab key on the focused editor inserts a literal tab at the caret.
+	m.BodyContent.FocusGained()
+	m.BodyContent.TypedKey(&fyne.KeyEvent{Name: fyne.KeyTab})
+	if got := string(m.BodyContent.Source()); got != "\t" {
+		t.Errorf("after Tab, editor source = %q, want %q", got, "\t")
 	}
 }
 

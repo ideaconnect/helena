@@ -31,6 +31,12 @@ scripting and the de-facto standard JS runtime for Go.
 Each `Run*` call constructs a fresh `goja.Runtime` so state never leaks
 between requests. The only shared state is the `EnvBridge`.
 
+The engine supports ES2018 **named capture groups**: `(?<name>…)` patterns
+populate `match`/`exec().groups`, and `$<name>` works as a backreference in a
+`String.replace` replacement string (against a named-group pattern; an unknown
+`$<name>` is dropped, and `$<…>` passes through verbatim when the pattern has no
+named groups). The contract is pinned by `TestNamedCaptureGroupContract`.
+
 ## Public API
 
 ```go

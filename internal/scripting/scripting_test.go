@@ -325,6 +325,41 @@ func TestConsoleStringifyObject(t *testing.T) {
 	}
 }
 
+// TestNamedCaptureGroupContract pins the ES2018 named-capture-group behavior the
+// scripting engine exposes after the goja bump. Earlier goja did not honor named
+// groups; user pre/post scripts now observe:
+//   - $<name> in a String.replace replacement is a named backreference, but only
+//     when the pattern has named groups (otherwise it passes through verbatim);
+//   - an unknown $<name> against a named-group pattern is dropped;
+//   - exec()/match expose a populated .groups object.
+//
+// A regression here would silently change how user scripts rewrite request and
+// response data, so the contract is locked against future goja bumps.
+func TestNamedCaptureGroupContract(t *testing.T) {
+	rt := New(newFakeBridge())
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	src := `
+		console.log("swap=" + "ab".replace(/(?<x>a)(?<y>b)/, "$<y>$<x>"));
+		console.log("group=" + (/(?<x>a)/.exec("a").groups.x));
+		console.log("match=" + ("a".match(/(?<x>a)/).groups.x));
+		console.log("unknown=" + "ab".replace(/(?<x>a)b/, "X$<nope>Y"));
+		console.log("nogroup=" + "ab".replace(/ab/, "$<y>"));
+	`
+	res, err := rt.RunPreRequest(context.Background(), src, &r, nil)
+	if err != nil {
+		t.Fatalf("err = %v", err)
+	}
+	want := []string{"swap=ba", "group=a", "match=a", "unknown=XY", "nogroup=$<y>"}
+	if len(res.Console) != len(want) {
+		t.Fatalf("Console = %v, want %v", res.Console, want)
+	}
+	for i := range want {
+		if res.Console[i] != want[i] {
+			t.Errorf("Console[%d] = %q, want %q", i, res.Console[i], want[i])
+		}
+	}
+}
+
 // TestScriptTimeout verifies an infinite loop is interrupted within
 // ScriptTimeout. The test caps wall time at 2x the timeout to fail loud
 // on a regression that would otherwise hang the suite.
