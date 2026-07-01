@@ -2,7 +2,7 @@ site_name: Helena
 site_description: >-
   A super-lightweight, cross-platform API client — a native alternative to
   Postman and Bruno, built with Go + Fyne.
-site_url: https://ideaconnect.github.io/helena/
+site_url: https://helena.idct.tech/docs/
 repo_url: https://github.com/ideaconnect/helena
 repo_name: ideaconnect/helena
 edit_uri: edit/main/docs/
