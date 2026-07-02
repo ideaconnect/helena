@@ -10,6 +10,13 @@ CI builds native per-OS binaries on every push (no cross-compile):
 `helena-linux-amd64`, `helena-windows-amd64.exe`, `helena-darwin-arm64`. Binaries
 embed their version (`helena --version`).
 
+Release binaries (and `make build` / `make.bat build`) are built with
+**`-tags no_emoji`**, which drops Fyne's bundled 4.2 MB colour-emoji font. Fyne
+parses that font fresh per theme scope, so excluding it cuts resident memory by
+~70–80 MB (≈ 25%, measured) and shrinks the binary by ~4 MB; response text still
+renders — only colour-emoji glyphs are unavailable. A plain `go build` / `go run`
+keeps emoji for development.
+
 A tagged `v*` push publishes a GitHub Release whose assets are (issues #27/#35):
 
 - **Archives** — `helena-linux-amd64.tar.gz`, `helena-darwin-arm64.tar.gz`,

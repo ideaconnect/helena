@@ -75,6 +75,13 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # Release binaries build with -tags no_emoji (see docs/PACKAGING.md); the
+      # release job only runs on tags, so compile-check the tag here on every PR
+      # so it can't silently break between releases.
+      - name: Build check (no_emoji)
+        if: runner.os == 'Linux'
+        run: go build -tags no_emoji ./cmd/helena
+
       # Linux runs tests under -race + coverage profile so the coverage
       # gate (next step) can enforce the per-package floor. Windows
       # runs the same suite under -race but skips the coverage gate
@@ -105,17 +112,17 @@ jobs:
         if: runner.os == 'Linux'
         # ref_name is the tag (e.g. v0.1.0) on a release build, else the branch
         # — a non-empty default so every binary can report its origin (#26).
-        run: go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
+        run: go build -tags no_emoji -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
         # -H windowsgui suppresses the console window when launched from Explorer.
-        run: go build -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
+        run: go build -tags no_emoji -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
         # macOS runners ship the Xcode CLT, so cgo/Metal build with no extra deps.
-        run: go build -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
+        run: go build -tags no_emoji -trimpath -ldflags="-s -w -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7

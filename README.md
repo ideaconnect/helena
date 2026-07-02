@@ -1,8 +1,8 @@
 # Helena 🐱
 
-A super-lightweight, cross-platform API client — a native alternative to
+A small, single-binary, cross-platform API client — a native alternative to
 Postman and Bruno — built with **Go + [Fyne](https://fyne.io)**. One
-self-contained binary, no Electron.
+self-contained ~37 MB binary, no Electron, no telemetry.
 
 [![CI](https://github.com/ideaconnect/helena/actions/workflows/ci.yml/badge.svg)](https://github.com/ideaconnect/helena/actions/workflows/ci.yml)
 
@@ -253,6 +253,24 @@ Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
   by its own OS's native cgo toolchain. No fyne-cross, no Docker. (macOS is
   built + tested in CI; macOS *distribution* — signing/notarization/Homebrew —
   is still deferred, see issue #39.)
+
+## Memory & rendering
+
+Helena is a native OpenGL app (Fyne), so its resident memory is dominated by the
+graphics stack, not the Go code (the Go heap is ~50 MB). With a working GPU
+driver it runs in the low hundreds of MB. **Without hardware OpenGL** — inside a
+VM, over RDP, or on the "Microsoft Basic Display Adapter" — the OS falls back to
+a *software* rasterizer (Mesa `llvmpipe` / Direct3D WARP, which pulls in a large
+LLVM JIT) and resident memory climbs to ~300 MB. That cost is in the driver, not
+in Helena. To see which you're on, read `GL_RENDERER` (e.g. `chrome://gpu`): a
+GPU name is hardware; `llvmpipe` / `WARP` / `Basic Render Driver` is software.
+
+Two things reduce it: release builds ship with `-tags no_emoji` (≈ −75 MB
+resident; see [docs/PACKAGING.md](docs/PACKAGING.md)), and large response bodies
+are reclaimed promptly so memory doesn't ratchet across a session. The single
+~37 MB binary, no Electron/Chromium, and no telemetry remain the core footprint
+wins — a fair comparison uses an Electron client's *total* across all its
+processes, not a single one.
 
 ## Privacy
 
