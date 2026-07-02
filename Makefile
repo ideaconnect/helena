@@ -38,8 +38,12 @@ $(GREMLINS):
 run:
 	go run $(PKG)
 
+# Release build. `-tags no_emoji` drops Fyne's bundled 4.2 MB colour-emoji font,
+# which Fyne otherwise parses fresh per theme-scope (measured ~-74 MB / -23% RSS
+# and a 4.2 MB smaller binary). API-response text still renders; only colour
+# emoji glyphs are unavailable. See docs/PACKAGING.md.
 build:
-	go build -o bin/$(APP) $(PKG)
+	go build -tags no_emoji -o bin/$(APP) $(PKG)
 
 test:
 	go test ./...

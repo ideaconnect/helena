@@ -38,6 +38,15 @@ label via [`.github/release.yml`](.github/release.yml).
   ES2018 named capture groups, so `$<name>` backreferences and `.groups` work
   in user scripts.
 
+### Performance
+- Release builds ship with `-tags no_emoji`, dropping Fyne's bundled colour-emoji
+  font (which Fyne parses fresh per theme scope): **~-75 MB resident (≈ -25%)** and
+  a ~4 MB smaller binary. Colour-emoji glyphs are unavailable; response text is
+  unaffected. Large response bodies are also reclaimed to the OS promptly so memory
+  no longer ratchets up across a session. See the README "Memory & rendering" note
+  — most remaining memory is the OpenGL driver, which balloons under software
+  rendering (VM / RDP / no GPU driver), not Helena's code.
+
 ### Security
 - Bearer-token, API-key, and Secret environment values are masked in the UI.
 - Added `SECURITY.md`; CI gates on `govulncheck`.
