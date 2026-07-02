@@ -41,7 +41,7 @@ goto :end
 
 :build
 if not exist bin mkdir bin
-rem -tags no_emoji drops Fyne's bundled colour-emoji font (~-74 MB RSS); see Makefile.
+rem -tags no_emoji drops Fyne's bundled colour-emoji font (-75 MB RSS measured); see Makefile.
 go build -tags no_emoji -o bin\%APP% %PKG%
 goto :end
 

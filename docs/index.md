@@ -1,8 +1,8 @@
 # Helena 🐱
 
-A super-lightweight, cross-platform **API client** — a native alternative to
+A small, single-binary, cross-platform **API client** — a native alternative to
 Postman and Bruno, built with **Go + [Fyne](https://fyne.io)**. One
-self-contained binary, no Electron.
+self-contained ~35 MB binary, no Electron, no telemetry.
 
 [Get started →](USER_GUIDE.md){ .md-button .md-button--primary }
 [View on GitHub →](https://github.com/ideaconnect/helena){ .md-button }

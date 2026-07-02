@@ -194,6 +194,10 @@ func (m *MainUI) closeTab(t *openTab) {
 	if idx < 0 {
 		return
 	}
+	// The closed tab's cached response is dropped with the tab; reclaim a large
+	// one once the strip has been rebuilt (harmlessly overlaps the reclaim
+	// applyResponse/clearResponsePanel fire on the active-tab paths).
+	defer reclaimAfterLargeBody(cachedBodyLen(t))
 	wasActive := idx == m.activeTabIdx
 	m.tabs = append(m.tabs[:idx], m.tabs[idx+1:]...)
 
@@ -228,6 +232,11 @@ func (m *MainUI) closeTab(t *openTab) {
 // pointer is invalidated. The persisted tab set is intentionally left alone
 // (see WORKFLOW.md — v1 tabs are global, no per-workspace memory).
 func (m *MainUI) closeAllTabs() {
+	var freed int
+	for _, t := range m.tabs {
+		freed += cachedBodyLen(t)
+	}
+	defer reclaimAfterLargeBody(freed) // every tab's cached response is dropped
 	m.tabs = nil
 	m.activeTabIdx = -1
 	m.currentRequest = nil
@@ -248,6 +257,10 @@ func (m *MainUI) reconcileTabs() {
 		return
 	}
 	active := m.activeTab()
+	// Dropped tabs discard their cached responses; reclaim the total on every
+	// exit path (closure: freed accumulates below, and one branch returns early).
+	var freed int
+	defer func() { reclaimAfterLargeBody(freed) }()
 	kept := m.tabs[:0]
 	for _, t := range m.tabs {
 		if t.scratch {
@@ -256,6 +269,7 @@ func (m *MainUI) reconcileTabs() {
 		}
 		nodeID, req, ok := m.sess.LocateRequest(t.collection, t.requestID)
 		if !ok {
+			freed += cachedBodyLen(t)
 			continue // request deleted or collection removed → drop the tab
 		}
 		t.nodeID = nodeID
@@ -545,12 +559,26 @@ func (m *MainUI) restoreTabs() {
 // active (the user may have switched tabs mid-Send). A nil initTab means the
 // Send had no open tab (bare URL) — then the panel is always repainted. Runs
 // on the UI goroutine (inside the Send's fyne.Do).
+// cachedBodyLen is the size of a tab's cached response body (nil-safe), fed to
+// reclaimAfterLargeBody when the cache is dropped or replaced.
+func cachedBodyLen(t *openTab) int {
+	if t == nil || t.resp == nil {
+		return 0
+	}
+	return len(t.resp.rawBody)
+}
+
 func (m *MainUI) deliverResponse(initTab *openTab, resp *tabResponse) {
+	old := cachedBodyLen(initTab)
 	if initTab != nil {
 		initTab.resp = resp
 	}
 	if initTab == nil || m.activeTab() == initTab {
-		m.applyResponse(resp)
+		m.applyResponse(resp) // reclaims the displayed (same) outgoing body itself
+	} else {
+		// The tab isn't displayed, so applyResponse never runs: reclaim the
+		// replaced cached body here or a large one lingers in RSS.
+		reclaimAfterLargeBody(old)
 	}
 }
 

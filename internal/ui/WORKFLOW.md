@@ -243,7 +243,12 @@ that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
   may switch tabs mid-Send). `applyResponse` feeds the body to the PrettyView
   (`pv.SetData`, auto-detecting format) and is also the restore path on tab
   switch. Only one Send runs at a time (`sendCancel`), so there are no
-  concurrent per-tab sends.
+  concurrent per-tab sends. Wherever a large (≥ 8 MiB) body's model or cache is
+  replaced or dropped — `applyResponse`/`clearResponsePanel`, `deliverResponse`
+  to an inactive tab, `closeTab`/`closeAllTabs`/`reconcileTabs`, stream start —
+  `reclaimAfterLargeBody` ([memtrim.go](memtrim.go)) returns the freed heap to
+  the OS on a single-flighted background goroutine, so RSS doesn't ratchet
+  across a session of big responses.
 - **Reconcile.** Every tree mutation (add / rename / duplicate / delete, in
   [items.go](items.go); also `RemoveCollection`) is followed by `reconcileTabs`:
   re-derive each tree-backed tab's node ID by `Request.ID`, drop tabs whose
