@@ -30,6 +30,12 @@ func (m *MainUI) streamOrStop() {
 // machinery — streaming is a focused, single-request mode. Snapshots are taken
 // on the UI goroutine; the stream runs on a worker and marshals updates back via
 // fyne.Do (the off-UI-goroutine invariant).
+// streamWorkerDone is a test seam: the stream worker calls it as its very last
+// act (after its final fyne.Do), so a test can wait for the goroutine to fully
+// finish instead of leaking UI work into the next test (Fyne's caches are
+// process-global, so a straggler races with later tests under -race).
+var streamWorkerDone = func() {}
+
 func (m *MainUI) streamSend() {
 	if m.sendCancel != nil || m.streamCancel != nil {
 		return // a Send or stream is already in flight
@@ -70,6 +76,7 @@ func (m *MainUI) streamSend() {
 	reclaimAfterLargeBody(freed)
 
 	go func() {
+		defer streamWorkerDone() // runs after the final fyne.Do below completes
 		defer cancel()
 		var buf strings.Builder
 		count := 0

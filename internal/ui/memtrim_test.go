@@ -185,6 +185,14 @@ func TestStreamStartReclaimsPreviousBody(t *testing.T) {
 	m := newAuthUI(t)
 	calls, wait := captureReclaim(t)
 
+	// The stream worker must be fully finished (including its final fyne.Do)
+	// before this test returns — Fyne's caches are process-global, so a
+	// straggling worker races with the next test's widget work.
+	origDone := streamWorkerDone
+	workerDone := make(chan struct{})
+	streamWorkerDone = func() { close(workerDone) }
+	t.Cleanup(func() { streamWorkerDone = origDone })
+
 	m.pv.SetData([]byte(bigBody()), prettyview.FormatRaw)
 	m.URL.SetText("http://127.0.0.1:9") // discard port: the worker fails fast
 	m.streamSend()
@@ -196,5 +204,10 @@ func TestStreamStartReclaimsPreviousBody(t *testing.T) {
 	}
 	if m.streamCancel != nil {
 		m.streamCancel()
+	}
+	select {
+	case <-workerDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("stream worker did not finish")
 	}
 }
