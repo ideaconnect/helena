@@ -75,9 +75,9 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      # Release binaries build with -tags no_emoji (see docs/PACKAGING.md); the
-      # release job only runs on tags, so compile-check the tag here on every PR
-      # so it can't silently break between releases.
+      # Shipped binaries build with -tags no_emoji (see docs/PACKAGING.md). The
+      # per-OS Build steps below already compile with the tag, but only after the
+      # full -race suite; this cheap check fails a broken tag build fast.
       - name: Build check (no_emoji)
         if: runner.os == 'Linux'
         run: go build -tags no_emoji ./cmd/helena

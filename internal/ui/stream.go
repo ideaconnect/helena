@@ -62,7 +62,12 @@ func (m *MainUI) streamSend() {
 	m.streamCancel = cancel
 	m.setStreamStopButton()
 	m.Status.SetText("Streaming…")
+	// Blanking the shared viewer discards the previous response's model; reclaim
+	// a large one. (The per-event SetData in the stream loop below is a hot path
+	// and deliberately does NOT reclaim — that would be a full GC per event.)
+	freed := len(m.pv.Source())
 	m.pv.SetData(nil, prettyview.FormatRaw)
+	reclaimAfterLargeBody(freed)
 
 	go func() {
 		defer cancel()

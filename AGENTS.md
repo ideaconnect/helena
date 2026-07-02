@@ -6,9 +6,9 @@ target module's own docs before changing code.
 
 ## What Helena is
 
-A super-lightweight cross-platform API client written in Go + Fyne — a
+A small, single-binary cross-platform API client written in Go + Fyne — a
 native alternative to Postman and Bruno, no Electron. Single self-contained
-binary on Linux and Windows; macOS deferred. Module path:
+~35 MB binary on Linux and Windows; macOS deferred. Module path:
 `github.com/idct/helena`.
 
 ## How to find what you need

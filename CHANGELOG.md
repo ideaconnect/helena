@@ -40,12 +40,13 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ### Performance
 - Release builds ship with `-tags no_emoji`, dropping Fyne's bundled colour-emoji
-  font (which Fyne parses fresh per theme scope): **~-75 MB resident (≈ -25%)** and
-  a ~4 MB smaller binary. Colour-emoji glyphs are unavailable; response text is
-  unaffected. Large response bodies are also reclaimed to the OS promptly so memory
-  no longer ratchets up across a session. See the README "Memory & rendering" note
-  — most remaining memory is the OpenGL driver, which balloons under software
-  rendering (VM / RDP / no GPU driver), not Helena's code.
+  font (which Fyne parses fresh per theme scope): **-75 MB resident (-23%,
+  326 → 251 MB measured)** and a ~4 MB smaller binary. Colour-emoji glyphs render
+  blank; response text is unaffected. Replaced or cleared large response bodies
+  (send, tab close, stream start) also promptly return their freed memory, so
+  repeated big sends no longer ratchet RSS up across a session. See the README
+  "Memory & rendering" note — most remaining memory is the OpenGL driver, which
+  balloons under software rendering (VM / RDP / no GPU driver), not Helena's code.
 
 ### Security
 - Bearer-token, API-key, and Secret environment values are masked in the UI.

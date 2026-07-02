@@ -21,6 +21,11 @@ Download it, make it executable, and run it.
 > macOS binaries are built in CI but **not yet signed / notarized** for
 > Gatekeeper - see [PACKAGING]({{ site.repo }}/blob/main/docs/PACKAGING.md).
 
+> Release builds omit Fyne's bundled colour-emoji font to cut resident memory
+> (~75 MB): colour emoji in response bodies render as blank glyphs; all other
+> text is unaffected. Build from source without `-tags no_emoji` if you want
+> colour emoji.
+
 Helena never checks for updates at runtime (part of its no-background-traffic
 guarantee) - update by re-downloading a release or via a package manager as
 those land. Run `helena --version` to see your build.

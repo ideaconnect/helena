@@ -2,7 +2,7 @@
 
 A small, single-binary, cross-platform API client — a native alternative to
 Postman and Bruno — built with **Go + [Fyne](https://fyne.io)**. One
-self-contained ~37 MB binary, no Electron, no telemetry.
+self-contained ~35 MB binary, no Electron, no telemetry.
 
 [![CI](https://github.com/ideaconnect/helena/actions/workflows/ci.yml/badge.svg)](https://github.com/ideaconnect/helena/actions/workflows/ci.yml)
 
@@ -260,17 +260,22 @@ Helena is a native OpenGL app (Fyne), so its resident memory is dominated by the
 graphics stack, not the Go code (the Go heap is ~50 MB). With a working GPU
 driver it runs in the low hundreds of MB. **Without hardware OpenGL** — inside a
 VM, over RDP, or on the "Microsoft Basic Display Adapter" — the OS falls back to
-a *software* rasterizer (Mesa `llvmpipe` / Direct3D WARP, which pulls in a large
-LLVM JIT) and resident memory climbs to ~300 MB. That cost is in the driver, not
-in Helena. To see which you're on, read `GL_RENDERER` (e.g. `chrome://gpu`): a
-GPU name is hardware; `llvmpipe` / `WARP` / `Basic Render Driver` is software.
+a *software* rasterizer (Mesa `llvmpipe`, which pulls in a large LLVM JIT, or
+Direct3D WARP) and resident memory climbs to ~300 MB. That cost is in the
+driver, not in Helena. To see which you're on, read `GL_RENDERER` from a GL
+diagnostic (`glxinfo -B` on Linux; a tool like OpenGL Extensions Viewer or
+`wglinfo` on Windows — browser pages such as `chrome://gpu` report the
+*browser's own* GL stack, not the one Helena gets): a GPU name is hardware;
+`llvmpipe` / `WARP` / `SwiftShader` / `Basic Render Driver` is software.
 
-Two things reduce it: release builds ship with `-tags no_emoji` (≈ −75 MB
-resident; see [docs/PACKAGING.md](docs/PACKAGING.md)), and large response bodies
-are reclaimed promptly so memory doesn't ratchet across a session. The single
-~37 MB binary, no Electron/Chromium, and no telemetry remain the core footprint
-wins — a fair comparison uses an Electron client's *total* across all its
-processes, not a single one.
+Two things reduce it: release builds ship with `-tags no_emoji` (−75 MB / −23%
+resident, 326 → 251 MB measured; colour emoji render as blank glyphs, all other
+text is unaffected — see [docs/PACKAGING.md](docs/PACKAGING.md)), and replaced
+or cleared large response bodies promptly return their freed memory, so
+repeated big sends don't ratchet RSS across a session. The single ~35 MB
+binary, no Electron/Chromium, and no telemetry remain the core footprint wins —
+a fair comparison uses an Electron client's *total* across all its processes,
+not a single one.
 
 ## Privacy
 
