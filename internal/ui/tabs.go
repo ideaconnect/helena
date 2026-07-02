@@ -562,6 +562,10 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 		m.clearResponsePanel()
 		return
 	}
+	// The outgoing body's parsed model becomes garbage once we SetData below;
+	// reclaim it off-UI if it was large so RSS doesn't ratchet across a session.
+	freed := len(m.pv.Source())
+	defer reclaimAfterLargeBody(freed)
 	m.setScriptConsole(r.console)
 	m.Response.SelectIndex(0) // Body
 	if r.isError {
@@ -591,6 +595,7 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 
 // clearResponsePanel blanks every response widget.
 func (m *MainUI) clearResponsePanel() {
+	defer reclaimAfterLargeBody(len(m.pv.Source()))
 	m.pv.SetData(nil, prettyview.FormatRaw)
 	m.headersText.SetText("")
 	m.corsBanner.Hide()
