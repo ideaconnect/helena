@@ -101,6 +101,14 @@ label via [`.github/release.yml`](.github/release.yml).
   changed. Steady-state RSS on a software-GL box drops ~20 MB (223 → 203 MB
   measured; the GL driver dominates there — hardware-GL setups keep most of
   the win as faster startup).
+- Request path: pre/post scripts compile once per distinct source (the goja
+  program is cached process-wide and runs on each send's fresh, isolated VM),
+  instead of recompiling on every send and twice per chain step. The response
+  viewer now renders at most the first 16 MiB of a body — its parse runs
+  synchronously on the UI goroutine at ~5–7× the source size, so an uncapped
+  100 MiB body (the HTTP cap's default) froze the UI for a ~600 MB parse; the
+  truncation is flagged on the status line and **Save response** always writes
+  the full body.
 
 ### Security
 - Bearer-token, API-key, and Secret environment values are masked in the UI.
