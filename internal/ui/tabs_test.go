@@ -15,7 +15,7 @@ import (
 // writeTabTestCollection writes a collection with two sibling root requests
 // (First 0/r0, Second 0/r1) and a nested one (Sub/Third 0/f0/r0), so the tab
 // tests can exercise dedup, sibling-delete remapping, and nested opens.
-func writeTabTestCollection(t *testing.T) string {
+func writeTabTestCollection(t testing.TB) string {
 	t.Helper()
 	// Explicit IDs so the on-disk YAML carries them (as a collection Helena has
 	// saved would), giving tab restoration a stable anchor across sessions.
