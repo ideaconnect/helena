@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -30,6 +31,16 @@ type openTab struct {
 	nodeID     string         // cached live tree node ID; re-derived by reconcileTabs
 	resp       *tabResponse   // nil until a Send completes on this tab
 }
+
+// displayBodyCap bounds how much of a response body the shared viewer
+// renders (its WithMaxInputBytes): parsing is synchronous on the UI goroutine
+// at ~5-7x the source size, so an uncapped 100 MiB body (the HTTP cap's
+// default) would freeze the UI for a ~600 MB parse. The full body always
+// stays in the tab cache for Save response; applyResponse flags the
+// truncation on the status line. Must stay above memTrimThreshold, or the
+// viewer-driven reclaim sites (which measure len(m.pv.Source()), capped to
+// this value) would never fire.
+const displayBodyCap = 16 << 20 // 16 MiB
 
 // tabResponse is the cached, re-renderable state of a tab's last response:
 // the raw body bytes (fed to the PrettyView with FormatAuto), the formatted
@@ -621,7 +632,13 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 	}
 	m.pv.SetData(r.rawBody, prettyview.FormatAuto)
 	m.headersText.SetText(r.headersText)
-	m.Status.SetText(r.status)
+	status := r.status
+	if len(r.rawBody) > displayBodyCap {
+		// The viewer rendered only the first displayBodyCap bytes (its
+		// WithMaxInputBytes); the tab cache — and so Save response — keeps all.
+		status += fmt.Sprintf(" · display truncated to %d MiB — Save response for the full body", displayBodyCap>>20)
+	}
+	m.Status.SetText(status)
 	m.hideErrorBanner()
 	if r.cors != "" {
 		m.corsBanner.Text = r.cors

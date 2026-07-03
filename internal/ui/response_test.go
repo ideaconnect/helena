@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"bytes"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -105,4 +107,23 @@ func TestVariantFor(t *testing.T) {
 		t.Errorf("variantFor(Dark) = %v, want VariantDark", got)
 	}
 	_ = variantFor(model.ThemeSystem) // defers to the app variant; must not panic
+}
+
+// TestApplyResponseCapsDisplayedBody: a body past displayBodyCap renders
+// truncated (the viewer's WithMaxInputBytes bounds the synchronous UI-thread
+// parse), the status line flags it, and Save response still has every byte.
+func TestApplyResponseCapsDisplayedBody(t *testing.T) {
+	m, _, _ := newTabUI(t)
+	m.openOrActivate("0/r0")
+	big := bytes.Repeat([]byte{'x'}, displayBodyCap+1)
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: big, status: "200 OK"})
+	if got := len(m.pv.Source()); got != displayBodyCap {
+		t.Errorf("viewer holds %d bytes, want the %d cap", got, displayBodyCap)
+	}
+	if !strings.Contains(m.Status.Text, "truncated") {
+		t.Errorf("status %q should flag the truncated display", m.Status.Text)
+	}
+	if b, ok := m.currentResponseBytes(); !ok || len(b) != displayBodyCap+1 {
+		t.Errorf("Save-response bytes = %d, want the full %d", len(b), displayBodyCap+1)
+	}
 }

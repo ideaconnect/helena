@@ -94,7 +94,7 @@ func (m *MainUI) streamSend() {
 		repaintQueued = false
 		repaintMu.Unlock()
 		m.pv.SetData([]byte(text), prettyview.FormatRaw)
-		m.Status.SetText(fmt.Sprintf("Streaming… %d event(s)", n))
+		m.Status.SetText(fmt.Sprintf("Streaming… %d event(s)%s", n, streamTruncNote(len(text))))
 	}
 
 	go func() {
@@ -110,7 +110,13 @@ func (m *MainUI) streamSend() {
 			func(ev sse.Event) bool {
 				// buf is worker-only; Builder.String() aliases the buffer
 				// without copying, and appends never mutate returned strings.
-				buf.WriteString(formatSSEEvent(ev))
+				// The transcript stops growing at the viewer's display cap:
+				// unlike a Send there is no tab cache behind it, so bytes past
+				// the cap would be both invisible AND unsaveable — accumulating
+				// them only grows memory. Events keep counting either way.
+				if buf.Len() < displayBodyCap {
+					buf.WriteString(formatSSEEvent(ev))
+				}
 				count++
 				repaintMu.Lock()
 				repaintText, repaintEvents = buf.String(), count
@@ -123,20 +129,30 @@ func (m *MainUI) streamSend() {
 				return true
 			},
 		)
-		final := count
+		final, finalLen := count, buf.Len()
 		canceled := ctx.Err() == context.Canceled
 		fyne.Do(func() {
 			m.resetStreamButton()
 			switch {
 			case canceled:
-				m.Status.SetText(fmt.Sprintf("Stream stopped (%d event(s))", final))
+				m.Status.SetText(fmt.Sprintf("Stream stopped (%d event(s))%s", final, streamTruncNote(finalLen)))
 			case err != nil:
 				m.Status.SetText("Stream ended: " + err.Error())
 			default:
-				m.Status.SetText(fmt.Sprintf("Stream ended (%d event(s))", final))
+				m.Status.SetText(fmt.Sprintf("Stream ended (%d event(s))%s", final, streamTruncNote(finalLen)))
 			}
 		})
 	}()
+}
+
+// streamTruncNote returns the status-line suffix flagging that the stream
+// transcript hit the display cap (further event payloads were dropped, not
+// just hidden — the stream path has no tab cache to save them from).
+func streamTruncNote(transcriptLen int) string {
+	if transcriptLen < displayBodyCap {
+		return ""
+	}
+	return fmt.Sprintf(" · transcript capped at %d MiB", displayBodyCap>>20)
 }
 
 // formatSSEEvent renders one event for the live Body view: the optional

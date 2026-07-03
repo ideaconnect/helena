@@ -314,7 +314,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// subsumes the old Structured tree + Raw text viewer. Its built-in toolbar
 	// (format selector, expand/collapse, wrap toggle, find box) sits above it;
 	// Open is disabled — this is a response viewer, not a file editor.
-	m.pv = prettyview.New()
+	// The input cap bounds SetData's synchronous parse (the model is ≈5–7×
+	// the source, built on the UI goroutine): the HTTP cap allows bodies up
+	// to 100 MiB, which would freeze the UI for a ~600 MB parse. applyResponse
+	// flags the truncation on the status line; Save response has full bytes.
+	m.pv = prettyview.New(prettyview.WithMaxInputBytes(displayBodyCap))
 	m.pv.SetTheme(variantFor(sess.Settings().Theme), prettyview.Theme{})
 	pvToolbar := prettyview.NewToolbar(m.pv, prettyview.ToolbarConfig{
 		ShowFormat: true, ShowExpandCollapse: true, ShowWrap: true, ShowSearch: true,
