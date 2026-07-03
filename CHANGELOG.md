@@ -84,6 +84,23 @@ label via [`.github/release.yml`](.github/release.yml).
   request; idle keep-alive sockets now expire after 90 s instead of living for
   the session; and post-response script format sniffing no longer copies the
   body. OAuth2 token-endpoint responses are capped at 1 MiB.
+- Startup: main-UI construction is **7× faster (208 → 28 ms) with 80% less
+  allocation (245 → 49 MB)**, measured by the new `BenchmarkNewMainUI`. The
+  bulk comes from cutting Fyne theme scopes from 11 to 3 — each
+  `container.NewThemeOverride` made Fyne re-parse the embedded fonts per
+  scope × text style and eagerly walk the wrapped subtree. The splits' thin
+  hairline divider is now a dedicated widget and the root's flush joins a
+  plain layout, instead of theme-scope overrides; as a side effect the
+  hairlines are now genuinely flush (the old zero-padding root scope never
+  reached Fyne's layout code, which reads the global theme, so there were
+  silent 4 px gaps — website screenshots regenerated). Also: collections load
+  concurrently at startup, toolbar icons are built once instead of per
+  lookup, the embedded window icon is a 256×256 downscale (−1 MB binary and
+  resident, ~12× less pixel data decoded on the GL thread before first
+  frame), and switching tabs no longer rewrites config.yml when nothing
+  changed. Steady-state RSS on a software-GL box drops ~20 MB (223 → 203 MB
+  measured; the GL driver dominates there — hardware-GL setups keep most of
+  the win as faster startup).
 
 ### Security
 - Bearer-token, API-key, and Secret environment values are masked in the UI.
