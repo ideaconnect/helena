@@ -1,6 +1,7 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -298,4 +299,27 @@ func writeCollectionWithRequestID(t *testing.T, colName, reqName, id string) str
 		t.Fatalf("Save %s: %v", colName, err)
 	}
 	return dir
+}
+
+// TestSetOpenTabsSkipsRedundantPersist: re-setting an identical tab set must
+// not rewrite config.yml (tab activation persists on every switch). Same
+// delete-probe as the active-collection test: only a real change recreates
+// the file.
+func TestSetOpenTabsSkipsRedundantPersist(t *testing.T) {
+	s, dir := openSessionDir(t)
+	health, _ := s.Tree().Request("0/r0")
+	tabs := []config.UIOpenTab{{Collection: dir, RequestID: health.ID}}
+	s.SetOpenTabs(tabs, 0)
+	cfg := s.cfgPath
+	if err := os.Remove(cfg); err != nil {
+		t.Fatalf("remove cfg: %v", err)
+	}
+	s.SetOpenTabs(tabs, 0) // identical — must not persist
+	if _, err := os.Stat(cfg); !os.IsNotExist(err) {
+		t.Error("redundant SetOpenTabs rewrote config.yml")
+	}
+	s.SetOpenTabs(nil, 0) // real change — must persist again
+	if _, err := os.Stat(cfg); err != nil {
+		t.Errorf("changing the tab set did not persist: %v", err)
+	}
 }
