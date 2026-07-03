@@ -29,7 +29,8 @@ type Conn struct {
 // Dial performs the RFC 6455 opening handshake to a ws:// or wss:// URL and
 // returns the established connection. Extra headers (e.g. Authorization,
 // subprotocols) are added to the upgrade request. The context bounds the dial
-// and the handshake.
+// and the handshake: a deadline caps them, and cancellation aborts an
+// in-flight handshake (the UI cancels when its dialog closes mid-dial).
 func Dial(ctx context.Context, rawURL string, header http.Header) (*Conn, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -56,6 +57,13 @@ func Dial(ctx context.Context, rawURL string, header http.Header) (*Conn, error)
 	if err != nil {
 		return nil, fmt.Errorf("websocket: dial: %w", err)
 	}
+	// The upgrade write/read below block on the socket and would ignore a
+	// context without a deadline; close the socket on ctx cancellation so a
+	// caller can abort the handshake against a server that accepted TCP but
+	// never answers. The watch stops once Dial returns, so cancelling the
+	// dial context later never touches an established connection.
+	stopCancelWatch := context.AfterFunc(ctx, func() { _ = netConn.Close() })
+	defer stopCancelWatch()
 	if secure {
 		tlsConn := tls.Client(netConn, &tls.Config{ServerName: u.Hostname()})
 		if err := tlsConn.HandshakeContext(ctx); err != nil {
@@ -75,11 +83,17 @@ func Dial(ctx context.Context, rawURL string, header http.Header) (*Conn, error)
 	}
 	if err := writeUpgrade(netConn, u, key, header); err != nil {
 		_ = netConn.Close()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("websocket: handshake aborted: %w", ctxErr)
+		}
 		return nil, err
 	}
 	br := bufio.NewReader(netConn)
 	if err := verifyUpgrade(br, key); err != nil {
 		_ = netConn.Close()
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return nil, fmt.Errorf("websocket: handshake aborted: %w", ctxErr)
+		}
 		return nil, err
 	}
 	_ = netConn.SetDeadline(time.Time{}) // clear the handshake deadline
@@ -136,10 +150,18 @@ func (c *Conn) WriteMessage(opcode byte, data []byte) error {
 	return WriteFrame(c.netConn, Frame{Fin: true, Opcode: opcode, Payload: data}, true)
 }
 
+// maxMessageBytes caps a reassembled message's total size. Individual frames
+// are already capped (maxFramePayload), but a stream of non-FIN fragments
+// would otherwise grow the reassembly buffer without bound — the same hostile
+// server the frame cap defends against. A var, not a const, so tests can
+// shrink it instead of allocating real 64 MiB messages.
+var maxMessageBytes = maxFramePayload
+
 // ReadMessage returns the next text or binary message, reassembling continuation
 // frames. Control frames are handled inline: a ping is answered with a pong, a
 // pong is ignored, and a close ends the stream (a close is echoed) — surfaced as
-// io.EOF. The returned opcode is OpText or OpBinary.
+// io.EOF. The returned opcode is OpText or OpBinary. Messages reassembling past
+// maxMessageBytes are rejected with an error.
 func (c *Conn) ReadMessage() (opcode byte, data []byte, err error) {
 	var buf []byte
 	msgOp := byte(0)
@@ -158,13 +180,13 @@ func (c *Conn) ReadMessage() (opcode byte, data []byte, err error) {
 		case f.Opcode == OpClose:
 			_ = c.writeControl(OpClose, f.Payload)
 			return 0, nil, io.EOF
-		case f.Opcode == OpContinuation:
-			buf = append(buf, f.Payload...)
-			if f.Fin {
-				return msgOp, buf, nil
+		case f.Opcode == OpContinuation, f.Opcode == OpText, f.Opcode == OpBinary:
+			if f.Opcode != OpContinuation {
+				msgOp = f.Opcode
 			}
-		case f.Opcode == OpText || f.Opcode == OpBinary:
-			msgOp = f.Opcode
+			if len(buf)+len(f.Payload) > maxMessageBytes {
+				return 0, nil, fmt.Errorf("websocket: message exceeds %d bytes", maxMessageBytes)
+			}
 			buf = append(buf, f.Payload...)
 			if f.Fin {
 				return msgOp, buf, nil

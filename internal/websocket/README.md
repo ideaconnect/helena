@@ -21,8 +21,8 @@ bidirectional messaging builds on top of it (next increment).
 | `ReadFrame(r) (Frame, error)` | Decode one frame; a masked server frame is unmasked transparently. Rejects a declared payload over 64 MiB. |
 | `AcceptKey(key) string` | The `Sec-WebSocket-Accept` value for a `Sec-WebSocket-Key`: `base64(SHA1(key + GUID))` (§1.3). The client verifies the server echoes this. |
 | `GenerateKey() (string, error)` | A fresh `Sec-WebSocket-Key`: base64 of 16 random bytes (§4.1). |
-| `Dial(ctx, url, header) (*Conn, error)` | Open a `ws://`/`wss://` connection: TCP/TLS dial + HTTP Upgrade handshake, verifying the server's accept key. |
-| `Conn` | An established connection. `WriteMessage(opcode, data)` sends a masked frame; `ReadMessage()` returns the next text/binary message (reassembling continuations, answering pings, ending on close); `Close()` sends a close frame and tears down. Safe for one reader + one writer. |
+| `Dial(ctx, url, header) (*Conn, error)` | Open a `ws://`/`wss://` connection: TCP/TLS dial + HTTP Upgrade handshake, verifying the server's accept key. A ctx deadline bounds the handshake; cancellation aborts it (the socket is closed, so a server that accepted TCP but never answers can't block the caller forever). |
+| `Conn` | An established connection. `WriteMessage(opcode, data)` sends a masked frame; `ReadMessage()` returns the next text/binary message (reassembling continuations — total size capped at 64 MiB, mirroring the per-frame cap — answering pings, ending on close); `Close()` sends a close frame and tears down. Safe for one reader + one writer. |
 
 ## Why hand-rolled
 
