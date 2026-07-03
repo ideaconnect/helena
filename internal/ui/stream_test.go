@@ -1,7 +1,12 @@
 package ui
 
 import (
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
+	"time"
 
 	"fyne.io/fyne/v2/widget"
 
@@ -58,5 +63,48 @@ func TestStreamSendEmptyURL(t *testing.T) {
 	m.streamSend()
 	if m.streamCancel != nil {
 		t.Error("streamSend with an empty URL must not start a stream")
+	}
+}
+
+// TestStreamShowsFullTranscript: the coalesced repaint path must still deliver
+// every event to the viewer — a queued repaint snapshots the newest
+// accumulated text when it runs, so bursts collapsing into one paint lose
+// nothing and the final event is always painted.
+func TestStreamShowsFullTranscript(t *testing.T) {
+	const events = 40
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fl := w.(http.Flusher)
+		for i := 0; i < events; i++ {
+			fmt.Fprintf(w, "data: ev-%d\n\n", i)
+			fl.Flush()
+		}
+	}))
+	defer srv.Close()
+
+	m := newAuthUI(t)
+	origDone := streamWorkerDone
+	workerDone := make(chan struct{})
+	streamWorkerDone = func() { close(workerDone) }
+	t.Cleanup(func() { streamWorkerDone = origDone })
+
+	m.URL.SetText(srv.URL)
+	m.streamSend()
+	select {
+	case <-workerDone:
+	case <-time.After(10 * time.Second):
+		t.Fatal("stream worker did not finish")
+	}
+
+	var want strings.Builder
+	for i := 0; i < events; i++ {
+		fmt.Fprintf(&want, "ev-%d\n\n", i)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for string(m.pv.Source()) != want.String() {
+		if time.Now().After(deadline) {
+			t.Fatalf("viewer shows %d bytes, want %d (the full transcript)", len(m.pv.Source()), want.Len())
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 }
