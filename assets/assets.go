@@ -13,9 +13,13 @@ import (
 	"fyne.io/fyne/v2"
 )
 
-// AppIcon is the PNG application/window icon (the Helena cat mascot).
+// AppIcon is the PNG application/window icon (the Helena cat mascot) at
+// 256×256 — plenty for any taskbar/dock. The full-resolution art stays in
+// assets/app_icon.png for packaging; embedding it would cost ~1 MB of binary
+// and resident memory, and Fyne decodes the window icon on the GL main
+// thread at startup, so smaller is measurably faster to first frame.
 //
-//go:embed app_icon.png
+//go:embed app_icon_window.png
 var AppIcon []byte
 
 // iconFS holds every SVG under assets/icons/. Use Icon(name) to fetch
