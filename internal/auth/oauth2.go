@@ -264,7 +264,7 @@ func (r *cachingResolver) refreshToken(ctx context.Context, a model.OAuth2Auth, 
 		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes))
 	if err != nil {
 		return TokenEntry{}, fmt.Errorf("oauth2 refresh_token: read response: %w", err)
 	}
@@ -307,7 +307,7 @@ func FetchClientCredentialsToken(ctx context.Context, client *http.Client, a mod
 		return TokenEntry{}, fmt.Errorf("oauth2 client_credentials: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes))
 	if err != nil {
 		return TokenEntry{}, fmt.Errorf("oauth2 client_credentials: read response: %w", err)
 	}
@@ -337,6 +337,11 @@ type tokenResponse struct {
 	RefreshToken string      `json:"refresh_token"`
 	Scope        string      `json:"scope"`
 }
+
+// maxTokenResponseBytes caps token-endpoint reads. Real token responses are
+// small JSON documents; the endpoint URL is user-configured, and an unbounded
+// ReadAll against a broken or hostile server is an allocation hazard.
+const maxTokenResponseBytes = 1 << 20 // 1 MiB
 
 // parseTokenResponse decodes an RFC 6749 token response body into a
 // TokenEntry. expires_in is interpreted as seconds from "now". Missing

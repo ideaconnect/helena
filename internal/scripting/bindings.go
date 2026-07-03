@@ -1,6 +1,7 @@
 package scripting
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -595,8 +596,10 @@ func responseToObject(vm *goja.Runtime, in ResponseInput) *goja.Object {
 // intent, so they fall back to false and stay accessible via
 // response.body.
 func tryParseJSON(body []byte) (interface{}, bool) {
-	trim := strings.TrimLeft(string(body), " \t\r\n")
-	if trim == "" {
+	// Sniff on the raw bytes — a string conversion here would copy the whole
+	// (possibly multi-MB) body just to look at its first non-space byte.
+	trim := bytes.TrimLeft(body, " \t\r\n")
+	if len(trim) == 0 {
 		return nil, false
 	}
 	c := trim[0]

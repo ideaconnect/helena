@@ -80,3 +80,32 @@ func TestNewWithTransportHonorsSettings(t *testing.T) {
 		t.Error("nil transport was not replaced with a fresh one")
 	}
 }
+
+// TestNewTransportExpiresIdleConnections: a zero IdleConnTimeout would pin
+// idle keep-alive sockets (and their read/write goroutine pairs) for the
+// whole session, one pair per host ever contacted.
+func TestNewTransportExpiresIdleConnections(t *testing.T) {
+	tr := NewTransport(model.Settings{})
+	if tr.IdleConnTimeout <= 0 {
+		t.Fatalf("IdleConnTimeout = %v, want > 0", tr.IdleConnTimeout)
+	}
+}
+
+// TestCloseIdleConnectionsReleasesPool exercises both CloseIdleConnections
+// branches: a real *http.Transport (released without error) and a foreign
+// RoundTripper (silently ignored).
+func TestCloseIdleConnectionsReleasesPool(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	c := New(model.Settings{TimeoutSeconds: 5})
+	if _, err := c.Do(context.Background(), model.Request{Method: model.GET, URL: srv.URL}, vars.New()); err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	c.CloseIdleConnections() // must not panic and must accept a warm pool
+
+	foreign := &Client{http: &http.Client{Transport: http.NewFileTransport(http.Dir(t.TempDir()))}}
+	foreign.CloseIdleConnections() // non-*http.Transport: no-op branch
+}

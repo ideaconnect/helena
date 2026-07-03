@@ -255,7 +255,7 @@ func (r *cachingResolver) exchangeAuthorizationCode(ctx context.Context, a model
 		return TokenEntry{}, fmt.Errorf("oauth2 authorization_code: token exchange: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxTokenResponseBytes))
 	if err != nil {
 		return TokenEntry{}, fmt.Errorf("oauth2 authorization_code: read token response: %w", err)
 	}

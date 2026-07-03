@@ -35,8 +35,12 @@ type openTab struct {
 // the raw body bytes (fed to the PrettyView with FormatAuto), the formatted
 // header dump, the status line, an optional CORS banner string, and the
 // console output. isError routes the apply path to a plain-text error display.
+//
+// rawBody is handed to the PrettyView zero-copy (SetData retains the slice),
+// so the tab cache and the viewer share one buffer instead of holding a full
+// copy each. Nothing may mutate it after delivery.
 type tabResponse struct {
-	rawBody     string
+	rawBody     []byte
 	headersText string
 	status      string
 	cors        string
@@ -199,7 +203,10 @@ func (m *MainUI) closeTab(t *openTab) {
 	// applyResponse/clearResponsePanel fire on the active-tab paths).
 	defer reclaimAfterLargeBody(cachedBodyLen(t))
 	wasActive := idx == m.activeTabIdx
-	m.tabs = append(m.tabs[:idx], m.tabs[idx+1:]...)
+	// slices.Delete zeroes the vacated tail slot; a plain append-splice would
+	// leave the closed tab reachable through the backing array, pinning its
+	// cached response so the reclaim above could never actually free it.
+	m.tabs = slices.Delete(m.tabs, idx, idx+1)
 
 	if len(m.tabs) == 0 {
 		m.activeTabIdx = -1
@@ -279,6 +286,10 @@ func (m *MainUI) reconcileTabs() {
 			m.currentRequestID = nodeID
 		}
 	}
+	// Zero the filtered-out tail slots: kept aliases m.tabs' backing array, so
+	// without this the dropped tabs (and their cached responses) stay reachable
+	// and the deferred reclaim above could never actually free them.
+	clear(m.tabs[len(kept):])
 	m.tabs = kept
 
 	m.activeTabIdx = m.tabIndexOf(active)
@@ -608,7 +619,7 @@ func (m *MainUI) applyResponse(r *tabResponse) {
 		m.showErrorBanner(r.status)
 		return
 	}
-	m.pv.SetData([]byte(r.rawBody), prettyview.FormatAuto)
+	m.pv.SetData(r.rawBody, prettyview.FormatAuto)
 	m.headersText.SetText(r.headersText)
 	m.Status.SetText(r.status)
 	m.hideErrorBanner()

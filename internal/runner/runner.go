@@ -94,8 +94,15 @@ func (rp Report) Totals() (requests, checksPassed, checksFailed int) {
 func Run(ctx context.Context, sess *session.Session) Report {
 	var rep Report
 	stop := &stopSignal{} // set by helena.runner.stop() (#92)
+	// One client (and connection pool) for the whole run: building it per
+	// request would orphan an idle keep-alive socket per request sent.
+	client := httpclient.New(sess.Settings())
+	client.SetCookieJar(sess.CookieJar())
+	client.SetOAuth2Resolver(auth.NewClientCredentialsResolver(
+		sess.TokenCache(), nil, sess.ActiveCollectionDir()))
+	defer client.CloseIdleConnections()
 	for _, rq := range collectRequests(sess.Tree()) {
-		rep.Results = append(rep.Results, runOne(ctx, sess, rq, stop))
+		rep.Results = append(rep.Results, runOne(ctx, sess, client, rq, stop))
 		if stop.stopped() {
 			break
 		}
@@ -110,16 +117,11 @@ type reqRef struct {
 	req  model.Request
 }
 
-func runOne(ctx context.Context, sess *session.Session, rq reqRef, stop *stopSignal) RequestResult {
+func runOne(ctx context.Context, sess *session.Session, client *httpclient.Client, rq reqRef, stop *stopSignal) RequestResult {
 	res := RequestResult{Path: rq.path, Method: string(rq.req.Method)}
 
 	leaf := rq.req
 	leaf.Auth = sess.EffectiveAuth(rq.id)
-
-	client := httpclient.New(sess.Settings())
-	client.SetCookieJar(sess.CookieJar())
-	client.SetOAuth2Resolver(auth.NewClientCredentialsResolver(
-		sess.TokenCache(), nil, sess.ActiveCollectionDir()))
 
 	envSnap := sess.SnapshotActiveEnvVars()
 	ctrl := &runControl{stop: stop} // backs helena.runner for this request (#92)
@@ -134,9 +136,14 @@ func runOne(ctx context.Context, sess *session.Session, rq reqRef, stop *stopSig
 		ctrl:       ctrl,
 	}
 
+	// The snapshot deep-copies the whole collection and chain.Resolve never
+	// consults the finder when the chain is empty — skip it for chainless
+	// requests (most of a typical collection during a full run).
 	var finder chain.RequestFinder = nilFinder{}
-	if snap := sess.SnapshotChainFinder(); snap != nil {
-		finder = snap
+	if len(leaf.Chain) > 0 {
+		if snap := sess.SnapshotChainFinder(); snap != nil {
+			finder = snap
+		}
 	}
 
 	preOverlay := sess.SnapshotEnvOverlay()

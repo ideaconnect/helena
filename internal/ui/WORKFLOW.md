@@ -302,9 +302,11 @@ share the same dispatch.
    `scripting.New(sessionEnvBridge{s: m.sess, base: envSnap})`. The
    bridge's `Get` reads through the captured env snapshot + live
    overlay; `Set` calls `Session.SetEnvOverlay`. Wrap it in a
-   `chainExecutor{rt, client, envSnap, sess}` and a
-   `sessionRequestFinder{m.sess}` — these are the two adapters the
-   chain runner needs.
+   `chainExecutor{rt, client, envSnap, sess}` and — only when
+   `req.Chain` is non-empty — a `m.sess.SnapshotChainFinder()` copy of
+   the active collection (the snapshot deep-copies the whole tree, and
+   `chain.Resolve` never consults the finder for a chainless request);
+   these are the two adapters the chain runner needs.
 6. Status -> "Sending…", Send button text swapped to "Abort"
    (warning importance), CORS banner hidden — all on the UI
    goroutine. The `context.WithCancel` is built here and the
@@ -365,8 +367,9 @@ share the same dispatch.
     `deliverResponse(initTab, resp)`. `deliverResponse` stores `resp`
     on the tab that started the Send and, only if that tab is still
     active, calls `applyResponse` — which selects the Body tab, feeds
-    the body to the PrettyView (`m.pv.SetData([]byte(rawBody),
-    prettyview.FormatAuto)` on success, `FormatRaw` for an error
+    the body to the PrettyView (`m.pv.SetData(rawBody,
+    prettyview.FormatAuto)` on success — zero-copy: the viewer retains
+    the same buffer the tab caches — `FormatRaw` for an error
     string so it can't be mis-rendered as structured), pushes the
     headers into `headersText`, sets the status + console, and
     shows/hides the `corsBanner`. PrettyView auto-detects JSON / XML /

@@ -27,7 +27,7 @@ func newResponseUI(t *testing.T) *MainUI {
 func TestApplyResponseJSONAutoDetectsStructured(t *testing.T) {
 	m := newResponseUI(t)
 	body := `{"a":1,"b":[2,3]}`
-	m.applyResponse(&tabResponse{rawBody: body, status: "200 OK"})
+	m.applyResponse(&tabResponse{rawBody: []byte(body), status: "200 OK"})
 
 	if got := string(m.pv.Source()); got != body {
 		t.Errorf("pv source = %q, want %q", got, body)
@@ -47,7 +47,7 @@ func TestApplyResponseJSONAutoDetectsStructured(t *testing.T) {
 func TestApplyResponsePlainTextIsRaw(t *testing.T) {
 	m := newResponseUI(t)
 	body := "just a plain text response\nsecond line"
-	m.applyResponse(&tabResponse{rawBody: body, status: "200"})
+	m.applyResponse(&tabResponse{rawBody: []byte(body), status: "200"})
 	if m.pv.Format() != prettyview.FormatRaw {
 		t.Errorf("plain-text format = %v, want FormatRaw", m.pv.Format())
 	}
@@ -61,7 +61,7 @@ func TestApplyResponsePlainTextIsRaw(t *testing.T) {
 func TestApplyResponseMalformedDoesNotPanic(t *testing.T) {
 	m := newResponseUI(t)
 	for _, body := range []string{`{not valid json`, `<unclosed`, "", "\x00\x01binary"} {
-		m.applyResponse(&tabResponse{rawBody: body, status: "200"})
+		m.applyResponse(&tabResponse{rawBody: []byte(body), status: "200"})
 		if got := string(m.pv.Source()); got != body {
 			t.Errorf("pv source = %q, want %q", got, body)
 		}
@@ -87,7 +87,7 @@ func TestApplyResponseErrorIsRaw(t *testing.T) {
 // TestClearResponsePanelEmptiesViewer verifies a nil response clears the viewer.
 func TestClearResponsePanelEmptiesViewer(t *testing.T) {
 	m := newResponseUI(t)
-	m.applyResponse(&tabResponse{rawBody: `{"a":1}`, status: "200"})
+	m.applyResponse(&tabResponse{rawBody: []byte(`{"a":1}`), status: "200"})
 	m.applyResponse(nil)
 	if got := string(m.pv.Source()); got != "" {
 		t.Errorf("pv source after clear = %q, want empty", got)

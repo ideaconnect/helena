@@ -8,16 +8,17 @@ import (
 	"fyne.io/fyne/v2/dialog"
 )
 
-// currentResponseBytes returns the raw bytes of the active tab's last response.
-// rawBody is a string holding the exact response bytes, so the round-trip is
-// binary-safe. Returns false when there is no successful response to save
-// (no tab, no response yet, or an error placeholder).
+// currentResponseBytes returns the raw bytes of the active tab's last response,
+// byte-for-byte. The returned slice is the tab's cached buffer (also retained
+// by the response viewer) — callers must only read it, never mutate. Returns
+// false when there is no successful response to save (no tab, no response yet,
+// or an error placeholder).
 func (m *MainUI) currentResponseBytes() ([]byte, bool) {
 	t := m.activeTab()
 	if t == nil || t.resp == nil || t.resp.isError {
 		return nil, false
 	}
-	return []byte(t.resp.rawBody), true
+	return t.resp.rawBody, true
 }
 
 // writeResponseTo writes the active response's raw bytes to w, byte-for-byte.

@@ -38,7 +38,7 @@ func TestErrorBannerSurfacesFailureNonTransiently(t *testing.T) {
 	}
 
 	// A subsequent successful response clears it.
-	m.applyResponse(&tabResponse{status: "200 OK", rawBody: "{}"})
+	m.applyResponse(&tabResponse{status: "200 OK", rawBody: []byte("{}")})
 	if m.errorBanner.Visible() {
 		t.Error("error banner not cleared after a successful response")
 	}

@@ -4,7 +4,7 @@
 
 | File | Responsibility |
 | --- | --- |
-| [runner.go](runner.go) | The public `Report` / `RequestResult` / `Check` types and their helpers (`OK`, `Failed`, `Totals`), the `Run` entry point (which threads a `stopSignal` so `helena.runner.stop()` halts the loop, #92), and `runOne` (per-request orchestration: auth flatten → snapshots → chain → execute → assertions; honours `helena.runner.skip()` by marking the result `Skipped` and not sending). |
+| [runner.go](runner.go) | The public `Report` / `RequestResult` / `Check` types and their helpers (`OK`, `Failed`, `Totals`), the `Run` entry point (which builds the run-wide `httpclient.Client` — one connection pool per run, idle sockets released at the end — and threads a `stopSignal` so `helena.runner.stop()` halts the loop, #92), and `runOne` (per-request orchestration: auth flatten → snapshots → chain (the collection snapshot is taken only for chained requests) → execute → assertions; honours `helena.runner.skip()` by marking the result `Skipped` and not sending). |
 | [exec.go](exec.go) | The `headlessExecutor` (pre-script → http → post-script, with the full resolver scope chain), the `envBridge`, the request-tree walk (`collectRequests` / `walk`), and the `enabledVars` / `chainViewToScripting` / `nilFinder` helpers. |
 | [runner_test.go](runner_test.go) | End-to-end runs against an `httptest` server: mixed pass/fail assertions + a `test()` script, all-pass, a connection error, a chain step with env-overlay scripts and request variables, a throwing post-script, and `{{var}}` resolution from the active environment. |
 
