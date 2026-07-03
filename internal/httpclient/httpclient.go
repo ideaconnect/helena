@@ -521,17 +521,18 @@ func (c *Client) Stream(ctx context.Context, r model.Request, res *vars.Resolver
 	if headerTimer != nil {
 		headerTimer.Stop()
 	}
-	if err != nil {
-		if ctx.Err() == nil && timedOut.Load() {
-			return headerTimeoutErr()
-		}
-		return sanitizeDoError(err)
-	}
+	// One branch for both timeout shapes: Do failing because the timer
+	// cancelled sctx, AND the race where the timer fired in the Do-return ↔
+	// Stop gap (Do succeeded but the body is already doomed) — either way,
+	// report the header timeout deterministically.
 	if ctx.Err() == nil && timedOut.Load() {
-		// Timer fired in the Do-return ↔ Stop gap: sctx is already cancelled,
-		// so the body is doomed — report the timeout deterministically.
-		_ = resp.Body.Close()
+		if err == nil {
+			_ = resp.Body.Close()
+		}
 		return headerTimeoutErr()
+	}
+	if err != nil {
+		return sanitizeDoError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
