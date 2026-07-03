@@ -273,9 +273,18 @@ func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
 		return err
 	}
 
+	// Compile (or fetch the cached program) before spawning the worker: a
+	// syntax error surfaces synchronously with the same source positions
+	// vm.RunString reported (minus its doubled "SyntaxError:" prefix), and a
+	// repeated script skips recompilation entirely.
+	prog, err := compileCached(src)
+	if err != nil {
+		return err
+	}
+
 	timer := time.NewTimer(ScriptTimeout)
 	defer timer.Stop()
-	go func() { _, err := vm.RunString(src); resultCh <- err }()
+	go func() { _, err := vm.RunProgram(prog); resultCh <- err }()
 
 	select {
 	case err := <-resultCh:

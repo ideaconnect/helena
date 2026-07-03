@@ -23,7 +23,9 @@ plumbing.
      - `requestToObject` mirrors the request into a fresh `goja.Object`.
      - `bindHelena` and `bindConsole` attach the helena.* and console.*
        surfaces.
-     - `vm.RunString(script)` evaluates the user source.
+     - `vm.RunProgram(compileCached(script))` evaluates the user source —
+       the compiled program is cached process-wide per distinct source, so a
+       re-sent request skips recompiling its scripts.
      - On normal return, `writeBackRequest` reads the JS object back
        into the model: scalars become direct writes; headers and params
        merge through `mergeKVFromObject` (see the merge rules below).
@@ -114,7 +116,7 @@ two ways:
    tests can drive timeouts).
 
 The watcher goroutine signs off via a local `done` channel that the
-main caller closes after `RunString` returns. There's no leak: even if
+main caller closes after the run returns. There's no leak: even if
 both the timer and the script finish at the exact same instant, the
 goroutine selects on the `done` close and exits.
 
