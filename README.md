@@ -256,17 +256,32 @@ Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
 
 ## Memory & rendering
 
-Helena is a native OpenGL app (Fyne), so its resident memory is dominated by the
-graphics stack, not the Go code (the Go heap is ~50 MB). With a working GPU
-driver it runs in the low hundreds of MB. **Without hardware OpenGL** — inside a
-VM, over RDP, or on the "Microsoft Basic Display Adapter" — the OS falls back to
-a *software* rasterizer (Mesa `llvmpipe`, which pulls in a large LLVM JIT, or
-Direct3D WARP) and resident memory climbs to ~300 MB. That cost is in the
-driver, not in Helena. To see which you're on, read `GL_RENDERER` from a GL
-diagnostic (`glxinfo -B` on Linux; a tool like OpenGL Extensions Viewer or
-`wglinfo` on Windows — browser pages such as `chrome://gpu` report the
-*browser's own* GL stack, not the one Helena gets): a GPU name is hardware;
-`llvmpipe` / `WARP` / `SwiftShader` / `Basic Render Driver` is software.
+**How Helena draws.** Helena renders through Fyne's OpenGL painter: at startup
+it requests a standard desktop **OpenGL 2.1+ context** from the OS (via GLFW),
+and every frame is drawn by that GL context — widget textures are uploaded with
+`glTexImage2D` and composited by the driver. **Hardware acceleration is used
+whenever the OS provides a GPU-backed OpenGL driver**: with a vendor driver
+(NVIDIA / AMD / Intel) the textures and framebuffers live in **VRAM** and the
+GPU rasterizes, so the process's own resident memory stays comparatively small.
+Helena never asks for software rendering — the shipped binary contains no
+software-renderer code path or flag (and if no GL 2.1 context can be created at
+all, it exits rather than degrade). Which driver serves the context is decided
+entirely by the OS GL loader (`opengl32.dll` → vendor ICD on Windows, Mesa on
+Linux), not by Helena.
+
+**The software-GL case.** Where the OS has no hardware OpenGL — a VM, an RDP
+session, the "Microsoft Basic Display Adapter", or WSLg without working GPU
+passthrough — the OS transparently substitutes a *software* rasterizer (Mesa
+`llvmpipe`, which pulls in a large LLVM JIT, or Direct3D WARP). Rendering then
+happens on the CPU, framebuffers sit in system RAM instead of VRAM, and
+resident memory climbs to ~300 MB. That cost lives in the driver stack, not in
+Helena. To see which you're on, read `GL_RENDERER` from a GL diagnostic
+(`glxinfo -B` on Linux; a tool like OpenGL Extensions Viewer or `wglinfo` on
+Windows — browser pages such as `chrome://gpu` report the *browser's own* GL
+stack, not the one Helena gets): a GPU name is hardware; `llvmpipe` / `WARP` /
+`SwiftShader` / `Basic Render Driver` is software. Task Manager's GPU column
+tells the same story — a Helena that never touches the GPU while animating is
+being software-rendered.
 
 Two things reduce it: release builds ship with `-tags no_emoji` (−75 MB / −23%
 resident, 326 → 251 MB measured; colour emoji render as blank glyphs, all other
