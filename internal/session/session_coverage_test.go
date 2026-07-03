@@ -970,6 +970,11 @@ func TestRemoveCollectionReindexesActiveEnv(t *testing.T) {
 	if err := s.RemoveCollection(0); err != nil { // remove A; B,C shift down
 		t.Fatalf("RemoveCollection: %v", err)
 	}
+	// The active pointer (C, previously index 2) must follow its collection
+	// to index 1 — asserted BEFORE any SetActiveCollection re-points it.
+	if got := s.ActiveCollectionDir(); got != filepath.Join(tmp, "C") {
+		t.Errorf("active dir after removal = %q, want C's dir", got)
+	}
 	s.SetActiveCollection(0) // B
 	if got := s.ActiveEnvName(); got != "EnvB" {
 		t.Errorf("B's env after shift = %q, want EnvB", got)
@@ -1004,5 +1009,78 @@ func TestRemoveActiveCollectionFallsBackToFirst(t *testing.T) {
 	}
 	if s.ActiveCollectionDir() != "" {
 		t.Errorf("active after removing all = %q, want none", s.ActiveCollectionDir())
+	}
+}
+
+// TestRemoveCollectionClearsRemovedEnvSlot: when the removed collection had
+// an active environment and its successor has none, the successor must NOT
+// inherit the stale env name through the index-keyed map.
+func TestRemoveCollectionClearsRemovedEnvSlot(t *testing.T) {
+	tmp := t.TempDir()
+	makeColl(t, tmp, "A")
+	makeColl(t, tmp, "B")
+	s, _ := New(filepath.Join(tmp, "cfg.yml"))
+	for _, name := range []string{"A", "B"} {
+		if err := s.OpenCollection(filepath.Join(tmp, name)); err != nil {
+			t.Fatalf("Open %s: %v", name, err)
+		}
+	}
+	s.SetActiveCollection(0) // A gets an env; B has none
+	if err := s.AddEnvironment("EnvA"); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveEnv("EnvA")
+
+	if err := s.RemoveCollection(0); err != nil {
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	// B is now index 0 and active; it must not report A's environment.
+	if got := s.ActiveEnvName(); got != "" {
+		t.Errorf("successor inherited the removed collection's env %q", got)
+	}
+}
+
+// TestRemoveCollectionKeepsSharedDirEnvKey: cfg.UI.ActiveEnv is one global
+// path-keyed map across workspaces. Removing a dir from one workspace must
+// not destroy another workspace's persisted env choice for the same dir.
+func TestRemoveCollectionKeepsSharedDirEnvKey(t *testing.T) {
+	tmp := t.TempDir()
+	dir := makeColl(t, tmp, "Shared")
+	s, _ := New(filepath.Join(tmp, "cfg.yml"))
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveCollection(0)
+	if err := s.AddEnvironment("EnvS"); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveEnv("EnvS")
+
+	// A second workspace also lists the same dir.
+	if err := s.AddWorkspace("Other"); err != nil {
+		t.Fatal(err)
+	}
+	s.cfg.Workspaces[1].Collections = append(s.cfg.Workspaces[1].Collections, dir)
+	s.cfg.Active = 0
+
+	if err := s.RemoveCollection(0); err != nil {
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	if _, ok := s.cfg.UI.ActiveEnv[dir]; !ok {
+		t.Error("removing the dir from one workspace destroyed the other workspace's env key")
+	}
+
+	// Sanity: with no other workspace referencing the dir, the key IS dropped.
+	s2, _ := New(filepath.Join(tmp, "cfg2.yml"))
+	if err := s2.OpenCollection(dir); err != nil {
+		t.Fatal(err)
+	}
+	s2.SetActiveCollection(0)
+	s2.SetActiveEnv("EnvS")
+	if err := s2.RemoveCollection(0); err != nil {
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	if _, ok := s2.cfg.UI.ActiveEnv[dir]; ok {
+		t.Error("sole-workspace removal left a dead env key behind")
 	}
 }

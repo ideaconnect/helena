@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/idct/helena/internal/auth"
@@ -504,19 +505,33 @@ func (c *Client) Stream(ctx context.Context, r model.Request, res *vars.Resolver
 	sctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	req = req.WithContext(sctx)
+	// timedOut distinguishes the header timer's cancel from the caller's: the
+	// timer can fire in the gap between Do returning success and Stop (Stop
+	// cannot un-fire it), which would otherwise kill the just-opened stream
+	// with a generic "context canceled" — off the documented contract.
+	var timedOut atomic.Bool
 	var headerTimer *time.Timer
 	if d := c.http.Timeout; d > 0 {
-		headerTimer = time.AfterFunc(d, cancel)
+		headerTimer = time.AfterFunc(d, func() { timedOut.Store(true); cancel() })
+	}
+	headerTimeoutErr := func() error {
+		return fmt.Errorf("sse: no response within %s", c.http.Timeout)
 	}
 	resp, err := hc.Do(req)
 	if headerTimer != nil {
 		headerTimer.Stop()
 	}
 	if err != nil {
-		if ctx.Err() == nil && sctx.Err() != nil {
-			return fmt.Errorf("sse: no response within %s", c.http.Timeout)
+		if ctx.Err() == nil && timedOut.Load() {
+			return headerTimeoutErr()
 		}
 		return sanitizeDoError(err)
+	}
+	if ctx.Err() == nil && timedOut.Load() {
+		// Timer fired in the Do-return ↔ Stop gap: sctx is already cancelled,
+		// so the body is doomed — report the timeout deterministically.
+		_ = resp.Body.Close()
+		return headerTimeoutErr()
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -539,6 +554,11 @@ func (c *Client) Stream(ctx context.Context, r model.Request, res *vars.Resolver
 			// A read aborted by ctx cancellation surfaces as the ctx error.
 			if ctxErr := ctx.Err(); ctxErr != nil {
 				return ctxErr
+			}
+			if timedOut.Load() {
+				// The header timer's late cancel aborted the read (see above)
+				// — name the real cause, not a generic "context canceled".
+				return headerTimeoutErr()
 			}
 			return fmt.Errorf("sse: %w", err)
 		}
