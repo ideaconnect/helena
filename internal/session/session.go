@@ -115,13 +115,29 @@ func (s *Session) reload() {
 	s.dirs = nil
 	s.loadErrs = nil
 	s.dotEnv = nil // drop the .env cache so reopened collections re-read from disk
-	for _, dir := range s.activeWorkspace().Collections {
-		c, err := storage.Load(dir)
-		if err != nil {
-			s.loadErrs = append(s.loadErrs, LoadError{Dir: dir, Err: err})
+	// Collections are independent trees, so load them concurrently — this runs
+	// on the main goroutine before the window exists, and a large workspace's
+	// wall time divides by core count. Results land in order-stable slots so
+	// collection indexes (and everything keyed on them) match the workspace
+	// list exactly as the sequential load did.
+	dirs := s.activeWorkspace().Collections
+	loaded := make([]model.Collection, len(dirs))
+	errs := make([]error, len(dirs))
+	var wg sync.WaitGroup
+	for i, dir := range dirs {
+		wg.Add(1)
+		go func(i int, dir string) {
+			defer wg.Done()
+			loaded[i], errs[i] = storage.Load(dir)
+		}(i, dir)
+	}
+	wg.Wait()
+	for i, dir := range dirs {
+		if errs[i] != nil {
+			s.loadErrs = append(s.loadErrs, LoadError{Dir: dir, Err: errs[i]})
 			continue
 		}
-		s.cols = append(s.cols, c)
+		s.cols = append(s.cols, loaded[i])
 		s.dirs = append(s.dirs, dir)
 	}
 
@@ -274,12 +290,15 @@ func (s *Session) SetActiveCollection(i int) {
 	if i < -1 || i >= len(s.cols) {
 		return
 	}
-	s.activeCol = i
+	dir := ""
 	if i >= 0 {
-		s.cfg.UI.ActiveCollection = s.dirs[i]
-	} else {
-		s.cfg.UI.ActiveCollection = ""
+		dir = s.dirs[i]
 	}
+	if s.activeCol == i && s.cfg.UI.ActiveCollection == dir {
+		return // no change — skip the config write (fires on every tab switch)
+	}
+	s.activeCol = i
+	s.cfg.UI.ActiveCollection = dir
 	_ = s.persist()
 }
 
@@ -1109,6 +1128,10 @@ func (s *Session) SetOpenTabs(tabs []config.UIOpenTab, active int) {
 		active = 0
 	} else if active < 0 || active >= len(tabs) {
 		active = 0
+	}
+	if slices.Equal(s.cfg.UI.OpenTabs, tabs) && s.cfg.UI.ActiveTab == active &&
+		s.cfg.UI.OpenRequest == nil {
+		return // no change — skip the config write (fires on every tab activation)
 	}
 	s.cfg.UI.OpenTabs = tabs
 	s.cfg.UI.ActiveTab = active
