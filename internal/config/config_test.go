@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -198,5 +199,60 @@ func TestLoadClampsActive(t *testing.T) {
 	}
 	if got.Active != 0 {
 		t.Errorf("Active = %d, want clamped to 0", got.Active)
+	}
+}
+
+// TestSaveIsAtomicOverwrite pins the stage-and-rename contract: an overwrite
+// lands the new content and leaves no staging file behind. A truncate-in-place
+// Save could be caught mid-write by a crash, leaving config.yml unparseable —
+// and a later launch would silently fall back to an empty session.
+func TestSaveIsAtomicOverwrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.yml")
+	if err := Save(path, Config{Version: CurrentSchemaVersion, Workspaces: []Workspace{{Name: "One"}}}); err != nil {
+		t.Fatalf("first Save: %v", err)
+	}
+	if err := Save(path, Config{Version: CurrentSchemaVersion, Workspaces: []Workspace{{Name: "Two"}}}); err != nil {
+		t.Fatalf("second Save: %v", err)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got.Workspaces) != 1 || got.Workspaces[0].Name != "Two" {
+		t.Errorf("overwritten config = %+v, want the single workspace Two", got.Workspaces)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.Name() != "config.yml" {
+			t.Errorf("stray staging file left behind: %s", e.Name())
+		}
+	}
+}
+
+// TestSaveStagingFailureSurfaces: when the target directory exists but is not
+// writable, the staged-file creation fails and Save must surface the error
+// (and leave nothing behind).
+func TestSaveStagingFailureSurfaces(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("read-only directory bits are not enforced on Windows")
+	}
+	dir := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	if err := Save(filepath.Join(dir, "config.yml"), Config{Version: CurrentSchemaVersion}); err == nil {
+		t.Fatal("Save into a read-only directory should fail")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("read-only dir should stay empty, has %d entries", len(entries))
 	}
 }
