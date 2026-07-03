@@ -18,9 +18,14 @@ func bindTest(vm *goja.Runtime, res *Result) error {
 	}); err != nil {
 		return err
 	}
-	_, err := vm.RunString(testPrelude)
+	_, err := vm.RunProgram(testProgram)
 	return err
 }
+
+// testProgram is the prelude compiled once at init: bindTest runs on every
+// fresh per-run VM (twice per send, pre + post), and the source is a
+// compile-time constant.
+var testProgram = goja.MustCompile("", testPrelude, false)
 
 // testPrelude defines the global test() runner and expect() matcher chain in
 // JavaScript. test(name, fn) runs fn and records pass/fail (a thrown matcher
