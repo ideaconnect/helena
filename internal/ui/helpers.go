@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 
 	"github.com/idct/helena/internal/model"
@@ -37,24 +36,68 @@ func tipButtonRes(icon fyne.Resource, tip string, tapped func()) *ttwidget.Butto
 }
 
 // thinHSplit / thinVSplit build a resizable split whose divider renders as a
-// thin subtle line (splitTheme) instead of Fyne's thick shadow bar, while the
-// panes keep normal sizing (paneTheme restores it inside the split's override).
+// thin subtle line instead of Fyne's thick shadow bar. The thinSplit widget
+// hard-codes the hairline styling, so no theme-scope overrides are needed
+// (the previous splitTheme + paneTheme wrapping cost three Fyne theme scopes
+// per split, each of which re-parses fonts and walks the subtree eagerly).
 func thinHSplit(leading, trailing fyne.CanvasObject, offset float64) fyne.CanvasObject {
-	s := container.NewHSplit(
-		container.NewThemeOverride(leading, paneTheme{}),
-		container.NewThemeOverride(trailing, paneTheme{}),
-	)
+	s := newThinSplit(true, leading, trailing)
 	s.SetOffset(offset)
-	return container.NewThemeOverride(s, splitTheme{})
+	return s
 }
 
 func thinVSplit(top, bottom fyne.CanvasObject, offset float64) fyne.CanvasObject {
-	s := container.NewVSplit(
-		container.NewThemeOverride(top, paneTheme{}),
-		container.NewThemeOverride(bottom, paneTheme{}),
-	)
+	s := newThinSplit(false, top, bottom)
 	s.SetOffset(offset)
-	return container.NewThemeOverride(s, splitTheme{})
+	return s
+}
+
+// flushColumn is a vertical layout with zero spacing: every row gets its
+// minimum height except the row at flexIdx, which takes all remaining space.
+// It replaces the old rootTheme (SizeNamePadding → 0) theme-scope override:
+// the hairline separators sit flush between the toolbar, body and status bar
+// without cascading a zero-padding theme over the whole widget tree.
+type flushColumn struct{ flexIdx int }
+
+func (f *flushColumn) MinSize(objects []fyne.CanvasObject) fyne.Size {
+	var w, h float32
+	for _, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		min := o.MinSize()
+		if min.Width > w {
+			w = min.Width
+		}
+		h += min.Height
+	}
+	return fyne.NewSize(w, h)
+}
+
+func (f *flushColumn) Layout(objects []fyne.CanvasObject, size fyne.Size) {
+	fixed := float32(0)
+	for i, o := range objects {
+		if i != f.flexIdx && o.Visible() {
+			fixed += o.MinSize().Height
+		}
+	}
+	flexH := size.Height - fixed
+	if flexH < 0 {
+		flexH = 0
+	}
+	y := float32(0)
+	for i, o := range objects {
+		if !o.Visible() {
+			continue
+		}
+		h := o.MinSize().Height
+		if i == f.flexIdx {
+			h = flexH
+		}
+		o.Move(fyne.NewPos(0, y))
+		o.Resize(fyne.NewSize(size.Width, h))
+		y += h
+	}
 }
 
 func methodNames() []string {

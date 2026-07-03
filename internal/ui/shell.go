@@ -386,10 +386,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 	)
 	// Cookies + Settings + Help are pushed to the trailing edge (#129).
 	trailing := container.NewHBox(cookiesBtn, settingsBtn, m.helpBtn)
-	// toolbarTheme restores normal theme padding (the root theme zeroes it) so
-	// the HBox spaces its controls AND bumps inline icons to 24px, so the top
-	// bar's icon buttons + indicators match the sidebar action toolbar; NewPadded
-	// gives the bar a margin.
+	// toolbarTheme bumps inline icons to 24px so the top bar's icon buttons +
+	// indicators match the sidebar action toolbar; NewPadded gives the bar a
+	// margin.
 	toolbar := container.NewThemeOverride(
 		container.NewPadded(container.NewBorder(nil, nil, leading, trailing, nil)),
 		toolbarTheme{},
@@ -528,15 +527,12 @@ func NewMainUI(sess *session.Session) *MainUI {
 	body := thinHSplit(sidebar, editorColumn, 0.25)
 
 	// Thin separator lines under the top bar and above the status bar, so the
-	// whole window grid is divided by hairlines (VS Code / Bruno style). The root
-	// is wrapped in rootTheme (padding 0) so the body sits flush against those
-	// lines and the vertical split divider meets them with no gap; the status
-	// label restores its own padding.
-	header := container.NewVBox(toolbar, widget.NewSeparator())
-	footer := container.NewVBox(widget.NewSeparator(), container.NewThemeOverride(m.Status, paneTheme{}))
-	m.root = container.NewThemeOverride(
-		container.NewBorder(header, footer, nil, nil, body),
-		rootTheme{})
+	// whole window grid is divided by hairlines (VS Code / Bruno style). The
+	// flushColumn layout stacks the rows with zero spacing, so the body sits
+	// flush against those lines and the vertical split divider meets them with
+	// no gap — without the old rootTheme zero-padding scope over the whole tree.
+	m.root = container.New(&flushColumn{flexIdx: 2},
+		toolbar, widget.NewSeparator(), body, widget.NewSeparator(), m.Status)
 
 	m.refreshEnvironments()
 	m.refreshEmptyState()
