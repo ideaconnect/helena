@@ -59,6 +59,15 @@ label via [`.github/release.yml`](.github/release.yml).
   never answers the upgrade can no longer hang the worker forever. WebSocket
   messages reassembled from continuation frames are also capped at 64 MiB,
   matching the existing per-frame cap.
+- SSE streams are no longer killed by the request timeout: the client-wide
+  deadline covers the whole exchange including the body read — which for a
+  stream is the stream itself — so every stream died at Timeout (default
+  30 s). The timeout now bounds only the connect + response-header phase; an
+  open stream runs until the server closes it or you press Stop.
+- Removing a collection no longer discards the other collections' unsaved
+  in-memory edits: it used to reload the entire workspace from disk (also
+  O(workspace) work for a one-entry delete); it now removes just that entry,
+  keeping each surviving collection's edits and environment selection intact.
 
 ### Performance
 - Release builds ship with `-tags no_emoji`, dropping Fyne's bundled colour-emoji
