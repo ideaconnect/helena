@@ -34,5 +34,8 @@ After the upgrade, both sides speak frames:
 
 A message may span multiple frames (FIN=0 continuation frames); control frames
 (close/ping/pong, `IsControl()`) may be interleaved and are capped at 125 bytes.
+Reassembly across continuation frames is itself capped (`maxMessageBytes`,
+64 MiB like the frame cap) so a stream of under-cap non-FIN fragments can't
+grow the buffer without bound.
 The message-level reassembly + control handling layer lands with `Conn` in the
 next increment.

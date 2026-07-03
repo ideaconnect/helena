@@ -35,7 +35,8 @@ func wsTranscriptLine(sent bool, msg string) string {
 // resolved ws:// URL, streams received messages into a transcript, and lets the
 // user send text messages. The connection runs on a worker goroutine; UI
 // updates marshal back via fyne.Do. Closing the dialog closes the connection
-// (which unblocks the read goroutine).
+// (which unblocks the read goroutine) — or, when the dial is still in flight,
+// cancels it, so an unresponsive server can't leak the worker and its socket.
 func (m *MainUI) openWebSocket() {
 	if m.win == nil {
 		return
@@ -58,7 +59,11 @@ func (m *MainUI) openWebSocket() {
 	input := widget.NewEntry()
 	input.SetPlaceHolder("Type a message and press Send")
 
+	// The dial runs under a cancelable context so closing the dialog while the
+	// handshake is still in flight aborts it instead of leaking the goroutine.
+	ctx, cancel := context.WithCancel(context.Background())
 	var conn *websocket.Conn // only ever read/written on the UI goroutine
+	dialogClosed := false    // UI goroutine only; gates the publish below
 	appendLine := func(s string) {
 		fyne.Do(func() {
 			if transcript.Text == "" {
@@ -89,6 +94,8 @@ func (m *MainUI) openWebSocket() {
 	d := dialog.NewCustom("WebSocket — "+url, "Close", content, m.win)
 	d.Resize(fyne.NewSize(560, 420))
 	d.SetOnClosed(func() {
+		dialogClosed = true
+		cancel() // aborts a dial/handshake still in flight
 		if conn != nil {
 			_ = conn.Close()
 		}
@@ -96,12 +103,26 @@ func (m *MainUI) openWebSocket() {
 	d.Show()
 
 	go func() {
-		c, err := websocket.Dial(context.Background(), url, m.currentRequestHeaders(resolver))
+		c, err := websocket.Dial(ctx, url, m.currentRequestHeaders(resolver))
 		if err != nil {
 			appendLine("✗ connect failed: " + err.Error())
 			return
 		}
-		fyne.Do(func() { conn = c }) // publish on the UI goroutine
+		// Publish on the UI goroutine — unless the dialog was closed while the
+		// dial was in flight, in which case OnClosed saw conn==nil and nothing
+		// else owns c, so it must be closed right here.
+		published := false
+		fyne.DoAndWait(func() {
+			if dialogClosed {
+				return
+			}
+			conn = c
+			published = true
+		})
+		if !published {
+			_ = c.Close()
+			return
+		}
 		appendLine("✓ connected")
 		for {
 			op, data, err := c.ReadMessage()

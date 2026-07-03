@@ -3,8 +3,10 @@ package websocket
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -311,5 +313,68 @@ func TestDialTLSHandshakeFails(t *testing.T) {
 	wss := "wss" + strings.TrimPrefix(srv.URL, "https")
 	if _, err := Dial(context.Background(), wss, nil); err == nil {
 		t.Error("expected a TLS handshake error for an untrusted cert")
+	}
+}
+
+// TestDialCancelAbortsHandshake: a server that accepts TCP but never answers
+// the upgrade must not block Dial forever — cancelling the context aborts the
+// in-flight handshake (the UI cancels when its dialog is closed mid-dial).
+func TestDialCancelAbortsHandshake(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		// Consume the upgrade request but never reply; unblocks when the
+		// aborted client closes its side.
+		_, _ = io.Copy(io.Discard, conn)
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	errCh := make(chan error, 1)
+	go func() {
+		_, dialErr := Dial(ctx, "ws://"+ln.Addr().String(), nil)
+		errCh <- dialErr
+	}()
+	time.Sleep(50 * time.Millisecond) // let the dial reach the handshake read
+	cancel()
+	select {
+	case dialErr := <-errCh:
+		if dialErr == nil {
+			t.Fatal("Dial succeeded against a server that never answered the upgrade")
+		}
+		if !errors.Is(dialErr, context.Canceled) {
+			t.Errorf("Dial error = %v, want context.Canceled in its chain", dialErr)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Dial did not abort within 2s of cancellation")
+	}
+}
+
+// TestReadMessageCapsReassembledSize: fragmented frames that never FIN must
+// not grow the reassembly buffer without bound — the per-frame cap alone does
+// not stop a stream of under-cap fragments.
+func TestReadMessageCapsReassembledSize(t *testing.T) {
+	origMax := maxMessageBytes
+	maxMessageBytes = 150
+	t.Cleanup(func() { maxMessageBytes = origMax })
+
+	srv := handshakeServer(t, func(brw *bufio.ReadWriter) {
+		payload := []byte(strings.Repeat("a", 100))
+		_ = WriteFrame(brw, Frame{Fin: false, Opcode: OpText, Payload: payload}, false)
+		_ = WriteFrame(brw, Frame{Fin: false, Opcode: OpContinuation, Payload: payload}, false)
+		_ = brw.Flush()
+	})
+
+	_, _, err := dialMsg(t, "ws"+strings.TrimPrefix(srv.URL, "http"))
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("ReadMessage err = %v, want the message-size cap error", err)
 	}
 }
