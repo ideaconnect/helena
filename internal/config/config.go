@@ -1,6 +1,7 @@
 package config
 
 import (
+	"errors"
 	"log"
 	"os"
 	"path/filepath"
@@ -164,7 +165,11 @@ func Load(path string) (Config, error) {
 	return migrate(c), nil
 }
 
-// Save writes the config to path, creating parent directories as needed.
+// Save writes the config to path atomically (staged sibling file + rename),
+// creating parent directories as needed. config.yml is rewritten on every
+// tab/env/workspace change and at quit; a crash or full disk mid-write must
+// never leave it truncated — a later launch would fail to parse it and
+// silently fall back to an empty session, "losing" the user's workspaces.
 func Save(path string, c Config) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -173,5 +178,18 @@ func Save(path string, c Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".config-*.tmp")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer func() { _ = os.Remove(tmpName) }() // no-op once the rename lands
+	_, werr := tmp.Write(data)
+	// Close before the rename regardless of the write outcome and surface the
+	// first failure. The chmod widens CreateTemp's 0600 to config.yml's usual
+	// 0644.
+	if err := errors.Join(werr, tmp.Close(), os.Chmod(tmpName, 0o644)); err != nil {
+		return err
+	}
+	return os.Rename(tmpName, path)
 }

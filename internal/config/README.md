@@ -4,7 +4,7 @@ Persists Helena's application-level state to a single YAML file in the user's OS
 
 What lives here: the list of workspaces and which one is active, the user's `Settings` (TLS, redirects, timeout, theme), global variables (#83 — the app-wide lowest-precedence resolver scope), and `UIState` (which collection/environment/request was last open, the set of open editor tabs + the active one, last window size). What does NOT live here: the contents of collections — those are written by the `storage` package to a separate OpenCollection directory; `config` only stores their on-disk paths. Open *scratch* tabs (unsaved, not in any collection) are likewise not persisted.
 
-`Load` is forgiving: a missing file or an empty path yields `Default()` instead of an error, and an out-of-range `Active` index is clamped to 0. `Save` creates any missing parent directories.
+`Load` is forgiving: a missing file or an empty path yields `Default()` instead of an error, and an out-of-range `Active` index is clamped to 0. `Save` creates any missing parent directories and writes atomically (staged sibling file + rename) — config.yml is rewritten on every tab/env/workspace change, and a crash mid-write must never truncate it.
 
 ### Schema versioning
 
@@ -29,7 +29,7 @@ To evolve the schema: bump `CurrentSchemaVersion`, add a `migrations[N]` step th
 - `Default() Config` — returns a `Config` with a single empty `Default` workspace and `model.DefaultSettings()`.
 - `DefaultPath() (string, error)` — returns the standard config file path (`<os user config dir>/helena/config.yml`).
 - `Load(path string) (Config, error)` — reads and validates the config; missing file or empty path returns `Default()`.
-- `Save(path string, c Config) error` — writes the config as YAML, creating parents as needed.
+- `Save(path string, c Config) error` — writes the config as YAML atomically (stage + rename), creating parents as needed.
 
 ## Dependencies
 
