@@ -23,6 +23,9 @@ func FromURL(url string, settings model.Settings) (model.Collection, error) {
 	tr := &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: settings.InsecureSkipVerify},
 	}
+	// One-shot transport: release its keep-alive socket when the import
+	// returns instead of leaving it pinned until the server hangs up.
+	defer tr.CloseIdleConnections()
 	client := &http.Client{
 		Transport: tr,
 		Timeout:   time.Duration(settings.TimeoutSeconds) * time.Second,

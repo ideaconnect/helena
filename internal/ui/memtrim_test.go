@@ -104,12 +104,12 @@ func TestDeliverResponseInactiveTabReclaims(t *testing.T) {
 
 	m.openOrActivate("0/r0") // tab 0
 	m.openOrActivate("0/r1") // tab 1 (active)
-	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: bigBody(), status: "200"})
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: []byte(bigBody()), status: "200"})
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("first (nothing replaced) deliver fired %d reclaims, want 0", got)
 	}
 	// Replacing the big cached body on the inactive tab must trigger.
-	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: "tiny", status: "200"})
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: []byte("tiny"), status: "200"})
 	if !wait() {
 		t.Fatal("replacing a large cached body on an inactive tab did not reclaim")
 	}
@@ -126,7 +126,7 @@ func TestCloseTabReclaimsCachedBody(t *testing.T) {
 
 	m.openOrActivate("0/r0") // tab 0
 	m.openOrActivate("0/r1") // tab 1 (active)
-	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: bigBody(), status: "200"})
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: []byte(bigBody()), status: "200"})
 
 	m.closeTab(m.tabs[0])
 	if !wait() {
@@ -146,8 +146,8 @@ func TestCloseAllTabsSumsCachedBodies(t *testing.T) {
 	half := strings.Repeat("y", memTrimThreshold/2)
 	m.openOrActivate("0/r0")
 	m.openOrActivate("0/r1")
-	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: half, status: "200"})
-	m.deliverResponse(m.tabs[1], &tabResponse{rawBody: half, status: "200"})
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: []byte(half), status: "200"})
+	m.deliverResponse(m.tabs[1], &tabResponse{rawBody: []byte(half), status: "200"})
 	if got := calls.Load(); got != 0 {
 		t.Fatalf("setup fired %d reclaims, want 0 (each body is below threshold)", got)
 	}
@@ -166,7 +166,7 @@ func TestReconcileTabsReclaimsDroppedTabs(t *testing.T) {
 
 	m.openOrActivate("0/r0") // tab 0
 	m.openOrActivate("0/r1") // tab 1 (active)
-	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: bigBody(), status: "200"})
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: []byte(bigBody()), status: "200"})
 	m.tabs[0].collection = "/nonexistent" // request can no longer be located
 
 	m.reconcileTabs()

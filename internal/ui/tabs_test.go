@@ -85,7 +85,7 @@ func TestPerTabResponseRestore(t *testing.T) {
 	m.openOrActivate("0/r1") // tab 1 (active)
 
 	m.activateTab(0)
-	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: "FIRST-BODY", status: "200 OK"})
+	m.deliverResponse(m.tabs[0], &tabResponse{rawBody: []byte("FIRST-BODY"), status: "200 OK"})
 	if string(m.pv.Source()) != "FIRST-BODY" {
 		t.Fatalf("after deliver to tab0: raw = %q, want FIRST-BODY", string(m.pv.Source()))
 	}
@@ -94,7 +94,7 @@ func TestPerTabResponseRestore(t *testing.T) {
 	if string(m.pv.Source()) != "" {
 		t.Errorf("tab1 raw = %q, want empty", string(m.pv.Source()))
 	}
-	m.deliverResponse(m.tabs[1], &tabResponse{rawBody: "SECOND-BODY", status: "201"})
+	m.deliverResponse(m.tabs[1], &tabResponse{rawBody: []byte("SECOND-BODY"), status: "201"})
 
 	m.activateTab(0) // back to tab0 → its body restored
 	if string(m.pv.Source()) != "FIRST-BODY" {
@@ -116,12 +116,12 @@ func TestDeliverResponseToInactiveTabDoesNotRepaint(t *testing.T) {
 	initTab := m.tabs[0]
 
 	m.activateTab(1) // user switched to tab 1 mid-Send
-	m.deliverResponse(initTab, &tabResponse{rawBody: "LATE", status: "200"})
+	m.deliverResponse(initTab, &tabResponse{rawBody: []byte("LATE"), status: "200"})
 
 	if string(m.pv.Source()) == "LATE" {
 		t.Error("inactive tab's response repainted the active panel")
 	}
-	if initTab.resp == nil || initTab.resp.rawBody != "LATE" {
+	if initTab.resp == nil || string(initTab.resp.rawBody) != "LATE" {
 		t.Error("response not stored on the originating tab")
 	}
 	m.activateTab(0)
@@ -367,5 +367,42 @@ func TestNewScratchTabBindsBlankRequest(t *testing.T) {
 	m.requestCloseTab(m.tabs[0])
 	if len(m.tabs) != 0 {
 		t.Errorf("empty scratch not closed: %d tabs", len(m.tabs))
+	}
+}
+
+// TestCloseTabReleasesBackingSlot: closing the rightmost tab must zero the
+// vacated backing-array slot — a plain append-splice keeps the closed tab
+// (and its cached response) reachable, so the close-time reclaim GC could
+// never actually free that memory.
+func TestCloseTabReleasesBackingSlot(t *testing.T) {
+	m, _, _ := newTabUI(t)
+	m.openOrActivate("0/r0")
+	m.openOrActivate("0/r1")
+	backing := m.tabs // shares the backing array with m.tabs after the close
+	m.closeTab(m.tabs[1])
+	if len(m.tabs) != 1 {
+		t.Fatalf("tabs = %d, want 1", len(m.tabs))
+	}
+	if backing[1] != nil {
+		t.Error("closed tab still reachable through the backing array")
+	}
+}
+
+// TestReconcileTabsReleasesDroppedSlots: the in-place filter must zero the
+// filtered-out tail slots for the same reason — dropped tabs otherwise stay
+// pinned by the backing array while their bytes are counted as reclaimed.
+func TestReconcileTabsReleasesDroppedSlots(t *testing.T) {
+	m, _, _ := newTabUI(t)
+	m.openOrActivate("0/r0")
+	m.openOrActivate("0/r1")
+	m.openOrActivate("0/r0")              // re-activate tab 0 so the tail tab is droppable
+	m.tabs[1].collection = "/nonexistent" // request can no longer be located
+	backing := m.tabs
+	m.reconcileTabs()
+	if len(m.tabs) != 1 {
+		t.Fatalf("tabs = %d, want 1", len(m.tabs))
+	}
+	if backing[1] != nil {
+		t.Error("dropped tab still reachable through the backing array")
 	}
 }

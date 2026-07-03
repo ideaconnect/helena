@@ -105,6 +105,16 @@ func (c *Client) SetCookieJar(jar http.CookieJar) {
 	c.http.Jar = jar
 }
 
+// CloseIdleConnections releases the client's pooled keep-alive sockets. Callers
+// that own the transport (the headless runner, one-shot fetches) call it when
+// their run ends so idle connections don't outlive the work that opened them;
+// the UI's shared session transport deliberately keeps its pool (#52).
+func (c *Client) CloseIdleConnections() {
+	if t, ok := c.http.Transport.(*http.Transport); ok {
+		t.CloseIdleConnections()
+	}
+}
+
 // New builds a Client honoring the given settings: invalid-TLS tolerance,
 // redirect policy, and request timeout.
 // NewTransport builds the *http.Transport for the given settings (proxy from
@@ -113,7 +123,13 @@ func (c *Client) SetCookieJar(jar http.CookieJar) {
 // repeated TCP+TLS handshakes. Only InsecureSkipVerify affects the transport;
 // timeout/redirect policy live on the per-call *http.Client.
 func NewTransport(s model.Settings) *http.Transport {
-	t := &http.Transport{Proxy: http.ProxyFromEnvironment}
+	// IdleConnTimeout is load-bearing: the zero value never expires idle
+	// keep-alive sockets, so each one (plus its read/write goroutine pair)
+	// would stay pinned for the whole session, one pair per host contacted.
+	t := &http.Transport{
+		Proxy:           http.ProxyFromEnvironment,
+		IdleConnTimeout: 90 * time.Second,
+	}
 	if s.InsecureSkipVerify {
 		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // explicit user opt-in
 	}

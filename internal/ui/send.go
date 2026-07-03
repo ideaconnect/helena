@@ -165,6 +165,11 @@ func snapshotRequest(req model.Request) model.Request {
 func (m *MainUI) sessionTransport() *http.Transport {
 	insecure := m.sess.Settings().InsecureSkipVerify
 	if m.httpTransport == nil || m.httpTransportInsecure != insecure {
+		if m.httpTransport != nil {
+			// Release the replaced pool's idle sockets now; otherwise they (and
+			// their goroutine pairs) linger until the peer or timeout closes them.
+			m.httpTransport.CloseIdleConnections()
+		}
 		m.httpTransport = httpclient.NewTransport(m.sess.Settings())
 		m.httpTransportInsecure = insecure
 	}
@@ -323,10 +328,15 @@ func (m *MainUI) send() {
 	// Snapshot the active collection on the UI goroutine so the
 	// chain runner reads from a frozen-at-Send-entry copy with
 	// pre-flattened Auth — never races against UI-thread tree edits
-	// and never sends a chain step with AuthInherit.
+	// and never sends a chain step with AuthInherit. Skipped for
+	// chainless requests: the snapshot deep-copies the whole collection
+	// (the dominant per-send allocation on large workspaces) and
+	// chain.Resolve never consults the finder when the chain is empty.
 	var finder chain.RequestFinder = nilFinder{}
-	if snap := m.sess.SnapshotChainFinder(); snap != nil {
-		finder = snap
+	if len(req.Chain) > 0 {
+		if snap := m.sess.SnapshotChainFinder(); snap != nil {
+			finder = snap
+		}
 	}
 
 	m.Status.SetText("Sending…")
@@ -442,7 +452,7 @@ func (m *MainUI) send() {
 				cors = "⚠ CORS: " + view.Response.CORSWarning
 			}
 			resp = &tabResponse{
-				rawBody:     string(view.Response.Body),
+				rawBody:     view.Response.Body,
 				headersText: responsefmt.FormatHeaders(view.Response.Headers),
 				status:      status,
 				cors:        cors,

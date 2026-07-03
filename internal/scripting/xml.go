@@ -29,8 +29,10 @@ var errXMLTooDeep = errors.New("xml: nesting too deep")
 // Returns (nil, false) when body doesn't parse as XML or exceeds
 // xmlMaxDepth nesting.
 func tryParseXML(body []byte) (interface{}, bool) {
-	s := strings.TrimLeft(string(body), " \t\r\n")
-	if !strings.HasPrefix(s, "<") {
+	// Sniff on the raw bytes — a string conversion here would copy the whole
+	// (possibly multi-MB) body just to look at its first non-space byte.
+	s := bytes.TrimLeft(body, " \t\r\n")
+	if len(s) == 0 || s[0] != '<' {
 		return nil, false
 	}
 	dec := xml.NewDecoder(bytes.NewReader(body))

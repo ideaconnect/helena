@@ -29,7 +29,7 @@ func TestRecoveredPanicReplacesStaleTabResponse(t *testing.T) {
 	sess, _ := session.New("")
 	m := NewMainUI(sess)
 
-	stale := &tabResponse{rawBody: `{"ok":true}`, status: "200 OK"}
+	stale := &tabResponse{rawBody: []byte(`{"ok":true}`), status: "200 OK"}
 	tab := &openTab{requestID: "r1", resp: stale}
 	m.tabs = []*openTab{tab}
 	m.activeTabIdx = 0

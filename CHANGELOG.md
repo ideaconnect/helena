@@ -45,6 +45,21 @@ label via [`.github/release.yml`](.github/release.yml).
   (VM / RDP / Basic Display Adapter) is an OS-side substitution. Includes how
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
+### Fixed
+- The per-collection environment selection persists across launches again:
+  constructing the UI used to fire the Environment dropdown's change handler,
+  which deleted the saved choice from config.yml before it could be restored.
+- `config.yml` is now written atomically (staged file + rename). It is
+  rewritten on every tab/env/workspace change and at quit; a crash mid-write
+  could previously truncate it, and the next launch would silently fall back
+  to an empty session with no workspaces.
+- Closing the WebSocket dialog while the connection attempt was still in
+  flight used to leak the worker goroutine (and, on late success, the socket)
+  indefinitely; the dial is now cancelled, and a server that accepts TCP but
+  never answers the upgrade can no longer hang the worker forever. WebSocket
+  messages reassembled from continuation frames are also capped at 64 MiB,
+  matching the existing per-frame cap.
+
 ### Performance
 - Release builds ship with `-tags no_emoji`, dropping Fyne's bundled colour-emoji
   font (which Fyne parses fresh per theme scope): **-75 MB resident (-23%,
@@ -54,6 +69,21 @@ label via [`.github/release.yml`](.github/release.yml).
   repeated big sends no longer ratchet RSS up across a session. See the README
   "Memory & rendering" note — most remaining memory is the OpenGL driver, which
   balloons under software rendering (VM / RDP / no GPU driver), not Helena's code.
+- A response body is now held once and shared between the tab cache and the
+  response viewer instead of being copied twice more per send, and switching
+  tabs re-displays the cached body without re-copying it. Closed or dropped
+  tabs release their cached responses immediately (they could previously stay
+  pinned through the tab strip's backing array).
+- SSE streaming repaints are coalesced: a burst of events triggers one
+  re-parse of the accumulated transcript instead of one per event (the old
+  per-event repaint made long streams quadratically expensive and could
+  saturate the UI queue).
+- Chainless sends no longer deep-copy the whole active collection (that
+  snapshot only exists for chain resolution); the headless collection runner
+  reuses one HTTP client for the whole run instead of building a transport per
+  request; idle keep-alive sockets now expire after 90 s instead of living for
+  the session; and post-response script format sniffing no longer copies the
+  body. OAuth2 token-endpoint responses are capped at 1 MiB.
 
 ### Security
 - Bearer-token, API-key, and Secret environment values are masked in the UI.

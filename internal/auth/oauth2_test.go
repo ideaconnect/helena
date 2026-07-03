@@ -472,3 +472,18 @@ func TestExchangeAuthorizationCodeNon2xxErrors(t *testing.T) {
 		t.Errorf("err = %v does not surface the HTTP status", err)
 	}
 }
+
+// TestFetchClientCredentialsTokenCapsHugeResponse: the token endpoint is
+// user-configured, so an oversized body must fail fast (truncated read →
+// decode error) instead of being buffered wholesale into memory.
+func TestFetchClientCredentialsTokenCapsHugeResponse(t *testing.T) {
+	huge := `{"access_token":"` + strings.Repeat("a", maxTokenResponseBytes) + `"}`
+	srv, _ := newTokenServer(t, huge, http.StatusOK)
+	defer srv.Close()
+
+	_, err := FetchClientCredentialsToken(context.Background(), srv.Client(),
+		model.OAuth2Auth{Grant: model.OAuth2ClientCredentials, TokenURL: srv.URL, ClientID: "id"})
+	if err == nil {
+		t.Fatal("expected an error for a token response past the read cap")
+	}
+}

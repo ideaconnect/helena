@@ -17,7 +17,7 @@ func TestWriteResponseByteExact(t *testing.T) {
 	m := NewMainUI(s)
 
 	payload := []byte{0x00, 0x01, 0xff, 0xfe, 'h', 'i', 0x0a, 0x80, 0x00}
-	m.tabs = append(m.tabs, &openTab{requestID: "x", resp: &tabResponse{rawBody: string(payload)}})
+	m.tabs = append(m.tabs, &openTab{requestID: "x", resp: &tabResponse{rawBody: payload}})
 	m.activeTabIdx = len(m.tabs) - 1
 
 	var buf bytes.Buffer

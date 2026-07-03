@@ -206,7 +206,7 @@ func sendSync(t *testing.T, m *MainUI, sess *session.Session) {
 		responsefmt.HumanSize(view.Response.Size),
 		responsefmt.HumanDuration(view.Response.Duration))
 	m.applyResponse(&tabResponse{
-		rawBody:     string(view.Response.Body),
+		rawBody:     view.Response.Body,
 		headersText: responsefmt.FormatHeaders(view.Response.Headers),
 		status:      status,
 		console:     console,
@@ -241,7 +241,7 @@ func sendChainSync(t *testing.T, m *MainUI, sess *session.Session) {
 		view.Response.Status, responsefmt.HumanSize(view.Response.Size),
 		responsefmt.HumanDuration(view.Response.Duration))
 	m.applyResponse(&tabResponse{
-		rawBody:     string(view.Response.Body),
+		rawBody:     view.Response.Body,
 		headersText: responsefmt.FormatHeaders(view.Response.Headers),
 		status:      status,
 		console:     append(chainConsole, leafConsole...),
