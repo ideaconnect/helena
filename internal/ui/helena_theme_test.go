@@ -5,8 +5,11 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/idct/helena/internal/model"
 )
@@ -156,47 +159,94 @@ func TestSidebarAndToolbarThemes(t *testing.T) {
 	}
 }
 
-// TestSplitPaneRootThemeOverrides covers the override values of the remaining
-// scoped sub-themes (splitTheme/paneTheme/rootTheme) and that they delegate
-// everything else to the app theme via the embedded delegatingTheme (#56).
-func TestSplitPaneRootThemeOverrides(t *testing.T) {
+// TestThinSplitDividerStyling pins the hairline divider that replaced the old
+// splitTheme/paneTheme scope overrides: 3px thickness, separator-coloured idle
+// fill, hover fill while hovered, no centre grab handle, and resize cursors.
+func TestThinSplitDividerStyling(t *testing.T) {
 	a := test.NewApp()
 	defer a.Quit()
 	ApplyTheme(a, model.ThemeDark)
 
-	// splitTheme: thin divider padding, separator-coloured fill, transparent handle.
-	if got := (splitTheme{}).Size(theme.SizeNamePadding); got != 1.5 {
-		t.Errorf("split padding = %v; want 1.5", got)
+	if thinDividerThickness != 3 {
+		t.Errorf("divider thickness = %v; want 3 (old splitTheme padding 1.5 x 2)", thinDividerThickness)
 	}
+
+	h := newThinSplit(true, widget.NewLabel("L"), widget.NewLabel("R"))
+	d := newThinDivider(h)
+	r := d.CreateRenderer().(*thinDividerRenderer)
+	r.Refresh()
 	sep := appTheme().Color(theme.ColorNameSeparator, theme.VariantDark)
-	if got := (splitTheme{}).Color(theme.ColorNameShadow, theme.VariantDark); got != sep {
-		t.Errorf("split shadow colour = %v; want separator %v", got, sep)
+	if r.line.FillColor != sep {
+		t.Errorf("idle divider fill = %v; want separator %v", r.line.FillColor, sep)
 	}
-	if got := (splitTheme{}).Color(theme.ColorNameForeground, theme.VariantDark); got != color.Transparent {
-		t.Errorf("split foreground (grab handle) = %v; want transparent", got)
+	d.hovered = true
+	r.Refresh()
+	hov := appTheme().Color(theme.ColorNameHover, theme.VariantDark)
+	if r.line.FillColor != hov {
+		t.Errorf("hovered divider fill = %v; want hover %v", r.line.FillColor, hov)
 	}
-	// A non-overridden size/colour delegates.
-	if got := (splitTheme{}).Size(theme.SizeNameText); got != appTheme().Size(theme.SizeNameText) {
-		t.Error("split theme should delegate non-padding sizes")
+	if len(r.Objects()) != 1 {
+		t.Errorf("divider renders %d objects; want 1 (no grab handle)", len(r.Objects()))
 	}
+	if d.Cursor() != desktop.HResizeCursor {
+		t.Error("horizontal split divider should use the H-resize cursor")
+	}
+	v := newThinSplit(false, widget.NewLabel("T"), widget.NewLabel("B"))
+	if newThinDivider(v).Cursor() != desktop.VResizeCursor {
+		t.Error("vertical split divider should use the V-resize cursor")
+	}
+}
 
-	// rootTheme: zero padding, everything else delegated.
-	if got := (rootTheme{}).Size(theme.SizeNamePadding); got != 0 {
-		t.Errorf("root padding = %v; want 0", got)
-	}
-	if got := (rootTheme{}).Size(theme.SizeNameText); got != appTheme().Size(theme.SizeNameText) {
-		t.Error("root theme should delegate non-padding sizes")
-	}
+// TestThinSplitLayoutRespectsOffset verifies the split's layout math: panes
+// share the space around the 3px divider at the requested offset.
+func TestThinSplitLayoutRespectsOffset(t *testing.T) {
+	a := test.NewApp()
+	defer a.Quit()
 
-	// paneTheme: pure delegation (the embedded base is the whole implementation).
-	if got := (paneTheme{}).Size(theme.SizeNamePadding); got != appTheme().Size(theme.SizeNamePadding) {
-		t.Error("pane theme should fully delegate padding")
+	s := newThinSplit(true, widget.NewLabel(""), widget.NewLabel(""))
+	s.SetOffset(0.25)
+	w := test.NewWindow(s)
+	defer w.Close()
+	w.Resize(fyne.NewSize(403, 100))
+	// 403 - 3 divider = 400 free; offset 0.25 -> leading 100 (within min-size
+	// clamps for empty labels).
+	lw := s.Leading.Size().Width
+	if lw < 95 || lw > 105 {
+		t.Errorf("leading width = %v; want ~100 at offset 0.25 of 400 free", lw)
 	}
-	if got := (paneTheme{}).Color(theme.ColorNamePrimary, theme.VariantDark); got != appTheme().Color(theme.ColorNamePrimary, theme.VariantDark) {
-		t.Error("pane theme should delegate colour")
+	if got := s.Leading.Size().Width + thinDividerThickness + s.Trailing.Size().Width; got > s.Size().Width+1 {
+		t.Errorf("panes + divider (%v) overflow the split (%v)", got, s.Size().Width)
 	}
-	if (paneTheme{}).Font(fyne.TextStyle{}) != appTheme().Font(fyne.TextStyle{}) {
-		t.Error("pane theme should delegate font")
+}
+
+// TestFlushColumnLayout pins the zero-spacing column that replaced the old
+// rootTheme zero-padding scope: fixed rows get their min height, the flex row
+// takes the remainder, and every row is flush against the next.
+func TestFlushColumnLayout(t *testing.T) {
+	mk := func(minH float32) fyne.CanvasObject {
+		r := canvas.NewRectangle(color.Black)
+		r.SetMinSize(fyne.NewSize(10, minH))
+		return r
+	}
+	objects := []fyne.CanvasObject{mk(20), mk(1), mk(5), mk(1), mk(24)}
+	l := &flushColumn{flexIdx: 2}
+	l.Layout(objects, fyne.NewSize(300, 200))
+
+	wantY := []float32{0, 20, 21, 175, 176}
+	wantH := []float32{20, 1, 154, 1, 24}
+	for i, o := range objects {
+		if o.Position().Y != wantY[i] {
+			t.Errorf("row %d y = %v; want %v", i, o.Position().Y, wantY[i])
+		}
+		if o.Size().Height != wantH[i] {
+			t.Errorf("row %d height = %v; want %v", i, o.Size().Height, wantH[i])
+		}
+		if o.Size().Width != 300 {
+			t.Errorf("row %d width = %v; want full 300", i, o.Size().Width)
+		}
+	}
+	if got := l.MinSize(objects); got.Height != 51 || got.Width != 10 {
+		t.Errorf("MinSize = %v; want 10x51 (sum of min heights)", got)
 	}
 }
 
@@ -218,5 +268,14 @@ func TestApplyThemeInstallsHelena(t *testing.T) {
 		if _, ok := a.Settings().Theme().(helenaTheme); !ok {
 			t.Errorf("ApplyTheme(%v) installed %T; want helenaTheme", th, a.Settings().Theme())
 		}
+	}
+}
+
+// TestThemedIconMemoizes: repeated lookups of one icon name must return the
+// same resource instance (construction requests ~21 icons with duplicates;
+// each miss re-reads and re-wraps the embedded file).
+func TestThemedIconMemoizes(t *testing.T) {
+	if themedIcon("play") != themedIcon("play") {
+		t.Error("themedIcon should return the memoized instance on repeat lookups")
 	}
 }

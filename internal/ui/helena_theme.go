@@ -56,9 +56,20 @@ func newHelenaTheme(t model.Theme) fyne.Theme {
 // drawn as-is, so the currentColor SVGs would render black. As a ThemedResource
 // the icon is recoloured to the foreground on medium/low buttons and to the
 // button's foreground (e.g. ForegroundOnPrimary) on high-importance ones.
+// Results are memoized: several icons are requested repeatedly (construction
+// alone asks for ~21, with duplicates), and each miss re-reads + re-wraps the
+// embedded file. A ThemedResource adapts to theme changes at render time, so
+// sharing one instance across callers is safe. UI-goroutine only.
 func themedIcon(name string) fyne.Resource {
-	return theme.NewThemedResource(assets.Icon(name))
+	if r, ok := themedIcons[name]; ok {
+		return r
+	}
+	r := theme.NewThemedResource(assets.Icon(name))
+	themedIcons[name] = r
+	return r
 }
+
+var themedIcons = map[string]fyne.Resource{}
 
 // Cached font resources. assets.Font panics on a missing name, so a typo is a
 // build/load-time failure rather than a per-call cost.
@@ -167,52 +178,11 @@ func (toolbarTheme) Size(n fyne.ThemeSizeName) float32 {
 	return appTheme().Size(n)
 }
 
-// splitTheme restyles a container.Split's divider into a thin, subtle line (like
-// VS Code / Bruno) instead of Fyne's thick shadow bar with a centre grab
-// handle: it shrinks SizeNamePadding (the divider is padding*2 thick), recolours
-// the idle fill (ColorNameShadow) to the subtle separator colour, and hides the
-// handle (ColorNameForeground → transparent). Applied ONLY to the split via
-// container.NewThemeOverride; each pane is re-wrapped in paneTheme so the shrunk
-// padding doesn't cascade into the pane contents. (dividerTheme uses the
-// divider's own Theme(), so the override does reach it.)
-type splitTheme struct{ delegatingTheme }
-
-func (splitTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
-	switch n {
-	case theme.ColorNameShadow:
-		return appTheme().Color(theme.ColorNameSeparator, v) // the divider line itself
-	case theme.ColorNameForeground:
-		return color.Transparent // no centre grab handle
-	}
-	return appTheme().Color(n, v)
-}
-func (splitTheme) Size(n fyne.ThemeSizeName) float32 {
-	if n == theme.SizeNamePadding {
-		return 1.5 // divider thickness = padding*2 = 3px: a thin, still-grabbable line
-	}
-	return appTheme().Size(n)
-}
-
-// paneTheme restores normal sizing inside a splitTheme-wrapped split's panes
-// (whose subtree would otherwise inherit the split's shrunk padding). It is
-// pure delegation — the embedded base is the whole implementation.
-type paneTheme struct{ delegatingTheme }
-
-// rootTheme zeroes SizeNamePadding so the root Border puts no gap between its
-// centre (the body / split) and the header/footer rows — the vertical split
-// divider then meets the header and footer separator lines flush, with no gap.
-// (Border's outer edges are already flush; only the centre↔border gap is
-// padding.) Cascades to root-level children, which restore their own padding
-// via their own overrides (toolbar → toolbarTheme, split panes → paneTheme,
-// status → paneTheme).
-type rootTheme struct{ delegatingTheme }
-
-func (rootTheme) Size(n fyne.ThemeSizeName) float32 {
-	if n == theme.SizeNamePadding {
-		return 0
-	}
-	return appTheme().Size(n)
-}
+// The splits' thin divider and the root's flush hairline joins used to be
+// splitTheme / paneTheme / rootTheme scope overrides here; they are now the
+// scope-free thinSplit widget ([thinsplit.go](thinsplit.go)) and flushColumn
+// layout ([helpers.go](helpers.go)) — each container.NewThemeOverride call
+// mints a Fyne theme scope, and Fyne re-parses fonts per scope.
 
 // Size overrides a curated subset for a denser, more modern feel and delegates
 // everything else (padding, icon sizes, line spacing, window-button metrics)
