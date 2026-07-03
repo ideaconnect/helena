@@ -245,11 +245,41 @@ func (s *Session) RemoveCollection(i int) error {
 		w.Collections = slices.Delete(w.Collections, j, j+1)
 	}
 	// If the active collection was the one removed, clear the UI state pointer
-	// so reload doesn't try to re-select a missing dir.
+	// so a later launch doesn't try to re-select a missing dir; drop the
+	// removed dir's persisted env choice too rather than leaving a dead key.
 	if s.cfg.UI.ActiveCollection == dir {
 		s.cfg.UI.ActiveCollection = ""
 	}
-	s.reload()
+	delete(s.cfg.UI.ActiveEnv, dir)
+	// Remove in place instead of reload()ing the workspace: a reload re-reads
+	// every remaining collection from disk — O(workspace) work for a
+	// one-entry delete — and, worse, silently discards every OTHER
+	// collection's unsaved in-memory edits (edits live in the tree until an
+	// explicit save; see the tab-strip docs).
+	s.cols = slices.Delete(s.cols, i, i+1)
+	s.dirs = slices.Delete(s.dirs, i, i+1)
+	delete(s.dotEnv, dir)
+	// activeEnv is keyed by collection index: shift the entries above the
+	// removed slot down one, exactly as reload's rebuild would have.
+	delete(s.activeEnv, i)
+	for j := i + 1; j <= len(s.dirs); j++ {
+		if name, ok := s.activeEnv[j]; ok {
+			s.activeEnv[j-1] = name
+			delete(s.activeEnv, j)
+		}
+	}
+	// Re-point the active collection: a surviving active collection keeps
+	// being active (its index may shift down); removing the active one falls
+	// back to the first, matching reload's pick order.
+	switch {
+	case s.activeCol == i:
+		s.activeCol = -1
+		if len(s.cols) > 0 {
+			s.activeCol = 0
+		}
+	case s.activeCol > i:
+		s.activeCol--
+	}
 	return s.persist()
 }
 

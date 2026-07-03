@@ -903,3 +903,106 @@ func TestSetActiveCollectionSkipsRedundantPersist(t *testing.T) {
 		t.Errorf("changing the active collection did not persist: %v", err)
 	}
 }
+
+// TestRemoveCollectionPreservesOtherEdits pins the in-place removal: deleting
+// one collection must not discard another collection's unsaved in-memory
+// edits (the old reload-from-disk implementation silently reverted them).
+func TestRemoveCollectionPreservesOtherEdits(t *testing.T) {
+	tmp := t.TempDir()
+	a := makeColl(t, tmp, "A")
+	makeColl(t, tmp, "B")
+	s, _ := New(filepath.Join(tmp, "cfg.yml"))
+	for _, name := range []string{"A", "B"} {
+		if err := s.OpenCollection(filepath.Join(tmp, name)); err != nil {
+			t.Fatalf("Open %s: %v", name, err)
+		}
+	}
+	// Edit a request in A in memory only (edits live in the tree until an
+	// explicit save).
+	id, err := s.AddRequestValue("0", model.Request{Name: "Edited", URL: "https://before"})
+	if err != nil {
+		t.Fatalf("AddRequestValue: %v", err)
+	}
+	req, _ := s.Tree().Request(id)
+	req.URL = "https://after" // unsaved in-memory edit
+
+	if err := s.RemoveCollection(1); err != nil { // remove B
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	got, ok := s.Tree().Request(id)
+	if !ok {
+		t.Fatal("request in surviving collection vanished")
+	}
+	if got.URL != "https://after" {
+		t.Errorf("URL = %q, want the unsaved in-memory edit to survive", got.URL)
+	}
+	if s.ActiveCollectionDir() != a {
+		t.Errorf("active dir = %q, want %q", s.ActiveCollectionDir(), a)
+	}
+}
+
+// TestRemoveCollectionReindexesActiveEnv: activeEnv is keyed by collection
+// index; removing a lower-indexed collection must shift the surviving
+// entries down so each collection keeps ITS environment selection.
+func TestRemoveCollectionReindexesActiveEnv(t *testing.T) {
+	tmp := t.TempDir()
+	for _, name := range []string{"A", "B", "C"} {
+		makeColl(t, tmp, name)
+	}
+	s, _ := New(filepath.Join(tmp, "cfg.yml"))
+	for _, name := range []string{"A", "B", "C"} {
+		if err := s.OpenCollection(filepath.Join(tmp, name)); err != nil {
+			t.Fatalf("Open %s: %v", name, err)
+		}
+	}
+	// Give B and C active environments.
+	s.SetActiveCollection(1)
+	if err := s.AddEnvironment("EnvB"); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveEnv("EnvB")
+	s.SetActiveCollection(2)
+	if err := s.AddEnvironment("EnvC"); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveEnv("EnvC")
+
+	if err := s.RemoveCollection(0); err != nil { // remove A; B,C shift down
+		t.Fatalf("RemoveCollection: %v", err)
+	}
+	s.SetActiveCollection(0) // B
+	if got := s.ActiveEnvName(); got != "EnvB" {
+		t.Errorf("B's env after shift = %q, want EnvB", got)
+	}
+	s.SetActiveCollection(1) // C
+	if got := s.ActiveEnvName(); got != "EnvC" {
+		t.Errorf("C's env after shift = %q, want EnvC", got)
+	}
+}
+
+// TestRemoveActiveCollectionFallsBackToFirst: removing the active collection
+// re-points to the first survivor; removing the last leaves none active.
+func TestRemoveActiveCollectionFallsBackToFirst(t *testing.T) {
+	tmp := t.TempDir()
+	a := makeColl(t, tmp, "A")
+	makeColl(t, tmp, "B")
+	s, _ := New(filepath.Join(tmp, "cfg.yml"))
+	for _, name := range []string{"A", "B"} {
+		if err := s.OpenCollection(filepath.Join(tmp, name)); err != nil {
+			t.Fatalf("Open %s: %v", name, err)
+		}
+	}
+	s.SetActiveCollection(1)
+	if err := s.RemoveCollection(1); err != nil {
+		t.Fatalf("RemoveCollection(active): %v", err)
+	}
+	if s.ActiveCollectionDir() != a {
+		t.Errorf("active after removing active = %q, want first survivor %q", s.ActiveCollectionDir(), a)
+	}
+	if err := s.RemoveCollection(0); err != nil {
+		t.Fatalf("RemoveCollection(last): %v", err)
+	}
+	if s.ActiveCollectionDir() != "" {
+		t.Errorf("active after removing all = %q, want none", s.ActiveCollectionDir())
+	}
+}
