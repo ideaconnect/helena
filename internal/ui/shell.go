@@ -185,7 +185,11 @@ func NewMainUI(sess *session.Session) *MainUI {
 	}
 
 	m.Environment = widget.NewSelect([]string{noEnv}, m.onEnvChanged)
-	m.Environment.SetSelected(noEnv)
+	// Seed the field directly: SetSelected fires onEnvChanged unconditionally,
+	// whose SetActiveEnv("") would delete the persisted per-collection
+	// environment choice before refreshEnvironments (end of construction)
+	// can read it back — resetting the user's selection on every launch.
+	m.Environment.Selected = noEnv
 
 	m.Method = newMethodPicker(func(s string) {
 		if !m.loading && m.currentRequest != nil {
