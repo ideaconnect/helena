@@ -101,7 +101,7 @@ func main() {
 	}()
 
 	a := app.NewWithID(appID)
-	icon := fyne.NewStaticResource("app_icon.png", assets.AppIcon)
+	icon := fyne.NewStaticResource("app_icon_window.png", assets.AppIcon)
 	a.SetIcon(icon)
 
 	cfgPath, err := config.DefaultPath()

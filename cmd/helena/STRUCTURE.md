@@ -28,9 +28,10 @@ step matters because some of them must happen before others can succeed.
    The app ID determines the platform-specific preferences directory Fyne
    uses internally (separate from Helena's own config).
 2. **Install the icon** —
-   `icon := fyne.NewStaticResource("app_icon.png", assets.AppIcon)` then
+   `icon := fyne.NewStaticResource("app_icon_window.png", assets.AppIcon)` then
    `a.SetIcon(icon)` ([main.go:18-19](main.go#L18-L19)). `assets.AppIcon` is
-   the bytes of `assets/app_icon.png` embedded at compile time.
+   the bytes of the 256×256 `assets/app_icon_window.png` embedded at compile
+   time (the full-res `app_icon.png` is packaging art, not embedded).
 3. **Resolve the config path** —
    `cfgPath, err := config.DefaultPath()`
    ([main.go:21-25](main.go#L21-L25)). On error, log + fall back to
