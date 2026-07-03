@@ -83,3 +83,42 @@ func TestEnvironmentsDialogGatesActions(t *testing.T) {
 		t.Errorf("after unselecting, %d of 4 buttons enabled; want 1", got)
 	}
 }
+
+// TestStartupPreservesPersistedEnvSelection is a launch-to-launch regression
+// test: the Environment dropdown's construction-time seeding used to fire
+// onEnvChanged, whose SetActiveEnv("") deleted the persisted per-collection
+// environment choice before refreshEnvironments could restore it — resetting
+// the user's selection on every launch.
+func TestStartupPreservesPersistedEnvSelection(t *testing.T) {
+	test.NewApp()
+	dir := filepath.Join(t.TempDir(), "c0")
+	if err := storage.Save(model.Collection{Name: "C0"}, dir); err != nil {
+		t.Fatal(err)
+	}
+	cfg := filepath.Join(t.TempDir(), "cfg.yml")
+	s, err := session.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.OpenCollection(dir); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveCollection(0)
+	if err := s.AddEnvironment("Staging"); err != nil {
+		t.Fatal(err)
+	}
+	s.SetActiveEnv("Staging")
+
+	// Relaunch: a fresh session + UI must still see Staging as active.
+	s2, err := session.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewMainUI(s2)
+	if got := s2.ActiveEnvName(); got != "Staging" {
+		t.Fatalf("ActiveEnvName after UI construction = %q, want Staging", got)
+	}
+	if m.Environment.Selected != "Staging" {
+		t.Errorf("Environment dropdown = %q, want Staging", m.Environment.Selected)
+	}
+}
