@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/widget"
@@ -69,11 +70,32 @@ func (m *MainUI) streamSend() {
 	m.setStreamStopButton()
 	m.Status.SetText("Streaming…")
 	// Blanking the shared viewer discards the previous response's model; reclaim
-	// a large one. (The per-event SetData in the stream loop below is a hot path
-	// and deliberately does NOT reclaim — that would be a full GC per event.)
+	// a large one. (The repaints in the stream loop below are a hot path and
+	// deliberately do NOT reclaim — that would be a full GC per repaint.)
 	freed := len(m.pv.Source())
 	m.pv.SetData(nil, prettyview.FormatRaw)
 	reclaimAfterLargeBody(freed)
+
+	// Repaint coalescing: SetData re-parses the ENTIRE accumulated transcript,
+	// so painting once per event is O(total²) over the stream's life and floods
+	// the UI queue under bursty streams. Events append on the worker; at most
+	// one repaint closure is queued at a time, and it snapshots the newest text
+	// when it actually runs on the UI goroutine (latest-wins, so the final
+	// event is always painted).
+	var (
+		repaintMu     sync.Mutex
+		repaintText   string
+		repaintEvents int
+		repaintQueued bool
+	)
+	repaint := func() {
+		repaintMu.Lock()
+		text, n := repaintText, repaintEvents
+		repaintQueued = false
+		repaintMu.Unlock()
+		m.pv.SetData([]byte(text), prettyview.FormatRaw)
+		m.Status.SetText(fmt.Sprintf("Streaming… %d event(s)", n))
+	}
 
 	go func() {
 		defer streamWorkerDone() // runs after the final fyne.Do below completes
@@ -86,13 +108,18 @@ func (m *MainUI) streamSend() {
 				fyne.Do(func() { m.Status.SetText("Streaming (" + status + ")…") })
 			},
 			func(ev sse.Event) bool {
+				// buf is worker-only; Builder.String() aliases the buffer
+				// without copying, and appends never mutate returned strings.
 				buf.WriteString(formatSSEEvent(ev))
 				count++
-				text, n := buf.String(), count
-				fyne.Do(func() {
-					m.pv.SetData([]byte(text), prettyview.FormatRaw)
-					m.Status.SetText(fmt.Sprintf("Streaming… %d event(s)", n))
-				})
+				repaintMu.Lock()
+				repaintText, repaintEvents = buf.String(), count
+				queue := !repaintQueued
+				repaintQueued = true
+				repaintMu.Unlock()
+				if queue {
+					fyne.Do(repaint)
+				}
 				return true
 			},
 		)
