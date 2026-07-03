@@ -91,7 +91,11 @@ runs under `go test -race`.
 (or `config.Default()` if the file is missing). `reload` then:
 
 1. Walks the active workspace's `Collections` and tries `storage.Load` on
-   each. Successful loads land in `cols` and `dirs`. A failure (renamed
+   each — concurrently, one goroutine per collection, since the trees are
+   independent and this runs on the main goroutine before the window exists
+   (results land in order-stable slots, so collection indexes match the
+   workspace list exactly as a sequential load would). Successful loads land
+   in `cols` and `dirs`. A failure (renamed
    directory, deleted folder, broken YAML) is dropped from `cols`/`dirs` so
    the app still starts, but its `{Dir, Err}` is appended to `loadErrs`
    (reset at the top of every `reload`) and exposed via `LoadErrors()` for the

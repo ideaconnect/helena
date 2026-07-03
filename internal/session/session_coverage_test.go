@@ -876,3 +876,30 @@ func TestDeleteWorkspaceOutOfRangeNoop(t *testing.T) {
 		t.Errorf("after DeleteWorkspace(99) = %d, want 1", got)
 	}
 }
+
+// TestSetActiveCollectionSkipsRedundantPersist: setting the already-active
+// collection must not rewrite config.yml — the setter fires on every tab
+// switch, and the redundant write also ran during startup. The probe deletes
+// the config file first: a skipped persist leaves it missing, a redundant
+// one recreates it.
+func TestSetActiveCollectionSkipsRedundantPersist(t *testing.T) {
+	tmp := t.TempDir()
+	a := makeColl(t, tmp, "A")
+	cfg := filepath.Join(tmp, "cfg.yml")
+	s, _ := New(cfg)
+	if err := s.OpenCollection(a); err != nil {
+		t.Fatalf("Open A: %v", err)
+	}
+	s.SetActiveCollection(0)
+	if err := os.Remove(cfg); err != nil {
+		t.Fatalf("remove cfg: %v", err)
+	}
+	s.SetActiveCollection(0) // unchanged — must not persist
+	if _, err := os.Stat(cfg); !os.IsNotExist(err) {
+		t.Error("redundant SetActiveCollection rewrote config.yml")
+	}
+	s.SetActiveCollection(-1) // a real change — must persist again
+	if _, err := os.Stat(cfg); err != nil {
+		t.Errorf("changing the active collection did not persist: %v", err)
+	}
+}
