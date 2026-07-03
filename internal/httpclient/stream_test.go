@@ -3,8 +3,10 @@ package httpclient
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,5 +125,59 @@ func TestStreamContextCancel(t *testing.T) {
 		})
 	if err == nil {
 		t.Error("expected ctx cancellation error")
+	}
+}
+
+// TestStreamOutlivesClientTimeout: an open stream must NOT be killed by the
+// client-wide TimeoutSeconds — that deadline covers the body read, and for
+// SSE the body read is the stream itself. Events keep arriving past the
+// timeout and the stream ends cleanly when the server closes.
+func TestStreamOutlivesClientTimeout(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fl := w.(http.Flusher)
+		_, _ = io.WriteString(w, "data: first\n\n")
+		fl.Flush()
+		time.Sleep(1500 * time.Millisecond) // past the 1 s client timeout
+		_, _ = io.WriteString(w, "data: second\n\n")
+		fl.Flush()
+	}))
+	defer srv.Close()
+
+	c := New(model.Settings{TimeoutSeconds: 1})
+	var got []string
+	err := c.Stream(context.Background(),
+		model.Request{Method: model.GET, URL: srv.URL}, vars.New(), nil,
+		func(ev sse.Event) bool { got = append(got, ev.Data); return true })
+	if err != nil {
+		t.Fatalf("Stream: %v (the client timeout must not kill an open stream)", err)
+	}
+	if len(got) != 2 || got[1] != "second" {
+		t.Fatalf("events = %q, want [first second] across the timeout boundary", got)
+	}
+}
+
+// TestStreamHeaderTimeoutStillBounds: TimeoutSeconds still bounds the
+// connect + response-header phase, so a server that accepts and stalls
+// fails fast instead of hanging the stream forever.
+func TestStreamHeaderTimeoutStillBounds(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done() // never write headers; unblocks when the client gives up
+	}))
+	defer srv.Close()
+
+	c := New(model.Settings{TimeoutSeconds: 1})
+	start := time.Now()
+	err := c.Stream(context.Background(),
+		model.Request{Method: model.GET, URL: srv.URL}, vars.New(), nil,
+		func(sse.Event) bool { return true })
+	if err == nil {
+		t.Fatal("expected a header-phase timeout error")
+	}
+	if !strings.Contains(err.Error(), "no response within") {
+		t.Errorf("err = %v, want the header-timeout message", err)
+	}
+	if e := time.Since(start); e > 5*time.Second {
+		t.Errorf("timed out after %v, want ~1 s", e)
 	}
 }

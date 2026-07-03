@@ -480,7 +480,9 @@ type StreamMeta struct {
 // called once with the response metadata before the first event. The response
 // body is read incrementally — not capped like Do — so a long-lived stream
 // works; cancel ctx to stop it. A non-2xx status returns an error without
-// streaming.
+// streaming. TimeoutSeconds bounds only the connect + response-header phase:
+// unlike Do, an open stream is never killed by the client-wide timeout (that
+// deadline covers the body read, which for SSE is the stream itself).
 func (c *Client) Stream(ctx context.Context, r model.Request, res *vars.Resolver, onOpen func(StreamMeta), onEvent func(sse.Event) bool) error {
 	req, _, err := Build(ctx, r, res, c.oauth2Resolver)
 	if err != nil {
@@ -489,8 +491,31 @@ func (c *Client) Stream(ctx context.Context, r model.Request, res *vars.Resolver
 	if req.Header.Get("Accept") == "" {
 		req.Header.Set("Accept", "text/event-stream")
 	}
-	resp, err := c.http.Do(req)
+	// Streams are exempt from the client-wide Timeout: it covers the entire
+	// exchange INCLUDING the body read, and for SSE the body read is the
+	// stream itself — the default 30 s would kill every stream mid-flight. A
+	// shallow-copied client shares the transport/jar/redirect policy but
+	// drops the deadline; the connect + response-header phase stays bounded
+	// by the same duration via a timer on the request context (stopped the
+	// moment headers arrive), and from then on the caller's ctx — the Stop
+	// button — is the stream's only lifetime control.
+	hc := *c.http
+	hc.Timeout = 0
+	sctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	req = req.WithContext(sctx)
+	var headerTimer *time.Timer
+	if d := c.http.Timeout; d > 0 {
+		headerTimer = time.AfterFunc(d, cancel)
+	}
+	resp, err := hc.Do(req)
+	if headerTimer != nil {
+		headerTimer.Stop()
+	}
 	if err != nil {
+		if ctx.Err() == nil && sctx.Err() != nil {
+			return fmt.Errorf("sse: no response within %s", c.http.Timeout)
+		}
 		return sanitizeDoError(err)
 	}
 	defer func() { _ = resp.Body.Close() }()
