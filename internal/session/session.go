@@ -245,12 +245,23 @@ func (s *Session) RemoveCollection(i int) error {
 		w.Collections = slices.Delete(w.Collections, j, j+1)
 	}
 	// If the active collection was the one removed, clear the UI state pointer
-	// so a later launch doesn't try to re-select a missing dir; drop the
-	// removed dir's persisted env choice too rather than leaving a dead key.
+	// so a later launch doesn't try to re-select a missing dir. Drop the
+	// removed dir's persisted env choice too rather than leaving a dead key —
+	// but only when no OTHER workspace still opens this dir: cfg.UI.ActiveEnv
+	// is one global path-keyed map shared across workspaces.
 	if s.cfg.UI.ActiveCollection == dir {
 		s.cfg.UI.ActiveCollection = ""
 	}
-	delete(s.cfg.UI.ActiveEnv, dir)
+	sharedElsewhere := false
+	for wi := range s.cfg.Workspaces {
+		if wi != s.cfg.Active && slices.Contains(s.cfg.Workspaces[wi].Collections, dir) {
+			sharedElsewhere = true
+			break
+		}
+	}
+	if !sharedElsewhere {
+		delete(s.cfg.UI.ActiveEnv, dir)
+	}
 	// Remove in place instead of reload()ing the workspace: a reload re-reads
 	// every remaining collection from disk — O(workspace) work for a
 	// one-entry delete — and, worse, silently discards every OTHER
