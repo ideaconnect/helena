@@ -37,6 +37,13 @@ label via [`.github/release.yml`](.github/release.yml).
   the editor). The pre/post-request scripting engine (goja) also gained
   ES2018 named capture groups, so `$<name>` backreferences and `.groups` work
   in user scripts.
+- The README "Memory & rendering" section now documents the rendering path:
+  Helena draws through Fyne's OpenGL painter (a standard desktop GL 2.1+
+  context via GLFW) and is **hardware-accelerated whenever the OS provides a
+  GPU-backed OpenGL driver** — textures and framebuffers then live in VRAM.
+  The shipped binary contains no software-rendering path or flag; software GL
+  (VM / RDP / Basic Display Adapter) is an OS-side substitution. Includes how
+  to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Performance
 - Release builds ship with `-tags no_emoji`, dropping Fyne's bundled colour-emoji
