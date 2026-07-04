@@ -6,6 +6,7 @@ package session
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/config"
 	"github.com/idct/helena/internal/cookiejar"
+	"github.com/idct/helena/internal/history"
 	"github.com/idct/helena/internal/model"
 	"github.com/idct/helena/internal/storage"
 	"github.com/idct/helena/internal/vars"
@@ -32,6 +34,7 @@ type Session struct {
 	overlayMu sync.RWMutex
 	overlay   map[string]string // script-set env; in-memory only, never persisted
 	jar       *cookiejar.Jar    // session-lifetime cookie jar (#91); in-memory only
+	history   *history.Store    // bounded request/response send history (#65)
 
 	dotEnv map[string]map[string]string // collection dir -> parsed .env vars (#84); lazy, UI-goroutine only
 
@@ -55,8 +58,22 @@ func New(cfgPath string) (*Session, error) {
 		return nil, err
 	}
 	s := &Session{cfgPath: cfgPath, cfg: cfg, tokens: auth.NewTokenCache(), overlay: map[string]string{}, jar: cookiejar.New()}
+	s.history = history.New(historyPath(cfgPath), 0)
 	s.reload()
 	return s, nil
+}
+
+// History returns the session's send-history store (#65). Never nil.
+func (s *Session) History() *history.Store { return s.history }
+
+// historyPath places history.yml alongside the config file. A blank config path
+// (no persistence, e.g. a headless run or a test) yields a blank path, so the
+// store stays in memory only.
+func historyPath(cfgPath string) string {
+	if cfgPath == "" {
+		return ""
+	}
+	return filepath.Join(filepath.Dir(cfgPath), "history.yml")
 }
 
 // CookieJar returns the session-scoped cookie jar. It is installed on every

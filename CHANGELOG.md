@@ -20,6 +20,12 @@ label via [`.github/release.yml`](.github/release.yml).
 ## [Unreleased]
 
 ### Added
+- Request history (**Help → History**): a bounded, restart-persistent log of
+  your recent sends — method, URL, status, and time — with **Restore** (reopen
+  the request in a new tab), **Resend**, and **Clear**. Snapshots are
+  secret-scrubbed before they touch disk, so `history.yml` never stores a
+  credential (a resend re-resolves auth from the active environment), matching
+  the collection YAML's secret externalization.
 - Quitting with unsaved request edits now asks for confirmation instead of
   dropping them silently: closing the window while any open request has edits
   not yet Saved (or a scratch tab with content) shows a **Discard & quit /
