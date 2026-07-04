@@ -350,9 +350,8 @@ import/export. It's also linked in-app under the **?** button.
 ## Contributing
 
 Contributions are welcome — start with [CONTRIBUTING.md](CONTRIBUTING.md)
-(build/test, the tests-and-docs mandate, the coverage floor, commit identity)
-and the [Code of Conduct](CODE_OF_CONDUCT.md). Bug reports and feature requests
-use the GitHub issue templates.
+(build/test, the tests-and-docs mandate, the coverage floor, commit identity).
+Bug reports and feature requests use the GitHub issue templates.
 
 ## Versioning & releases
 

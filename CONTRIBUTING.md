@@ -3,8 +3,6 @@
 Thanks for your interest in Helena — a free, open-source, devs-for-devs API
 client. Contributions of all sizes are welcome.
 
-By participating you agree to abide by the [Code of Conduct](CODE_OF_CONDUCT.md).
-
 ## Getting set up
 
 See the **Build from source** section of the [README](README.md) for the

@@ -48,7 +48,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Collections &amp; headless runner</h2><span class="badge shipped">Shipped</span></div>
-      <p>Workspaces, collections, folders; an in-app runner and a <code>helena run</code> CLI for CI with the same resolution, scripts, and assertions as a GUI Send.</p>
+      <p>Workspaces, collections, folders; an in-app runner and a <code>helena run</code> CLI for CI with the same resolution, scripts, and assertions as a GUI Send. Run a whole collection or a single folder, and emit JSON / JUnit reports for CI dashboards.</p>
+      <div class="chips"><span class="chip">folder-scoped runs</span><span class="chip">JSON / JUnit reports</span></div>
     </div>
   </li>
 
