@@ -13,8 +13,10 @@ embed their version (`helena --version`).
 Release binaries (and `make build` / `make.bat build`) are built with
 **`-tags no_emoji`**, which drops Fyne's bundled 4.2 MB colour-emoji font. Fyne
 parses that font fresh per theme scope, so excluding it cuts resident memory by
-75 MB (-23%, 326 → 251 MB measured) and shrinks the binary by ~4 MB; response
-text still renders — colour-emoji glyphs come out blank. A plain `go build` /
+75 MB (326 → 251 MB when it landed) and shrinks the binary by ~4 MB; response
+text still renders — colour-emoji glyphs come out blank. The later
+theme-scope reduction (11 → 3 scopes) brought the same software-GL box to
+**~200 MB resident** total. A plain `go build` /
 `go run` keeps emoji for development.
 
 A tagged `v*` push publishes a GitHub Release whose assets are (issues #27/#35):
