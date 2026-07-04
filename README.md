@@ -274,8 +274,9 @@ session, the "Microsoft Basic Display Adapter", or WSLg without working GPU
 passthrough — the OS transparently substitutes a *software* rasterizer (Mesa
 `llvmpipe`, which pulls in a large LLVM JIT, or Direct3D WARP). Rendering then
 happens on the CPU, framebuffers sit in system RAM instead of VRAM, and
-resident memory climbs to ~300 MB. That cost lives in the driver stack, not in
-Helena. To see which you're on, read `GL_RENDERER` from a GL diagnostic
+resident memory climbs to ~200 MB with current builds (it was well past
+300 MB before the v0.3 memory work). That cost lives in the driver stack, not
+in Helena. To see which you're on, read `GL_RENDERER` from a GL diagnostic
 (`glxinfo -B` on Linux; a tool like OpenGL Extensions Viewer or `wglinfo` on
 Windows — browser pages such as `chrome://gpu` report the *browser's own* GL
 stack, not the one Helena gets): a GPU name is hardware; `llvmpipe` / `WARP` /
@@ -283,11 +284,15 @@ stack, not the one Helena gets): a GPU name is hardware; `llvmpipe` / `WARP` /
 tells the same story — a Helena that never touches the GPU while animating is
 being software-rendered.
 
-Two things reduce it: release builds ship with `-tags no_emoji` (−75 MB / −23%
-resident, 326 → 251 MB measured; colour emoji render as blank glyphs, all other
-text is unaffected — see [docs/PACKAGING.md](docs/PACKAGING.md)), and replaced
-or cleared large response bodies promptly return their freed memory, so
-repeated big sends don't ratchet RSS across a session. The single ~35 MB
+Three things reduce it: release builds ship with `-tags no_emoji` (−75 MB;
+colour emoji render as blank glyphs, all other text is unaffected — see
+[docs/PACKAGING.md](docs/PACKAGING.md)); the UI creates only 3 Fyne theme
+scopes (Fyne re-parses its fonts per scope × text style — cutting 11 scopes
+to 3, plus a smaller embedded window icon, took roughly another 50 MB off and
+made construction 7× faster); and replaced or cleared large response bodies
+promptly return their freed memory, so repeated big sends don't ratchet RSS
+across a session. Measured on the same software-GL box across these changes:
+**326 → ~200 MB resident**. The single ~35 MB
 binary, no Electron/Chromium, and no telemetry remain the core footprint wins —
 a fair comparison uses an Electron client's *total* across all its processes,
 not a single one.
