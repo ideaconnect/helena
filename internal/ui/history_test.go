@@ -36,7 +36,7 @@ func TestRecordHistoryOnSend(t *testing.T) {
 		Request:  chain.RequestView{Method: "GET", URL: "https://api/a"}, // resolved
 		Response: chain.ResponseView{StatusCode: 200, Size: 12, Duration: 3 * time.Millisecond},
 	}
-	m.recordHistory(req, view, nil)
+	m.recordHistory(req, view, nil, false)
 
 	got := m.sess.History().Entries()
 	if len(got) != 1 {
@@ -58,11 +58,23 @@ func TestRecordHistoryError(t *testing.T) {
 	m := historyUI(t)
 	req := model.Request{Method: model.POST, URL: "https://api/down"}
 	view := chain.View{Request: chain.RequestView{Method: "POST", URL: "https://api/down"}}
-	m.recordHistory(req, view, errString("connection refused"))
+	m.recordHistory(req, view, errString("connection refused"), false)
 
 	e := m.sess.History().Entries()[0]
 	if e.Status != 0 || !strings.Contains(e.Err, "connection refused") {
 		t.Errorf("errored entry = %+v, want status 0 + the error string", e)
+	}
+}
+
+// TestRecordHistorySkipsAbort: a user-aborted send (canceled) is not recorded —
+// a Stop is not a real send.
+func TestRecordHistorySkipsAbort(t *testing.T) {
+	m := historyUI(t)
+	req := model.Request{Method: model.GET, URL: "https://api/slow"}
+	view := chain.View{Request: chain.RequestView{Method: "GET", URL: "https://api/slow"}}
+	m.recordHistory(req, view, errString("context canceled"), true)
+	if n := m.sess.History().Len(); n != 0 {
+		t.Errorf("aborted send recorded: history len = %d, want 0", n)
 	}
 }
 
