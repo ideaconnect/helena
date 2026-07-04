@@ -42,9 +42,20 @@ jobs:
             artifact: helena-linux-amd64
           - os: windows-latest
             artifact: helena-windows-amd64.exe
+          # Native Windows-on-ARM build (#142). GitHub's windows-11-arm runner
+          # compiles GOARCH=arm64 natively — the runner.os == 'Windows' steps
+          # below build + race-test it unchanged, with GOARCH inferred from the
+          # host — so no cross-toolchain is needed.
+          - os: windows-11-arm
+            artifact: helena-windows-arm64.exe
+            experimental: true
           - os: macos-latest
             artifact: helena-darwin-arm64
     runs-on: ${{ matrix.os }}
+    # The windows-11-arm leg is on trial (#142): its CGO/Fyne toolchain is
+    # unverified, so keep it non-blocking until a green run proves it out —
+    # then drop this flag. Other legs stay required (experimental unset → false).
+    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@v7
 
