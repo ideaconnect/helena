@@ -13,6 +13,7 @@ import (
 
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/chain"
+	"github.com/idct/helena/internal/history"
 	"github.com/idct/helena/internal/httpclient"
 	"github.com/idct/helena/internal/logging"
 	"github.com/idct/helena/internal/model"
@@ -460,9 +461,36 @@ func (m *MainUI) send() {
 			}
 		}
 
+		// Record the send in the history (#65). The store is thread-safe and
+		// scrubs secrets itself, so this runs off the UI goroutine. WebSocket /
+		// SSE sends use other paths and are not recorded.
+		m.recordHistory(req, view, leafErr)
+
 		fyne.Do(func() {
 			m.resetSendButton()
 			m.deliverResponse(initTab, resp)
 		})
 	}()
+}
+
+// recordHistory appends a completed send to the session history (#65). The
+// Method/URL shown prefer the resolved sent form for a meaningful list; the
+// stored Request is the authored snapshot (with {{vars}}) so restore/resend
+// re-resolves. The store scrubs secrets before persisting.
+func (m *MainUI) recordHistory(req model.Request, view chain.View, leafErr error) {
+	e := history.Entry{Method: string(req.Method), URL: req.URL, Request: req}
+	if view.Request.Method != "" {
+		e.Method = view.Request.Method
+	}
+	if view.Request.URL != "" {
+		e.URL = view.Request.URL
+	}
+	if view.Response.StatusCode != 0 {
+		e.Status = view.Response.StatusCode
+		e.Duration = view.Response.Duration
+		e.Size = view.Response.Size
+	} else if leafErr != nil {
+		e.Err = leafErr.Error()
+	}
+	m.sess.History().Record(e)
 }

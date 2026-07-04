@@ -25,6 +25,7 @@ func (m *MainUI) helpMenuItems() []*fyne.MenuItem {
 	return []*fyne.MenuItem{
 		fyne.NewMenuItem("Getting started", m.showGettingStarted),
 		fyne.NewMenuItem("Keyboard shortcuts", m.showShortcuts),
+		fyne.NewMenuItem("History", m.showHistory),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("User guide (web)", func() { m.openURL(userGuideURL) }),
 		fyne.NewMenuItem("Report an issue (web)", func() { m.openURL(issuesURL) }),
