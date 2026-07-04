@@ -221,6 +221,26 @@ func collectRequests(tree *session.Tree) []reqRef {
 	return out
 }
 
+// collectRequestsFrom returns the requests in the subtree rooted at scopeID,
+// matched by node-id prefix so paths stay collection-relative (#89). scopeID ""
+// is the whole tree. A folder id "0/f1" keeps "0/f1" itself and any deeper
+// "0/f1/..." node; the trailing separator stops "0/f1" from also matching a
+// sibling "0/f10".
+func collectRequestsFrom(tree *session.Tree, scopeID string) []reqRef {
+	all := collectRequests(tree)
+	if scopeID == "" {
+		return all
+	}
+	prefix := scopeID + "/"
+	var out []reqRef
+	for _, r := range all {
+		if r.id == scopeID || strings.HasPrefix(r.id, prefix) {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
 func walk(tree *session.Tree, id, prefix string, out *[]reqRef) {
 	if r, ok := tree.Request(id); ok {
 		path := r.Name

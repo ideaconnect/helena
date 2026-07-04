@@ -87,11 +87,20 @@ func (rp Report) Totals() (requests, checksPassed, checksFailed int) {
 	return
 }
 
-// Run executes every request in sess's active collection (depth-first) and
+// Run executes every request in sess's open collections (depth-first) and
 // returns a Report. Each request is sent independently with its own chain,
 // scripts, and assertions, exactly as a UI Send would. The env overlay is
 // rolled back after each request so script-set values don't leak between them.
 func Run(ctx context.Context, sess *session.Session) Report {
+	return RunScope(ctx, sess, "")
+}
+
+// RunScope is Run restricted to the subtree rooted at scopeID (#89): a folder
+// node id ("0/f1") runs just that folder's requests, a collection root id ("0")
+// runs that collection, and "" runs the whole tree. Paths in the Report stay
+// collection-relative regardless of the scope, so they match the GUI and a
+// whole-collection run.
+func RunScope(ctx context.Context, sess *session.Session, scopeID string) Report {
 	var rep Report
 	stop := &stopSignal{} // set by helena.runner.stop() (#92)
 	// One client (and connection pool) for the whole run: building it per
@@ -101,7 +110,7 @@ func Run(ctx context.Context, sess *session.Session) Report {
 	client.SetOAuth2Resolver(auth.NewClientCredentialsResolver(
 		sess.TokenCache(), nil, sess.ActiveCollectionDir()))
 	defer client.CloseIdleConnections()
-	for _, rq := range collectRequests(sess.Tree()) {
+	for _, rq := range collectRequestsFrom(sess.Tree(), scopeID) {
 		rep.Results = append(rep.Results, runOne(ctx, sess, client, rq, stop))
 		if stop.stopped() {
 			break

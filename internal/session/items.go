@@ -173,6 +173,38 @@ func (s *Session) nodeNamePath(nodeID string) string {
 	return strings.Join(parts, "/")
 }
 
+// FolderNodeID resolves a slash-separated folder name path (e.g. "Auth/OAuth")
+// within collection ci to its tree node id (e.g. "0/f1/f0"), the inverse of
+// nodeNamePath for folders (#89). Leading/trailing slashes are ignored; an
+// empty path returns the collection root id. ok is false if ci is out of range
+// or any segment names no child folder.
+func (s *Session) FolderNodeID(ci int, namePath string) (string, bool) {
+	if ci < 0 || ci >= len(s.cols) {
+		return "", false
+	}
+	id := strconv.Itoa(ci)
+	trimmed := strings.Trim(namePath, "/")
+	if trimmed == "" {
+		return id, true // collection root
+	}
+	folders := s.cols[ci].Folders
+	for _, name := range strings.Split(trimmed, "/") {
+		found := -1
+		for i := range folders {
+			if folders[i].Name == name {
+				found = i
+				break
+			}
+		}
+		if found < 0 {
+			return "", false
+		}
+		id = fmt.Sprintf("%s/f%d", id, found)
+		folders = folders[found].Folders
+	}
+	return id, true
+}
+
 // nodeCollectionIndex extracts the leading collection segment from
 // nodeID, returning -1 on malformed input.
 func nodeCollectionIndex(nodeID string) int {

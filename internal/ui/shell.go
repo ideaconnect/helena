@@ -443,7 +443,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	openBtn := tipButton("folder-open", "Open collection", m.openCollection)
 	importBtn := tipButton("download", "Import", m.actionImport)
 	colVarsBtn := tipButton("sliders", "Collection variables", m.editCollectionVariables)
-	runColBtn := tipButton("play", "Run collection", m.actionRunCollection)
+	runColBtn := tipButton("play", "Run collection (or selected folder)", m.actionRunCollection)
 
 	// Node-action buttons operating on the selected tree node. Enable state is
 	// reconciled by refreshSidebarActions (rename/delete need any selection;

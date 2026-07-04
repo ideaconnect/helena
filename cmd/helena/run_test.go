@@ -98,3 +98,20 @@ func TestRunCommandFlagAfterDir(t *testing.T) {
 		t.Errorf("dir-first --format json on an empty collection = %d, want 0", code)
 	}
 }
+
+// TestRunCommandFolderFlag verifies --folder scopes the run: an existing (empty)
+// folder runs cleanly (exit 0), an unknown folder fails fast (exit 2) before any
+// network (#89).
+func TestRunCommandFolderFlag(t *testing.T) {
+	dir := t.TempDir()
+	col := model.Collection{Name: "API", Folders: []model.Folder{{Name: "Sub"}}}
+	if err := storage.Save(col, dir); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if code := runCommand([]string{dir, "--folder", "Sub"}); code != 0 {
+		t.Errorf("--folder Sub (empty folder) = %d, want 0", code)
+	}
+	if code := runCommand([]string{dir, "--folder", "Ghost"}); code != 2 {
+		t.Errorf("--folder Ghost (missing) = %d, want 2", code)
+	}
+}
