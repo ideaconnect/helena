@@ -20,6 +20,12 @@ label via [`.github/release.yml`](.github/release.yml).
 ## [Unreleased]
 
 ### Added
+- Quitting with unsaved request edits now asks for confirmation instead of
+  dropping them silently: closing the window while any open request has edits
+  not yet Saved (or a scratch tab with content) shows a **Discard & quit /
+  Cancel** dialog. Everything else (add / rename / delete / move, and
+  collection / folder / environment / global variables) still saves as you go,
+  so the prompt only appears for editor edits genuinely pending a Save.
 - Schema-versioned config with forward migration.
 - Configurable response-body size cap (Settings → Max response).
 - `helena --version` reporting the build's tag + commit.

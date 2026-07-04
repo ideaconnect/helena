@@ -65,10 +65,11 @@ step matters because some of them must happen before others can succeed.
 10. **Wire shutdown** —
    `a.Lifecycle().SetOnStopped(saveWindowState)` records the final window size
    into the session on `app.Quit()` paths. `w.SetCloseIntercept(...)` handles
-   the window close button: it persists the same state and `os.Exit(0)`s
-   immediately, bypassing Fyne's slow `glfw.Terminate` GL-context teardown
-   (which runs on the UI thread before `OnStopped` and stalls for seconds on
-   WSLg, making close appear to hang).
+   the window close button: it runs `mainUI.ConfirmQuit(...)` — which asks before
+   discarding request-field edits pending a Save (#139) — and on the quit path
+   persists the same state and `os.Exit(0)`s immediately, bypassing Fyne's slow
+   `glfw.Terminate` GL-context teardown (which runs on the UI thread before
+   `OnStopped` and stalls for seconds on WSLg, making close appear to hang).
 11. **Run** —
     `w.ShowAndRun()` shows the window and blocks on the Fyne event loop until
     the app quits.

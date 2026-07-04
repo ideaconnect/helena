@@ -79,6 +79,8 @@ Everything is plain **Open Collection YAML** on disk - diff and merge it like
 source code. Auth secrets and Secret-flagged variables are **externalized** to a
 store under your OS config dir (outside the repo), so a committed collection
 carries no cleartext credential. The session env overlay never touches disk.
+Structural changes save as you make them; request edits save on **Mod+S**, and
+quitting with edits still pending **asks before discarding them**.
 
 ## Native niceties
 

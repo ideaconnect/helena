@@ -260,8 +260,8 @@ that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
   `commitScratchTab`: make the chosen collection active, `AddRequestValue` (mints
   a fresh ID, one save), then convert the tab to tree-backed and re-activate.
   Closing a scratch tab with content confirms first (its edits would be lost);
-  closing a tree-backed tab is silent (edits live in the tree until the app
-  exits, as before).
+  closing a tree-backed tab is silent (edits live in the tree, still reachable
+  from the sidebar) — the quit guard below is what catches them at app exit.
 - **Persistence.** `persistTabs` writes the tree-backed tabs (by collection dir +
   `Request.ID`) and the active index in one `SetOpenTabs` call; scratch tabs are
   never persisted. `restoreTabs` reopens them on launch.
@@ -437,7 +437,40 @@ the `Mod+S` shortcut.
 4. `m.sess.SaveActiveCollection()` writes the collection's YAML files via
    `internal/storage`. On error: status update + dialog (only if `m.win` is
    set).
-5. Status -> `"Saved: <name>"` on success.
+5. On success, `refreshCleanSnapshots(activeDir)` rebaselines every open tab in
+   the just-saved collection for the quit guard (see below), then status ->
+   `"Saved: <name>"`.
+
+## Quitting with unsaved edits ([quit.go](quit.go), #139)
+
+Request-field edits (headers, body, params, auth, scripts, chain, assertions,
+docs) land on the live tree node and persist only on an explicit Save — every
+*other* mutation (add / rename / delete / move, and collection / folder / env /
+global variables) auto-saves as it happens. So the only work a quit can silently
+drop is per-request editor edits pending a Save, plus scratch tabs never saved
+into a collection.
+
+`cmd/helena`'s `SetCloseIntercept` funnels through `MainUI.ConfirmQuit(onQuit)`:
+
+1. `unsavedTabCount()` flushes the debounced body editor (`syncBodyFromEditor`),
+   then counts unsaved tabs — a scratch tab with content (`scratchHasContent`),
+   or a tree-backed tab whose live request marshals (`marshalRequestState`) to
+   something other than its `cleanSnapshot` baseline.
+2. Count 0 (or `m.win == nil`, headless) → run `onQuit` immediately (which saves
+   the window size and `os.Exit`s).
+3. Otherwise show a `Discard & quit` / `Cancel` confirm. Discard runs `onQuit`;
+   Cancel leaves the app running so the user can Save. A `quitting` flag drops a
+   second close-click while the dialog is up.
+
+The baseline is a **value comparison, never an edited-flag** (mirroring
+`saveRequest`'s `#101` URL baseline): `captureCleanSnapshot` records a tab's
+snapshot the first time `activateTab` loads it — *after* the URL fold, so an
+inline-query URL that `loadRequest` folds into Params is not mistaken for an
+edit — and never overwrites it on re-activation (which would hide an edit made
+then switched away from). A save flushes the whole collection, so
+`refreshCleanSnapshots` rebaselines *all* of that collection's tabs, not just the
+saved one. No missed write-back path can hide an edit, because nothing sets a
+flag; the state itself is compared.
 
 ## Opening / importing / creating a collection
 

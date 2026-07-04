@@ -134,6 +134,7 @@ type MainUI struct {
 	loading            bool // suppress write-back during programmatic widget updates
 	syncing            bool // suppress re-entrant URL<->Query sync (see query.go)
 	runningCollection  bool // a #89 collection run is in flight; ignore re-clicks
+	quitting           bool // a quit-confirm dialog is showing; suppress stacking (quit.go)
 
 	// Editor tab strip. tabs is the ordered set of open requests;
 	// activeTabIdx indexes the active one (-1 when none). tabBar holds the
@@ -843,6 +844,11 @@ func (m *MainUI) saveRequest() {
 			dialog.ShowError(err, m.win)
 		}
 		return
+	}
+	// The whole active collection is now on disk, so rebaseline every tab that
+	// belongs to it — not just this one — for the quit guard (#139).
+	if t := m.activeTab(); t != nil {
+		m.refreshCleanSnapshots(t.collection)
 	}
 	status := "Saved: " + m.currentRequest.Name
 	if halfFilledChain > 0 {
