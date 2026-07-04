@@ -64,6 +64,32 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # The windows-11-arm runner ships an x86-64 mingw gcc (CC=gcc), which
+      # can't assemble arm64 cgo — a native GOARCH=arm64 build fails with
+      # "gcc_arm64.S: no such instruction: stp x29,x30" (#142). Install
+      # llvm-mingw's *native aarch64* toolchain (it runs on the arm64 host and
+      # emits arm64) and point cgo at it, before the first compile (Vet).
+      - name: Install arm64 cgo toolchain (llvm-mingw)
+        if: matrix.os == 'windows-11-arm'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          rt=$(cygpath -u "$RUNNER_TEMP")
+          url=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
+            https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest \
+            | grep -oE 'https://[^"]+-ucrt-aarch64\.zip' | head -1)
+          test -n "$url"
+          echo "toolchain: $url"
+          curl -fsSL -o "$rt/llvm-mingw.zip" "$url"
+          mkdir -p "$rt/llvm-mingw"
+          tar -xf "$rt/llvm-mingw.zip" -C "$rt/llvm-mingw"
+          bin=$(ls -d "$rt"/llvm-mingw/llvm-mingw-*/bin)
+          cygpath -w "$bin" >> "$GITHUB_PATH"
+          echo "CC=aarch64-w64-mingw32-gcc" >> "$GITHUB_ENV"
+          echo "CXX=aarch64-w64-mingw32-g++" >> "$GITHUB_ENV"
+
       # Fyne needs OpenGL / X11 headers on Linux; the windows-latest runner ships
       # with mingw-w64 GCC on PATH so cgo works out of the box there.
       - name: Install Linux GUI deps
@@ -114,10 +140,16 @@ jobs:
           if-no-files-found: error
 
       - name: Test (non-Linux)
-        if: runner.os != 'Linux'
+        if: runner.os != 'Linux' && matrix.os != 'windows-11-arm'
         # macOS + Windows run the same race suite; the coverage gate runs once
         # on Linux (coverage is platform-agnostic).
         run: go test ./... -race
+
+      - name: Test (windows/arm64)
+        if: matrix.os == 'windows-11-arm'
+        # The race detector has no windows/arm64 support, so this leg runs the
+        # suite without -race (the windows/amd64 leg already covers -race).
+        run: go test ./...
 
       - name: Build (Linux)
         if: runner.os == 'Linux'
