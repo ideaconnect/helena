@@ -43,19 +43,16 @@ jobs:
           - os: windows-latest
             artifact: helena-windows-amd64.exe
           # Native Windows-on-ARM build (#142). GitHub's windows-11-arm runner
-          # compiles GOARCH=arm64 natively — the runner.os == 'Windows' steps
-          # below build + race-test it unchanged, with GOARCH inferred from the
-          # host — so no cross-toolchain is needed.
+          # compiles GOARCH=arm64 natively (GOARCH inferred from the host); the
+          # runner.os == 'Windows' steps build it, and it runs the suite without
+          # -race (no windows/arm64 race support). Its stock C compiler is an
+          # x86-64 mingw gcc that can't assemble arm64 cgo, so the step below
+          # installs llvm-mingw's native aarch64 toolchain first.
           - os: windows-11-arm
             artifact: helena-windows-arm64.exe
-            experimental: true
           - os: macos-latest
             artifact: helena-darwin-arm64
     runs-on: ${{ matrix.os }}
-    # The windows-11-arm leg is on trial (#142): its CGO/Fyne toolchain is
-    # unverified, so keep it non-blocking until a green run proves it out —
-    # then drop this flag. Other legs stay required (experimental unset → false).
-    continue-on-error: ${{ matrix.experimental || false }}
     steps:
       - uses: actions/checkout@v7
 
@@ -317,6 +314,7 @@ jobs:
           tar -C artifacts -czf dist/helena-linux-amd64.tar.gz helena-linux-amd64 LICENSE README.md
           tar -C artifacts -czf dist/helena-darwin-arm64.tar.gz helena-darwin-arm64 LICENSE README.md
           (cd artifacts && zip -q ../dist/helena-windows-amd64.zip helena-windows-amd64.exe LICENSE README.md)
+          (cd artifacts && zip -q ../dist/helena-windows-arm64.zip helena-windows-arm64.exe LICENSE README.md)
 
       # Linux .deb / .rpm from the native binary + the freedesktop assets (#37).
       # nfpm packages the binary, .desktop, icon, and AppStream metainfo.

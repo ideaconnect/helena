@@ -50,8 +50,8 @@ self-contained ~35 MB binary, no Electron, no telemetry.
 
 ## Download
 
-Pre-built Linux (amd64), Windows (amd64), and macOS (arm64) binaries are
-attached to each
+Pre-built Linux (amd64), Windows (amd64 and arm64), and macOS (arm64) binaries
+are attached to each
 [GitHub Release](https://github.com/ideaconnect/helena/releases). macOS binaries are
 built in CI but not yet signed/notarized for Gatekeeper — see
 [docs/PACKAGING.md](docs/PACKAGING.md).
@@ -254,10 +254,13 @@ Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
   `Access-Control-Allow-Origin` and shows an orange warning if a browser
   would have blocked the response. The request is sent regardless.
 - **Native CI, no cross-compile.** GitHub Actions runs `ubuntu-latest`,
-  `windows-latest`, and `macos-latest` in a matrix so each binary is produced
-  by its own OS's native cgo toolchain. No fyne-cross, no Docker. (macOS is
-  built + tested in CI; macOS *distribution* — signing/notarization/Homebrew —
-  is still deferred, see issue #39.)
+  `windows-latest`, `windows-11-arm`, and `macos-latest` in a matrix so each
+  binary is produced by its own OS's native cgo toolchain. No fyne-cross, no
+  Docker. The `windows-11-arm` runner's stock C compiler is x86-64 mingw gcc
+  (can't assemble arm64 cgo), so that leg installs llvm-mingw's native aarch64
+  toolchain first and runs its tests without `-race` (unsupported on
+  windows/arm64). (macOS is built + tested in CI; macOS *distribution* —
+  signing/notarization/Homebrew — is still deferred, see issue #39.)
 
 ## Memory & rendering
 
