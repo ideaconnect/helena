@@ -146,15 +146,18 @@ func (m *MainUI) setAbortButton() {
 }
 
 // snapshotRequest returns a copy of req with every slice-backed field detached
-// from the original's backing arrays, so the off-UI send/chain worker never
-// shares mutable state with the live m.currentRequest the user keeps editing.
-// (ChainStep / KeyValue are all-value structs, so a shallow element copy fully
-// detaches them.)
+// from the original's backing arrays, so the off-UI send/chain worker (and the
+// history snapshot #65) never shares mutable state with the live
+// m.currentRequest the user keeps editing. (ChainStep / KeyValue / Assertion /
+// Variable are all-value structs, so a shallow element copy fully detaches
+// them.)
 func snapshotRequest(req model.Request) model.Request {
 	req.Params = append([]model.KeyValue(nil), req.Params...)
 	req.Headers = append([]model.KeyValue(nil), req.Headers...)
 	req.Body.Form = append([]model.KeyValue(nil), req.Body.Form...)
 	req.Chain = append([]model.ChainStep(nil), req.Chain...)
+	req.Assertions = append([]model.Assertion(nil), req.Assertions...)
+	req.Variables = append([]model.Variable(nil), req.Variables...)
 	return req
 }
 
@@ -464,7 +467,7 @@ func (m *MainUI) send() {
 		// Record the send in the history (#65). The store is thread-safe and
 		// scrubs secrets itself, so this runs off the UI goroutine. WebSocket /
 		// SSE sends use other paths and are not recorded.
-		m.recordHistory(req, view, leafErr)
+		m.recordHistory(req, view, leafErr, ctx.Err() == context.Canceled)
 
 		fyne.Do(func() {
 			m.resetSendButton()
@@ -476,8 +479,13 @@ func (m *MainUI) send() {
 // recordHistory appends a completed send to the session history (#65). The
 // Method/URL shown prefer the resolved sent form for a meaningful list; the
 // stored Request is the authored snapshot (with {{vars}}) so restore/resend
-// re-resolves. The store scrubs secrets before persisting.
-func (m *MainUI) recordHistory(req model.Request, view chain.View, leafErr error) {
+// re-resolves. The store scrubs secrets before persisting. A user-aborted send
+// (canceled) is skipped — a Stop is not a real send, and logging it as an error
+// would just clutter the list.
+func (m *MainUI) recordHistory(req model.Request, view chain.View, leafErr error, canceled bool) {
+	if canceled {
+		return
+	}
 	e := history.Entry{Method: string(req.Method), URL: req.URL, Request: req}
 	if view.Request.Method != "" {
 		e.Method = view.Request.Method

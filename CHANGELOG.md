@@ -74,6 +74,11 @@ label via [`.github/release.yml`](.github/release.yml).
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Fixed
+- The per-send request snapshot now also detaches the request's **Variables**
+  and **Assertions** slices (it already detached params/headers/body-form/chain):
+  editing those two tabs while a send was in flight could race the off-UI
+  worker on their shared backing array. This also keeps a request-history entry
+  fully independent of the live request it was captured from.
 - The per-collection environment selection persists across launches again:
   constructing the UI used to fire the Environment dropdown's change handler,
   which deleted the saved choice from config.yml before it could be restored.

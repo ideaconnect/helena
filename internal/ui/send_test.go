@@ -12,10 +12,12 @@ import (
 // (or feed torn values into) the worker.
 func TestSnapshotRequestDetachesSlices(t *testing.T) {
 	orig := model.Request{
-		Params:  []model.KeyValue{{Enabled: true, Key: "a", Value: "1"}},
-		Headers: []model.KeyValue{{Enabled: true, Key: "h", Value: "v"}},
-		Body:    model.Body{Form: []model.KeyValue{{Enabled: true, Key: "f", Value: "x"}}},
-		Chain:   []model.ChainStep{{Alias: "login", Request: "Auth/Login"}},
+		Params:     []model.KeyValue{{Enabled: true, Key: "a", Value: "1"}},
+		Headers:    []model.KeyValue{{Enabled: true, Key: "h", Value: "v"}},
+		Body:       model.Body{Form: []model.KeyValue{{Enabled: true, Key: "f", Value: "x"}}},
+		Chain:      []model.ChainStep{{Alias: "login", Request: "Auth/Login"}},
+		Assertions: []model.Assertion{{Enabled: true, Source: "status", Op: "eq", Expected: "200"}},
+		Variables:  []model.Variable{{Key: "v", Value: "1"}},
 	}
 	snap := snapshotRequest(orig)
 
@@ -24,8 +26,11 @@ func TestSnapshotRequestDetachesSlices(t *testing.T) {
 	orig.Headers[0].Value = "MUT"
 	orig.Body.Form[0].Value = "MUT"
 	orig.Chain[0].Request = "MUT"
+	orig.Assertions[0].Expected = "MUT"
+	orig.Variables[0].Value = "MUT"
 	if snap.Params[0].Value != "1" || snap.Headers[0].Value != "v" ||
-		snap.Body.Form[0].Value != "x" || snap.Chain[0].Request != "Auth/Login" {
+		snap.Body.Form[0].Value != "x" || snap.Chain[0].Request != "Auth/Login" ||
+		snap.Assertions[0].Expected != "200" || snap.Variables[0].Value != "1" {
 		t.Errorf("snapshot shares a backing array with the original: %+v", snap)
 	}
 
