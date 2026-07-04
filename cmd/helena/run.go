@@ -12,19 +12,37 @@ import (
 	"github.com/idct/helena/internal/session"
 )
 
-// runCommand executes `helena run <collection-dir> [--env NAME]` (#90): it loads
-// the collection headlessly, runs every request (chain + scripts + assertions),
-// prints a report, and returns the process exit code — 1 when any request
-// errored or any check failed, 2 on a usage/setup error.
+// runCommand executes `helena run <collection-dir> [--env NAME] [--format FMT]`
+// (#90): it loads the collection headlessly, runs every request (chain + scripts
+// + assertions), writes a report in the chosen format (text / json / junit), and
+// returns the process exit code — 1 when any request errored or any check
+// failed, 2 on a usage/setup error.
 func runCommand(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	env := fs.String("env", "", "active environment name")
+	format := fs.String("format", "text", "output format: text, json, or junit")
 	fs.SetOutput(os.Stderr)
+	// Two-phase parse so flags may appear before OR after the <collection-dir>
+	// positional. Go's flag package stops at the first non-flag argument, so a
+	// single fs.Parse would leave flags written after the dir (the natural
+	// `helena run ./col --env Staging` form the README documents) unparsed.
 	if err := fs.Parse(args); err != nil {
 		return 2
 	}
-	if fs.NArg() < 1 {
-		fmt.Fprintln(os.Stderr, "usage: helena run <collection-dir> [--env NAME]")
+	rest := fs.Args()
+	if len(rest) == 0 {
+		fmt.Fprintln(os.Stderr, "usage: helena run <collection-dir> [--env NAME] [--format text|json|junit]")
+		return 2
+	}
+	dir := rest[0]
+	if err := fs.Parse(rest[1:]); err != nil { // flags that followed the dir
+		return 2
+	}
+	// Validate the format up front so a typo fails before the (network) run.
+	switch *format {
+	case "text", "json", "junit":
+	default:
+		fmt.Fprintf(os.Stderr, "helena run: unknown --format %q (want text, json, or junit)\n", *format)
 		return 2
 	}
 
@@ -33,8 +51,8 @@ func runCommand(args []string) int {
 		fmt.Fprintf(os.Stderr, "helena run: %v\n", err)
 		return 2
 	}
-	if err := sess.OpenCollection(fs.Arg(0)); err != nil {
-		fmt.Fprintf(os.Stderr, "helena run: open %q: %v\n", fs.Arg(0), err)
+	if err := sess.OpenCollection(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "helena run: open %q: %v\n", dir, err)
 		return 2
 	}
 	sess.SetActiveCollection(0)
@@ -43,11 +61,38 @@ func runCommand(args []string) int {
 	}
 
 	rep := runner.Run(context.Background(), sess)
-	printReport(os.Stdout, rep)
+	if err := writeReport(os.Stdout, rep, *format); err != nil {
+		fmt.Fprintf(os.Stderr, "helena run: %v\n", err)
+		return 2
+	}
 	if rep.Failed() {
 		return 1
 	}
 	return 0
+}
+
+// writeReport renders rep to w in the chosen format. text is the human-readable
+// summary; json and junit are machine-readable (runner.Report.JSON / .JUnit).
+func writeReport(w io.Writer, rep runner.Report, format string) error {
+	switch format {
+	case "json":
+		b, err := rep.JSON()
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(b)
+		return err
+	case "junit":
+		b, err := rep.JUnit()
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(b)
+		return err
+	default:
+		printReport(w, rep)
+		return nil
+	}
 }
 
 // printReport renders a run report as plain text: one line per request with its

@@ -5,8 +5,10 @@
 | File | Responsibility |
 | --- | --- |
 | [runner.go](runner.go) | The public `Report` / `RequestResult` / `Check` types and their helpers (`OK`, `Failed`, `Totals`), the `Run` entry point (which builds the run-wide `httpclient.Client` — one connection pool per run, idle sockets released at the end — and threads a `stopSignal` so `helena.runner.stop()` halts the loop, #92), and `runOne` (per-request orchestration: auth flatten → snapshots → chain (the collection snapshot is taken only for chained requests) → execute → assertions; honours `helena.runner.skip()` by marking the result `Skipped` and not sending). |
+| [report.go](report.go) | Machine-readable renderings of a `Report` (#90): `Report.JSON()` (a stable JSON DTO — totals, a `failed` flag, per-request status/durationMs/checks) and `Report.JUnit()` (JUnit XML — one `<testcase>` per request; errored/failed-check → `<failure>`, script-skipped → `<skipped/>`). Both are pure functions of the `Report`, selected by `helena run --format`. |
 | [exec.go](exec.go) | The `headlessExecutor` (pre-script → http → post-script, with the full resolver scope chain), the `envBridge`, the request-tree walk (`collectRequests` / `walk`), and the `enabledVars` / `chainViewToScripting` / `nilFinder` helpers. |
 | [runner_test.go](runner_test.go) | End-to-end runs against an `httptest` server: mixed pass/fail assertions + a `test()` script, all-pass, a connection error, a chain step with env-overlay scripts and request variables, a throwing post-script, and `{{var}}` resolution from the active environment. |
+| [report_test.go](report_test.go) | `Report.JSON()` / `Report.JUnit()` over a mixed ok/failed-check/errored/skipped report — decodes the emitted bytes back with `encoding/json` / `encoding/xml` and asserts totals, the `failed` flag, and per-case failure/skip mapping (incl. skipped-but-failed → failure). |
 
 ## Type catalog
 

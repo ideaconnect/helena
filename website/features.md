@@ -65,7 +65,9 @@ dependency.
 
 Organize requests into workspaces, collections, and folders. Run a whole
 collection from the GUI, or **headlessly from the CLI** with `helena run` for CI
-- same resolution, scripts, and assertions as an interactive Send.
+- same resolution, scripts, and assertions as an interactive Send. It exits
+non-zero on any failure and can emit a **`--format json`** or **`--format
+junit`** report for CI dashboards.
 
 ## Import &amp; export
 
