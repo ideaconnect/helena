@@ -12,10 +12,11 @@ import (
 	"github.com/idct/helena/internal/runner"
 )
 
-// actionRunCollection runs every request in the active collection (#89) off the
-// UI goroutine via the shared headless runner, then shows a per-request +
-// aggregate pass/fail dialog. No-op with a status hint when no collection is
-// open; ignores a second click while a run is in flight.
+// actionRunCollection runs requests off the UI goroutine via the shared
+// headless runner, then shows a per-request + aggregate pass/fail dialog. Scope
+// follows the sidebar selection: a selected folder runs just that folder's
+// subtree (#89), otherwise the whole active collection. No-op with a status hint
+// when no collection is open; ignores a second click while a run is in flight.
 func (m *MainUI) actionRunCollection() {
 	if m.win == nil {
 		return
@@ -27,32 +28,43 @@ func (m *MainUI) actionRunCollection() {
 	if m.runningCollection {
 		return
 	}
+
+	scopeID, scopeLabel := "", "collection"
+	if m.isFolderSelected() {
+		scopeID = m.lastSelectedNodeID
+		scopeLabel = "folder " + m.sess.Tree().Label(scopeID)
+		// Resolve vars / auth against the folder's own collection.
+		if ci := m.sess.Tree().CollectionIndex(scopeID); ci >= 0 {
+			m.sess.SetActiveCollection(ci)
+		}
+	}
+
 	m.runningCollection = true
-	m.Status.SetText("Running collection…")
+	m.Status.SetText("Running " + scopeLabel + "…")
 
 	go func() {
-		// runner.Run does network I/O and must not touch widgets; it reads
+		// runner.RunScope does network I/O and must not touch widgets; it reads
 		// session snapshots and returns a plain Report. Marshal the result back
 		// to the UI thread to render (invariant 4).
-		rep := runner.Run(context.Background(), m.sess)
+		rep := runner.RunScope(context.Background(), m.sess, scopeID)
 		fyne.Do(func() {
 			m.runningCollection = false
-			m.showRunReport(rep)
+			m.showRunReport(rep, scopeLabel)
 		})
 	}()
 }
 
 // showRunReport renders a run Report as a scrollable dialog: an aggregate
-// header line plus one row per request (ok/FAIL, status, path) with its failed
-// checks indented beneath.
-func (m *MainUI) showRunReport(rep runner.Report) {
+// header line (naming the run scope) plus one row per request (ok/FAIL, status,
+// path) with its failed checks indented beneath.
+func (m *MainUI) showRunReport(rep runner.Report, scopeLabel string) {
 	reqs, passed, failed := rep.Totals()
 	verdict := "PASSED"
 	if rep.Failed() {
 		verdict = "FAILED"
 	}
 	summary := widget.NewLabelWithStyle(
-		fmt.Sprintf("%s — %d requests, %d checks passed, %d failed", verdict, reqs, passed, failed),
+		fmt.Sprintf("%s — %s: %d requests, %d checks passed, %d failed", verdict, scopeLabel, reqs, passed, failed),
 		fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	m.Status.SetText(fmt.Sprintf("Run %s: %d passed / %d failed", verdict, passed, failed))
 

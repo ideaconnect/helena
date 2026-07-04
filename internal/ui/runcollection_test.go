@@ -42,7 +42,7 @@ func TestShowRunReportSummary(t *testing.T) {
 		{Path: "Health", Method: "GET", StatusCode: 200, Checks: []runner.Check{{Name: "status", Passed: true}}},
 		{Path: "Broken", Method: "GET", StatusCode: 500, Checks: []runner.Check{{Name: "status", Passed: false, Error: "bad"}}},
 	}}
-	m.showRunReport(rep)
+	m.showRunReport(rep, "collection")
 	if got := m.Status.Text; !strings.Contains(got, "FAILED") || !strings.Contains(got, "1 failed") {
 		t.Errorf("status = %q, want a FAILED summary with 1 failed", got)
 	}

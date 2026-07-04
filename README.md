@@ -193,14 +193,15 @@ URL userinfo/query), so a log is safe to attach.
 
 ## Headless runs (`helena run`)
 
-For CI and automation, `helena run <collection-dir> [--env NAME] [--format FMT]`
-executes every request in a collection without the GUI — running each request's
-chain, scripts, and assertions — and prints a report:
+For CI and automation, `helena run <collection-dir> [--env NAME] [--format FMT]
+[--folder PATH]` executes every request in a collection without the GUI —
+running each request's chain, scripts, and assertions — and prints a report:
 
 ```sh
 helena run ./my-collection --env Staging               # human-readable text (default)
 helena run ./my-collection --format json  > report.json  # machine-readable
 helena run ./my-collection --format junit > report.xml   # JUnit XML for CI dashboards
+helena run ./my-collection --folder Auth/OAuth           # run just one folder's subtree
 ```
 
 Each request shows `ok`/`FAIL`, its status, and any `test()`/`expect()` (#87) or
@@ -208,9 +209,11 @@ declarative-assertion (#88) checks. The process exits non-zero if any request
 errored or any check failed, so a CI job can gate on it. `--format json` emits a
 structured report (totals, a `failed` flag, and per-request status/duration/
 checks); `--format junit` emits JUnit XML (one `<testcase>` per request) that
-CI systems ingest directly. Flags may come before or after the collection dir.
-`{{var}}` references resolve from the same scopes as a GUI Send; interactive
-prompt variables (`{{?Name}}`) stay unresolved since a headless run can't ask.
+CI systems ingest directly. `--folder <name-path>` scopes the run to a single
+folder's subtree (report paths stay collection-relative); an unknown folder is a
+usage error. Flags may come before or after the collection dir. `{{var}}`
+references resolve from the same scopes as a GUI Send; interactive prompt
+variables (`{{?Name}}`) stay unresolved since a headless run can't ask.
 
 App identity/version for packaging lives in [`FyneApp.toml`](FyneApp.toml) at
 the repo root, consumed by Fyne's native tooling (`go run fyne.io/tools/cmd/fyne

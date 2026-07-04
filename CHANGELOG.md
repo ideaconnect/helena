@@ -32,6 +32,11 @@ label via [`.github/release.yml`](.github/release.yml).
   for CI dashboards. The default stays the human-readable `text` summary. Flags
   may now be written before *or* after the collection dir (they were previously
   ignored when placed after it).
+- Folder-scoped runs: the runner can now execute a single folder's subtree
+  instead of the whole collection. In the GUI, selecting a folder and pressing
+  **Run** runs just that folder; headlessly, `helena run <dir> --folder
+  <name-path>` (e.g. `--folder Auth/OAuth`) does the same. Report paths stay
+  collection-relative either way.
 - Schema-versioned config with forward migration.
 - Configurable response-body size cap (Settings → Max response).
 - `helena --version` reporting the build's tag + commit.

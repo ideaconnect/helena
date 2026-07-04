@@ -12,15 +12,17 @@ import (
 	"github.com/idct/helena/internal/session"
 )
 
-// runCommand executes `helena run <collection-dir> [--env NAME] [--format FMT]`
-// (#90): it loads the collection headlessly, runs every request (chain + scripts
-// + assertions), writes a report in the chosen format (text / json / junit), and
-// returns the process exit code — 1 when any request errored or any check
-// failed, 2 on a usage/setup error.
+// runCommand executes `helena run <collection-dir> [--env NAME] [--format FMT]
+// [--folder PATH]` (#90, #89): it loads the collection headlessly, runs every
+// request (or just one folder's subtree) with its chain + scripts + assertions,
+// writes a report in the chosen format (text / json / junit), and returns the
+// process exit code — 1 when any request errored or any check failed, 2 on a
+// usage/setup error.
 func runCommand(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ContinueOnError)
 	env := fs.String("env", "", "active environment name")
 	format := fs.String("format", "text", "output format: text, json, or junit")
+	folder := fs.String("folder", "", "run only this folder's subtree (name path, e.g. Auth/OAuth)")
 	fs.SetOutput(os.Stderr)
 	// Two-phase parse so flags may appear before OR after the <collection-dir>
 	// positional. Go's flag package stops at the first non-flag argument, so a
@@ -31,7 +33,7 @@ func runCommand(args []string) int {
 	}
 	rest := fs.Args()
 	if len(rest) == 0 {
-		fmt.Fprintln(os.Stderr, "usage: helena run <collection-dir> [--env NAME] [--format text|json|junit]")
+		fmt.Fprintln(os.Stderr, "usage: helena run <collection-dir> [--env NAME] [--format text|json|junit] [--folder PATH]")
 		return 2
 	}
 	dir := rest[0]
@@ -60,7 +62,18 @@ func runCommand(args []string) int {
 		sess.SetActiveEnv(*env)
 	}
 
-	rep := runner.Run(context.Background(), sess)
+	// --folder scopes the run to a folder subtree; empty runs the collection.
+	scopeID := ""
+	if *folder != "" {
+		id, ok := sess.FolderNodeID(0, *folder)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "helena run: folder %q not found in the collection\n", *folder)
+			return 2
+		}
+		scopeID = id
+	}
+
+	rep := runner.RunScope(context.Background(), sess, scopeID)
 	if err := writeReport(os.Stdout, rep, *format); err != nil {
 		fmt.Fprintf(os.Stderr, "helena run: %v\n", err)
 		return 2
