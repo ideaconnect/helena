@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 
 	"gopkg.in/yaml.v3"
 
@@ -213,6 +214,26 @@ func authSecrets(prefix string, a *model.Auth, fn func(string, *string)) {
 	if a.NTLM != nil {
 		fn(prefix+"/auth/ntlm.password", &a.NTLM.Password)
 	}
+}
+
+// ScrubRequestSecrets returns a deep copy of r with every credential value
+// blanked: the auth secret fields (Basic password, Bearer token, API-key value,
+// OAuth2 client secret, WSSE / OAuth1 / AWSv4 / Digest / NTLM secrets) and any
+// Secret-flagged request variable. The request history (#65) records the scrub
+// so a snapshot written to disk carries no cleartext credential — the same
+// invariant the collection YAML gets via secret externalization (#42). Non-
+// secret fields (method, URL, headers, body, auth type + usernames / client
+// IDs, …) are preserved so restore keeps everything but the secret, which the
+// resend re-resolves from the environment / re-entry. The secret-field list is
+// shared with the externalizer (authSecrets / variableSecrets), so it can't
+// drift.
+func ScrubRequestSecrets(r model.Request) model.Request {
+	r.Auth = cloneAuth(r.Auth)
+	r.Variables = slices.Clone(r.Variables)
+	blank := func(_ string, v *string) { *v = "" }
+	authSecrets("", &r.Auth, blank)
+	variableSecrets("", r.Variables, blank)
+	return r
 }
 
 // cloneForSecretSplit deep-copies exactly the parts splitSecrets mutates — the
