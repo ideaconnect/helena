@@ -76,15 +76,17 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          rt=$(cygpath -u "$RUNNER_TEMP")
+          rt=$(cygpath -u "$RUNNER_TEMP")   # /c/... for bash
+          rtw=$(cygpath -m "$RUNNER_TEMP")  # C:/... for PowerShell
           url=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" \
             https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest \
             | grep -oE 'https://[^"]+-ucrt-aarch64\.zip' | head -1)
           test -n "$url"
           echo "toolchain: $url"
           curl -fsSL -o "$rt/llvm-mingw.zip" "$url"
-          mkdir -p "$rt/llvm-mingw"
-          tar -xf "$rt/llvm-mingw.zip" -C "$rt/llvm-mingw"
+          # git-bash's `tar` is GNU tar (no zip support); extract with the
+          # built-in Windows PowerShell instead.
+          powershell -NoProfile -Command "Expand-Archive -Path '$rtw/llvm-mingw.zip' -DestinationPath '$rtw/llvm-mingw' -Force"
           bin=$(ls -d "$rt"/llvm-mingw/llvm-mingw-*/bin)
           cygpath -w "$bin" >> "$GITHUB_PATH"
           echo "CC=aarch64-w64-mingw32-gcc" >> "$GITHUB_ENV"
