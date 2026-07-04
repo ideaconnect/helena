@@ -26,6 +26,12 @@ label via [`.github/release.yml`](.github/release.yml).
   Cancel** dialog. Everything else (add / rename / delete / move, and
   collection / folder / environment / global variables) still saves as you go,
   so the prompt only appears for editor edits genuinely pending a Save.
+- `helena run --format json|junit` — machine-readable reports for the headless
+  collection runner. `json` emits totals + a `failed` flag + per-request
+  status/duration/checks; `junit` emits JUnit XML (one `<testcase>` per request)
+  for CI dashboards. The default stays the human-readable `text` summary. Flags
+  may now be written before *or* after the collection dir (they were previously
+  ignored when placed after it).
 - Schema-versioned config with forward migration.
 - Configurable response-body size cap (Settings → Max response).
 - `helena --version` reporting the build's tag + commit.

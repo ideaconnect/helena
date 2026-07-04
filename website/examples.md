@@ -111,6 +111,10 @@ as the GUI - and gate your pipeline on the exit code:
 ```bash
 helena run ./collections/acme --env Staging
 # exits non-zero if any request errors or any check fails
+
+# machine-readable output for CI dashboards:
+helena run ./collections/acme --format junit > report.xml
+helena run ./collections/acme --format json  > report.json
 ```
 
 ```text
