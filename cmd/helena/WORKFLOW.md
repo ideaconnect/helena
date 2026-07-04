@@ -25,7 +25,7 @@ main()
   -> w.SetContent(fynetooltip.AddWindowToolTipLayer(mainUI.Root(), w.Canvas()))  (tooltip layer for icon-only buttons)
   -> a.Lifecycle().SetOnStarted(mainUI.SurfaceLoadErrors)  (diagnostic dialog for collections that failed to load, #108)
   -> a.Lifecycle().SetOnStopped(saveWindowState)  (persist window size on app.Quit paths)
-  -> w.SetCloseIntercept(...)                 (window close button: persist + os.Exit, skipping the slow GL teardown)
+  -> w.SetCloseIntercept(...)                 (window close button: ConfirmQuit → persist + os.Exit, skipping the slow GL teardown)
   -> w.ShowAndRun()                           (blocks until quit)
 ```
 
@@ -50,9 +50,12 @@ Key invariants:
 - **The window close button uses `SetCloseIntercept`.** Fyne tears the OpenGL
   context down (`glfw.Terminate`) on the UI thread *before* `OnStopped`, and on
   WSLg that teardown can stall for seconds, so the process appears to hang on
-  close. The interceptor fires *before* teardown: it persists the window size
-  and calls `os.Exit(0)`, skipping the stall (the OS reclaims the GL resources).
-  Safe because window size is the only shutdown-time state — collections and
-  config are written on edit.
+  close. The interceptor fires *before* teardown: it runs
+  `mainUI.ConfirmQuit(...)`, and on the quit path persists the window size and
+  calls `os.Exit(0)`, skipping the stall (the OS reclaims the GL resources).
+  Window size is the only shutdown-time state that always needs writing —
+  collections and config are written on edit — but request-field edits pending a
+  Save are the one thing a quit can drop, so `ConfirmQuit` asks before discarding
+  them (#139). It quits straight through when there is nothing unsaved.
 - **Blocking call.** `ShowAndRun` blocks; on `app.Quit()` paths `main` returns
   when the event loop ends, while the close button exits from the interceptor.

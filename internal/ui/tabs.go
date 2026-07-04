@@ -30,6 +30,14 @@ type openTab struct {
 	scratchReq *model.Request // owned request for scratch tabs; nil otherwise
 	nodeID     string         // cached live tree node ID; re-derived by reconcileTabs
 	resp       *tabResponse   // nil until a Send completes on this tab
+	// cleanSnapshot is the JSON-marshaled request captured the first time the
+	// tab is loaded (post URL-fold) and refreshed after each save of its
+	// collection. It is the "last in sync with disk" baseline: the quit guard
+	// (quit.go) flags the tab as unsaved when the live request marshals to
+	// something different. Empty means never loaded — a tree-backed request
+	// can't be edited before it is loaded, so an empty snapshot reads as clean.
+	// Always empty for scratch tabs (they use scratchHasContent instead).
+	cleanSnapshot string
 }
 
 // displayBodyCap bounds how much of a response body the shared viewer
@@ -169,6 +177,9 @@ func (m *MainUI) activateTab(i int) {
 		m.loadRequest(req, nodeID)
 		m.Status.SetText("Loaded: " + req.Name)
 	}
+	// Baseline the tab against disk the first time it loads (post URL-fold), so
+	// the quit guard can tell later edits from a pristine open (#139).
+	m.captureCleanSnapshot(tab)
 	m.applyResponse(tab.resp) // overrides the status line when a response is cached
 	m.rebuildTabBar()
 	m.persistTabs()
@@ -176,8 +187,8 @@ func (m *MainUI) activateTab(i int) {
 
 // requestCloseTab is the close-button entry point. A scratch tab with content
 // would lose unsaved work, so it confirms first; tree-backed tabs close
-// immediately (their edits live in the tree until the app exits, exactly as
-// before tabs existed).
+// immediately — their edits live in the tree, still reachable from the sidebar,
+// and the quit guard (quit.go / ConfirmQuit) is what catches them at app exit.
 func (m *MainUI) requestCloseTab(t *openTab) {
 	if t.scratch && scratchHasContent(t.scratchReq) && m.win != nil {
 		dialog.ShowConfirm("Discard tab?", "This unsaved request will be lost.", func(yes bool) {
