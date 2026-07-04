@@ -24,6 +24,11 @@ label via [`.github/release.yml`](.github/release.yml).
 - Configurable response-body size cap (Settings → Max response).
 - `helena --version` reporting the build's tag + commit.
 - Dedicated environment manager and structured form-body editor.
+- Native **Windows on ARM (arm64)** build, attached to each release as
+  `helena-windows-arm64.zip`. Built on GitHub's `windows-11-arm` runner with
+  llvm-mingw's native aarch64 cgo toolchain (the runner's stock gcc is x86-64
+  and can't assemble arm64 cgo); its CI leg runs without `-race`, which has no
+  windows/arm64 support.
 
 ### Changed
 - Token-endpoint and transport errors are redacted of secrets before display.

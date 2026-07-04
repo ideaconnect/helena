@@ -7,8 +7,12 @@ Status and conventions for shipping Helena. App identity/version come from
 ## Current distribution
 
 CI builds native per-OS binaries on every push (no cross-compile):
-`helena-linux-amd64`, `helena-windows-amd64.exe`, `helena-darwin-arm64`. Binaries
-embed their version (`helena --version`).
+`helena-linux-amd64`, `helena-windows-amd64.exe`, `helena-windows-arm64.exe`,
+`helena-darwin-arm64`. Binaries embed their version (`helena --version`). The
+Windows-on-ARM binary is built on the `windows-11-arm` runner with llvm-mingw's
+native aarch64 cgo toolchain (the runner's stock gcc is x86-64 and can't
+assemble arm64 cgo) and is tested there without `-race` (unsupported on
+windows/arm64; the amd64 leg covers the race suite).
 
 Release binaries (and `make build` / `make.bat build`) are built with
 **`-tags no_emoji`**, which drops Fyne's bundled 4.2 MB colour-emoji font. Fyne
@@ -22,7 +26,8 @@ theme-scope reduction (11 → 3 scopes) brought the same software-GL box to
 A tagged `v*` push publishes a GitHub Release whose assets are (issues #27/#35):
 
 - **Archives** — `helena-linux-amd64.tar.gz`, `helena-darwin-arm64.tar.gz`,
-  `helena-windows-amd64.zip` (each bundling the binary + `LICENSE` + `README.md`).
+  `helena-windows-amd64.zip`, `helena-windows-arm64.zip` (each bundling the
+  binary + `LICENSE` + `README.md`).
 - **`SHA256SUMS`** — SHA-256 checksums over every asset.
 - **`helena.sbom.spdx.json`** — an SPDX software bill of materials.
 - **Provenance attestation** — a keyless (Sigstore) build-provenance

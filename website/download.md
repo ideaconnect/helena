@@ -10,8 +10,8 @@ description: Download pre-built Helena binaries or build from source on Linux, W
 
 ## Pre-built binaries
 
-Pre-built **Linux (amd64)**, **Windows (amd64)**, and **macOS (arm64)** binaries
-are attached to each release.
+Pre-built **Linux (amd64)**, **Windows (amd64 &amp; arm64)**, and **macOS
+(arm64)** binaries are attached to each release.
 
 <p><a class="btn btn-primary" href="{{ site.releases }}">Releases on GitHub →</a></p>
 
