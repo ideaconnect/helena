@@ -164,12 +164,25 @@ func NewWithTransport(s model.Settings, transport *http.Transport) *Client {
 		if len(via) >= 10 { // match net/http's default redirect cap
 			return fmt.Errorf("stopped after %d redirects", len(via))
 		}
-		// Once the chain leaves the originally-targeted host, drop the
-		// caller-flagged credential headers so they aren't sent to it.
-		if len(via) > 0 && req.URL.Host != via[0].URL.Host {
+		if len(via) == 0 {
+			return nil
+		}
+		origin := via[0].URL
+		// An https→http downgrade — even to the SAME host — must not carry
+		// credentials over cleartext. net/http strips its own Authorization /
+		// Cookie only on a host change (scheme is never compared), so a same-host
+		// downgrade would otherwise forward them; treat the downgrade like a host
+		// change and additionally drop Authorization that net/http would keep.
+		downgrade := origin.Scheme == "https" && req.URL.Scheme == "http"
+		// Once the chain leaves the originally-targeted host (or downgrades),
+		// drop the caller-flagged credential headers so they aren't sent on.
+		if req.URL.Host != origin.Host || downgrade {
 			for _, h := range c.crossHostStrip {
 				req.Header.Del(h)
 			}
+		}
+		if downgrade {
+			req.Header.Del("Authorization")
 		}
 		return nil
 	}
@@ -359,10 +372,14 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 		creds := auth.ResolveValues(r.Auth, resolve).Digest
 		hdr, ok, derr := auth.DigestRespond(resp.Header.Values("Www-Authenticate"), req.Method, req.URL.RequestURI(), *creds)
 		if derr == nil && ok {
-			_ = resp.Body.Close()
 			if req2, body2, berr := Build(ctx, r, res, c.oauth2Resolver); berr == nil {
 				req2.Header.Set("Authorization", hdr)
 				if resp2, err2 := c.http.Do(req2); err2 == nil {
+					// Close the original 401 only now that the retry supersedes
+					// it — if the retry had failed we must leave its body open so
+					// the read below surfaces the original 401, not a
+					// "read on closed body" error.
+					_ = resp.Body.Close()
 					resp, body = resp2, body2
 				}
 			}
@@ -421,35 +438,44 @@ func (c *Client) Do(ctx context.Context, r model.Request, res *vars.Resolver) (*
 // fails. Each request is freshly built via Build so its body replays; the
 // transport reuses the same keep-alive connection across the steps.
 func (c *Client) ntlmHandshake(ctx context.Context, r model.Request, res *vars.Resolver, initial *http.Response, creds model.NTLMAuth) (*http.Response, []byte, bool) {
-	c.drainBody(initial) // return the connection to the pool before reusing it
+	// Capture the initial 401's body before draining its connection back to the
+	// pool. On any failure below we restore it so the caller can surface the
+	// original 401 — otherwise its body is closed and the caller's read errors
+	// with "read on closed body" (e.g. a proxy that drops connection affinity
+	// gives an unparseable type-2 challenge).
+	initialBody := c.drainBodyBytes(initial)
+	fail := func() (*http.Response, []byte, bool) {
+		initial.Body = io.NopCloser(bytes.NewReader(initialBody))
+		return nil, nil, false
+	}
 
 	req1, _, err := Build(ctx, r, res, c.oauth2Resolver)
 	if err != nil {
-		return nil, nil, false
+		return fail()
 	}
 	req1.Header.Set("Authorization", auth.NTLMNegotiateHeader())
 	resp1, err := c.http.Do(req1)
 	if err != nil {
-		return nil, nil, false
+		return fail()
 	}
 	challenge, ok := auth.NTLMChallenge(resp1.Header.Values("Www-Authenticate"))
 	c.drainBody(resp1)
 	if !ok {
-		return nil, nil, false
+		return fail()
 	}
 
 	hdr, err := auth.NTLMAuthenticateHeader(challenge, creds)
 	if err != nil {
-		return nil, nil, false
+		return fail()
 	}
 	req2, body2, err := Build(ctx, r, res, c.oauth2Resolver)
 	if err != nil {
-		return nil, nil, false
+		return fail()
 	}
 	req2.Header.Set("Authorization", hdr)
 	resp2, err := c.http.Do(req2)
 	if err != nil {
-		return nil, nil, false
+		return fail()
 	}
 	return resp2, body2, true
 }
@@ -458,12 +484,17 @@ func (c *Client) ntlmHandshake(ctx context.Context, r model.Request, res *vars.R
 // transport can reuse the underlying connection — required for the NTLM
 // handshake's connection affinity. A body larger than the cap is left unread
 // (the connection won't be reused, and the handshake degrades to the 401).
-func (c *Client) drainBody(resp *http.Response) {
+func (c *Client) drainBody(resp *http.Response) { _ = c.drainBodyBytes(resp) }
+
+// drainBodyBytes is drainBody that also returns the (bounded) bytes it read, so
+// a caller can reconstruct the response body after the connection is freed.
+func (c *Client) drainBodyBytes(resp *http.Response) []byte {
 	if resp == nil || resp.Body == nil {
-		return
+		return nil
 	}
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, c.maxResponseBytes()))
+	data, _ := io.ReadAll(io.LimitReader(resp.Body, c.maxResponseBytes()))
 	_ = resp.Body.Close()
+	return data
 }
 
 // StreamMeta carries the response metadata available once an SSE stream opens,
