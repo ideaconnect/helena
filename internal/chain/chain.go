@@ -63,6 +63,33 @@ var reservedAliases = map[string]bool{
 	"with": true, "yield": true, "let": true, "static": true, "await": true,
 }
 
+// jsObjectProps are Object.prototype member names. They pass aliasRe (they are
+// valid identifiers, not reserved words) but binding one as `chain.<alias>` via
+// the runtime's obj.Set corrupts the object rather than adding a property:
+// `__proto__` reassigns the prototype, and the rest shadow methods the runtime
+// and scripts rely on. Reject them like reserved words so the failure is a clear
+// resolve-time error, not silently wrong `chain.<alias>` data.
+var jsObjectProps = map[string]bool{
+	"__proto__": true, "constructor": true, "prototype": true,
+	"hasOwnProperty": true, "isPrototypeOf": true, "propertyIsEnumerable": true,
+	"toLocaleString": true, "toString": true, "valueOf": true,
+	"__defineGetter__": true, "__defineSetter__": true,
+	"__lookupGetter__": true, "__lookupSetter__": true,
+}
+
+// stepRef is the human-readable identifier for a chain step in error messages:
+// the path when present, else the stable RequestID (an ID-only step is valid —
+// resolveTarget prefers RequestID — so its errors must not print an empty path).
+func stepRef(step model.ChainStep) string {
+	if step.Request != "" {
+		return step.Request
+	}
+	if step.RequestID != "" {
+		return "id " + step.RequestID
+	}
+	return ""
+}
+
 // View is the snapshot of one executed request — what its sibling
 // chain steps and the leaf will see via `chain.<alias>.{request,response}`.
 // Body and Headers are copies; mutating them in a script doesn't
@@ -187,12 +214,15 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 	out := make(map[string]View, len(steps))
 	for _, step := range steps {
 		blankAlias := step.Alias == ""
-		blankRef := step.Request == ""
+		// A step references a request by human path (Request) OR by stable
+		// RequestID — resolveTarget prefers the ID and falls back to the path, so
+		// an ID-only step (populated RequestID, blank Request) is valid.
+		blankRef := step.Request == "" && step.RequestID == ""
 		if blankAlias && blankRef {
 			return nil, fmt.Errorf("chain: a step is missing both alias and request reference")
 		}
 		if blankAlias {
-			return nil, fmt.Errorf("chain: step is missing an alias (request %q)", step.Request)
+			return nil, fmt.Errorf("chain: step is missing an alias (request %q)", stepRef(step))
 		}
 		if blankRef {
 			return nil, fmt.Errorf("chain: alias %q has no request reference", step.Alias)
@@ -203,12 +233,15 @@ func resolveSteps(ctx context.Context, steps []model.ChainStep, finder RequestFi
 		if reservedAliases[step.Alias] {
 			return nil, fmt.Errorf("chain: alias %q is a reserved JavaScript word; pick another name", step.Alias)
 		}
+		if jsObjectProps[step.Alias] {
+			return nil, fmt.Errorf("chain: alias %q collides with a JavaScript object property; pick another name", step.Alias)
+		}
 		if _, dup := out[step.Alias]; dup {
 			return nil, fmt.Errorf("chain: duplicate alias %q in the same request's chain", step.Alias)
 		}
 		sub, ok := resolveTarget(finder, step)
 		if !ok {
-			return nil, fmt.Errorf("chain: cannot resolve request %q (alias %q)", step.Request, step.Alias)
+			return nil, fmt.Errorf("chain: cannot resolve request %q (alias %q)", stepRef(step), step.Alias)
 		}
 		key := visitKey(sub, step)
 		if visiting[key] {

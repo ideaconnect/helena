@@ -70,31 +70,64 @@ func (r *Resolver) Lookup(name string) (string, bool) {
 // It returns the result and the names that are unresolvable (no scope and no
 // fallback) or cyclic, deduped in first-seen order.
 func (r *Resolver) Resolve(s string) (string, []string) {
-	missing := make(map[string]bool)
-	var order []string
-	out := r.expand(s, make(map[string]bool), missing, &order)
-	return out, order
+	st := &resolveState{
+		visiting: map[string]bool{},
+		missing:  map[string]bool{},
+		memo:     map[string]string{},
+		noCache:  map[string]bool{},
+	}
+	out := r.expand(s, st)
+	return out, st.order
+}
+
+// resolveState is the mutable bookkeeping for one Resolve call. Keeping it in a
+// struct (rather than five threaded parameters) keeps expand readable and makes
+// the memo/noCache pair — the fix for exponential re-expansion — cheap to carry.
+type resolveState struct {
+	visiting map[string]bool   // scope vars currently being expanded (cycle guard)
+	missing  map[string]bool   // unresolvable/cyclic names already reported
+	memo     map[string]string // fully-expanded value of each cache-safe scope var
+	noCache  map[string]bool   // scope vars whose expansion touched a cycle (unsafe to memo)
+	order    []string          // missing names in first-seen order
 }
 
 // expand replaces the top-level {{name}} templates in s. A scope value is
 // expanded recursively (visiting guards against cycles, so depth is bounded by
 // the number of distinct variables); a fallback value is frozen. Unresolvable
-// and cyclic names accumulate into order via the missing set.
-func (r *Resolver) expand(s string, visiting, missing map[string]bool, order *[]string) string {
+// and cyclic names accumulate into st.order via st.missing.
+//
+// Each scope variable's fully-expanded value is memoized within the Resolve, so
+// a value referenced N times (e.g. "{{a}}{{a}}") expands once, not N times —
+// without this a branching acyclic scope graph (v0="{{v1}}{{v1}}", …) costs
+// O(2^depth) and can wedge the caller. A variable whose expansion truncated a
+// cycle is context-dependent (its result would differ if reused off the cycle),
+// so every var on the stack at cycle-detection is marked no-cache; a cached
+// value is therefore always cycle-free and independent of the visiting stack.
+func (r *Resolver) expand(s string, st *resolveState) string {
 	return varRe.ReplaceAllStringFunc(s, func(match string) string {
 		name := strings.TrimSpace(varRe.FindStringSubmatch(match)[1])
 		if name == "" {
 			return match
 		}
 		if v, ok := r.lookupScope(name); ok {
-			if visiting[name] {
-				// Cyclic scope reference: stop, keep the template, report it.
-				markMissing(name, missing, order)
+			if cached, ok := st.memo[name]; ok {
+				return cached
+			}
+			if st.visiting[name] {
+				// Cyclic scope reference: stop, keep the template, report it, and
+				// poison the cache for every var currently on the stack.
+				for onStack := range st.visiting {
+					st.noCache[onStack] = true
+				}
+				markMissing(name, st.missing, &st.order)
 				return match
 			}
-			visiting[name] = true
-			out := r.expand(v, visiting, missing, order)
-			delete(visiting, name)
+			st.visiting[name] = true
+			out := r.expand(v, st)
+			delete(st.visiting, name)
+			if !st.noCache[name] {
+				st.memo[name] = out
+			}
 			return out
 		}
 		if r.fallback != nil {
@@ -102,7 +135,7 @@ func (r *Resolver) expand(s string, visiting, missing map[string]bool, order *[]
 				return v // frozen: untrusted dynamic values are not re-expanded
 			}
 		}
-		markMissing(name, missing, order)
+		markMissing(name, st.missing, &st.order)
 		return match
 	})
 }
