@@ -1102,6 +1102,17 @@ func (s *Session) MoveCollection(from, to int) error {
 		activeDir = s.dirs[s.activeCol]
 	}
 
+	// activeEnv is keyed by collection index, so a reorder must carry each
+	// collection's active environment with it. Snapshot the env by dir now and
+	// rebuild against the new index order below — otherwise the entries alias
+	// whatever collection ends up in each slot (mirrors reload's rebuild).
+	envByDir := make(map[string]string, len(s.activeEnv))
+	for idx, name := range s.activeEnv {
+		if idx >= 0 && idx < len(s.dirs) {
+			envByDir[s.dirs[idx]] = name
+		}
+	}
+
 	col, dir, wc := s.cols[from], s.dirs[from], w.Collections[from]
 	s.cols = slices.Delete(s.cols, from, from+1)
 	s.dirs = slices.Delete(s.dirs, from, from+1)
@@ -1121,6 +1132,14 @@ func (s *Session) MoveCollection(from, to int) error {
 				s.activeCol = i
 				break
 			}
+		}
+	}
+	// Rebuild activeEnv against the reordered dirs so each collection's env
+	// follows it to its new index.
+	s.activeEnv = make(map[int]string, len(envByDir))
+	for i, d := range s.dirs {
+		if name, ok := envByDir[d]; ok {
+			s.activeEnv[i] = name
 		}
 	}
 	return s.persist()

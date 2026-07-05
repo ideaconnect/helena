@@ -13,6 +13,39 @@ func reqName(s *Session, nodeID string) string {
 	return ""
 }
 
+// TestMoveCollectionCarriesActiveEnv pins that reordering collections carries
+// each collection's active environment with it. activeEnv is index-keyed, so a
+// reorder that doesn't remap it makes the active env alias whatever collection
+// lands in each slot (and the UI would then persist the wrong env to disk).
+func TestMoveCollectionCarriesActiveEnv(t *testing.T) {
+	s := openSessionWithCollection(t) // collection 0
+	if err := s.OpenCollection(writeSampleCollection(t)); err != nil {
+		t.Fatal(err)
+	}
+	d0, d1 := s.CollectionDir(0), s.CollectionDir(1)
+
+	s.SetActiveCollection(0)
+	s.SetActiveEnv("EnvA") // d0 → EnvA
+	s.SetActiveCollection(1)
+	s.SetActiveEnv("EnvB") // d1 → EnvB
+
+	if err := s.MoveCollection(1, 0); err != nil { // order → [d1, d0]
+		t.Fatalf("MoveCollection: %v", err)
+	}
+	if s.CollectionDir(0) != d1 || s.CollectionDir(1) != d0 {
+		t.Fatalf("order = [%s %s], want [d1 d0]", s.CollectionDir(0), s.CollectionDir(1))
+	}
+	// Each collection's env must have followed it to its new index.
+	s.SetActiveCollection(0)
+	if got := s.ActiveEnvName(); got != "EnvB" {
+		t.Errorf("env at new index 0 (d1) = %q, want EnvB", got)
+	}
+	s.SetActiveCollection(1)
+	if got := s.ActiveEnvName(); got != "EnvA" {
+		t.Errorf("env at new index 1 (d0) = %q, want EnvA", got)
+	}
+}
+
 // TestMoveRequestIntoFolder moves a root request into a folder and checks it
 // lands at the requested slot and leaves the root behind.
 func TestMoveRequestIntoFolder(t *testing.T) {
