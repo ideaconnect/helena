@@ -19,6 +19,36 @@ func TestFromOpenAPINoInfoBlock(t *testing.T) {
 	}
 }
 
+// TestFromOpenAPINullServerNoPanic guards the nil-*Server deref: a spec with
+// `servers: [null]` (the loader stores a nil pointer) must import cleanly with
+// no base_url environment, not crash.
+func TestFromOpenAPINullServerNoPanic(t *testing.T) {
+	c, err := FromOpenAPI([]byte(`{"openapi":"3.0.0","info":{"title":"x","version":"1"},"servers":[null],"paths":{}}`))
+	if err != nil {
+		t.Fatalf("servers:[null] should import cleanly, got err: %v", err)
+	}
+	if len(c.Environments) != 0 {
+		t.Errorf("a null server should yield no base_url environment, got %d", len(c.Environments))
+	}
+}
+
+// TestFromOpenAPIMalformedReturnsErrorNotPanic pins the recover: kin-openapi's
+// Swagger-2 conversion nil-derefs on these null sub-objects, and the importer
+// must return an error rather than panic (a hostile URL-served spec runs off the
+// UI goroutine with no recover above it and would otherwise crash the app).
+func TestFromOpenAPIMalformedReturnsErrorNotPanic(t *testing.T) {
+	for _, bad := range []string{
+		`{"swagger":"2.0","paths":{"/a":null}}`,
+		`{"swagger":"2.0","paths":{"/a":{"get":{"parameters":[null]}}}}`,
+		`{"swagger":"2.0","paths":{"/a":{"get":{"responses":{"200":null}}}}}`,
+		`{"swagger":"2.0","parameters":{"P":null},"paths":{}}`,
+	} {
+		if _, err := FromOpenAPI([]byte(bad)); err == nil {
+			t.Errorf("expected an error (not a panic) for malformed spec %q", bad)
+		}
+	}
+}
+
 const oas3Sample = `openapi: 3.0.0
 info:
   title: Sample API

@@ -5,6 +5,7 @@ package importer
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/getkin/kin-openapi/openapi2"
@@ -17,7 +18,19 @@ import (
 
 // FromOpenAPI parses an OpenAPI 3 or Swagger 2 spec (JSON or YAML bytes) and
 // returns the resulting Helena collection. The spec version is auto-detected.
-func FromOpenAPI(data []byte) (model.Collection, error) {
+func FromOpenAPI(data []byte) (col model.Collection, err error) {
+	// kin-openapi's Swagger-2 conversion and OAS3 traversal can panic on some
+	// malformed specs (e.g. a null server or operation object). An importer must
+	// return an error, not crash the app — a hostile URL-served spec reaches this
+	// path off the UI goroutine with no recover above it (unlike the file/cURL
+	// paths, which run under the UI panic guard). Turn any panic into an error.
+	defer func() {
+		if r := recover(); r != nil {
+			col = model.Collection{}
+			err = fmt.Errorf("malformed spec: %v", r)
+		}
+	}()
+
 	asJSON, err := toJSON(data)
 	if err != nil {
 		return model.Collection{}, fmt.Errorf("parse spec: %w", err)
@@ -105,8 +118,13 @@ func convertOAS3(doc *openapi3.T) model.Collection {
 	}
 
 	baseURL := ""
-	if len(doc.Servers) > 0 {
-		baseURL = doc.Servers[0].URL
+	for _, srv := range doc.Servers {
+		// A spec may carry `servers: [null]`; the loader stores a nil *Server, so
+		// guard the deref and take the first server that actually names a URL.
+		if srv != nil && srv.URL != "" {
+			baseURL = srv.URL
+			break
+		}
 	}
 	if baseURL != "" {
 		c.Environments = append(c.Environments, model.Environment{
@@ -287,17 +305,8 @@ func sortedKeys[V any](m map[string]V) []string {
 		keys = append(keys, k)
 	}
 	// Insertion-ordered would be nicer, but kin-openapi's map is unordered; a
-	// stable sorted order keeps imports deterministic.
-	sortStrings(keys)
+	// stable sorted order keeps imports deterministic. slices.Sort is O(n log n)
+	// — a spec with tens of thousands of paths must not go quadratic.
+	slices.Sort(keys)
 	return keys
-}
-
-func sortStrings(a []string) {
-	// Tiny insertion sort — keeps the importer free of an extra "sort" import
-	// since we already import several heavy packages here.
-	for i := 1; i < len(a); i++ {
-		for j := i; j > 0 && a[j-1] > a[j]; j-- {
-			a[j-1], a[j] = a[j], a[j-1]
-		}
-	}
 }

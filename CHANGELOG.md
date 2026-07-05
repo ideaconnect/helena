@@ -74,6 +74,13 @@ label via [`.github/release.yml`](.github/release.yml).
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Fixed
+- Importing a malformed OpenAPI/Swagger spec no longer crashes the app. A spec
+  with `servers: [null]` (a nil server), or various null sub-objects that made
+  kin-openapi's Swagger-2 conversion panic, now returns a clean error — this
+  mattered most for **Import from URL**, which ran the parse off the UI thread
+  with no panic guard, so a hostile server could take the whole app down. Path
+  ordering is also `O(n log n)` now, so a spec with tens of thousands of paths
+  doesn't import quadratically.
 - A chain step that references its target only by stable ID (`RequestID` set,
   the human path left blank — a valid, documented state) now resolves and runs
   instead of being rejected as having "no request reference".

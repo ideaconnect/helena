@@ -40,7 +40,7 @@ This is deliberately simple: WSDL files always start with `<?xml` or `<definitio
 ### Public parsers
 
 - `From` — see above; dispatches on a single leading byte.
-- `FromOpenAPI` ([openapi.go:20](openapi.go#L20)) — accepts JSON or YAML. Pipeline: `toJSON` -> probe `swagger`/`openapi` -> either `openapi2conv.ToV3` or `openapi3.NewLoader().LoadFromData` -> `convertOAS3`.
+- `FromOpenAPI` ([openapi.go:20](openapi.go#L20)) — accepts JSON or YAML. Pipeline: `toJSON` -> probe `swagger`/`openapi` -> either `openapi2conv.ToV3` or `openapi3.NewLoader().LoadFromData` -> `convertOAS3`. A deferred `recover` turns any panic (kin-openapi's Swagger-2 conversion nil-derefs on null sub-objects) into an error — the importer must never crash the app, since the URL-import path runs it off the UI goroutine with no panic guard above it.
 - `FromWSDL` ([wsdl.go:17](wsdl.go#L17)) — unmarshals into `wsdlDefinitions`, builds a binding-name lookup, then iterates services -> ports -> binding-operations, emitting one POST `model.Request` per operation. Errors if no operations are found.
 - `FromURL` ([url.go:17](url.go#L17)) — `http.Get` with a settings-derived transport; non-2xx becomes an error mentioning `resp.Status`; the body is handed to `From`.
 
@@ -48,7 +48,7 @@ This is deliberately simple: WSDL files always start with `<?xml` or `<definitio
 
 - `toJSON` ([openapi.go:57](openapi.go#L57)) — fast-paths valid JSON; otherwise YAML-unmarshals and re-marshals as JSON. Exists because kin-openapi only consumes JSON.
 - `normalizeYAML` ([openapi.go:72](openapi.go#L72)) — recursively converts `map[any]any` (still produced by `yaml.v3` for some nested maps) into `map[string]any`, which is what `json.Marshal` requires.
-- `convertOAS3` ([openapi.go:94](openapi.go#L94)) — walks the OAS3 document: hoists `Servers[0].URL` into a `{{base_url}}` environment variable, groups paths-and-operations into folders by `Tags[0]`, leaves tag-less operations as root requests.
+- `convertOAS3` ([openapi.go:94](openapi.go#L94)) — walks the OAS3 document: hoists the first non-nil server's `URL` into a `{{base_url}}` environment variable (a spec may carry `servers: [null]`, so the nil `*Server` is skipped rather than deref'd), groups paths-and-operations into folders by `Tags[0]`, leaves tag-less operations as root requests. Path/operation keys are ordered with `slices.Sort` (O(n log n)) for deterministic output.
 - `buildRequest` ([openapi.go:150](openapi.go#L150)) — assembles a single `model.Request`: prepends `{{base_url}}` when present, deduplicates path-item + operation parameters by `(in,name)`, maps `query` to `Params`, `header` to `Headers`, leaves `path` placeholders embedded in the URL.
 - `bodyTypeFromContentType` ([openapi.go:226](openapi.go#L226)) — case-insensitive content-type sniff: `json`, `xml`, `form-urlencoded`, `multipart`, `text/*`, default text.
 - `extractExample` ([openapi.go:244](openapi.go#L244)) — pulls `Example`, then any first `Examples[i].Value.Value`, then `Schema.Value.Example`.
