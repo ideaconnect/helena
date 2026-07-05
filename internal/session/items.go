@@ -285,6 +285,10 @@ func (s *Session) DeleteItem(nodeID string) error {
 	if !ok {
 		return fmt.Errorf("invalid node: %q", nodeID)
 	}
+	ci := nodeCollectionIndex(nodeID)
+	// Capture the parent container by stable folder ID so undo re-resolves it
+	// robustly (folderIDForContainer backfills a missing ID so it survives).
+	parentFolderID, _ := s.folderIDForContainer(parent, ci)
 	switch kind {
 	case "c":
 		return fmt.Errorf("collections are removed via workspace management")
@@ -293,19 +297,26 @@ func (s *Session) DeleteItem(nodeID string) error {
 		if foldersP == nil || idx < 0 || idx >= len(*foldersP) {
 			return fmt.Errorf("invalid folder %q", nodeID)
 		}
-		s.lastDeleted = &deletedNode{parent: parent, kind: "f", index: idx,
-			colIdx: nodeCollectionIndex(nodeID), folder: cloneFolderKeepID((*foldersP)[idx])}
+		s.lastDeleted = &deletedNode{parent: parent, parentFolderID: parentFolderID, kind: "f",
+			index: idx, colIdx: ci, folder: cloneFolderKeepID((*foldersP)[idx])}
 		*foldersP = slices.Delete(*foldersP, idx, idx+1)
 	case "r":
 		_, _, requestsP := s.containerAtPtr(parent)
 		if requestsP == nil || idx < 0 || idx >= len(*requestsP) {
 			return fmt.Errorf("invalid request %q", nodeID)
 		}
-		s.lastDeleted = &deletedNode{parent: parent, kind: "r", index: idx,
-			colIdx: nodeCollectionIndex(nodeID), request: cloneRequestKeepID((*requestsP)[idx])}
+		s.lastDeleted = &deletedNode{parent: parent, parentFolderID: parentFolderID, kind: "r",
+			index: idx, colIdx: ci, request: cloneRequestKeepID((*requestsP)[idx])}
 		*requestsP = slices.Delete(*requestsP, idx, idx+1)
 	}
-	return s.saveCollection(nodeCollectionIndex(nodeID))
+	if err := s.saveCollection(ci); err != nil {
+		// The save failed and persistCollection reload()ed the tree back from
+		// disk, so the item is restored in memory — leaving undo armed would
+		// re-insert a duplicate (same Request.ID). Disarm it.
+		s.lastDeleted = nil
+		return err
+	}
+	return nil
 }
 
 // deletedNode captures everything needed to restore the most recently deleted
@@ -314,12 +325,18 @@ func (s *Session) DeleteItem(nodeID string) error {
 // re-insert and re-save. The full model copy preserves the persistent
 // Request.ID, keeping chain refs valid across a delete->undo.
 type deletedNode struct {
-	parent  string
-	kind    string // "f" or "r"
-	index   int
-	colIdx  int
-	folder  model.Folder  // valid when kind == "f"
-	request model.Request // valid when kind == "r"
+	parent string
+	// parentFolderID is the stable model.ID of the parent container ("" for the
+	// collection root), captured at delete time. Undo re-resolves the container
+	// by this ID rather than the positional `parent`, so an intervening
+	// index-shifting op (duplicate/delete/move a sibling) can't retarget the
+	// restore into the wrong container.
+	parentFolderID string
+	kind           string // "f" or "r"
+	index          int
+	colIdx         int
+	folder         model.Folder  // valid when kind == "f"
+	request        model.Request // valid when kind == "r"
 }
 
 // CanUndoDelete reports whether a delete is available to undo.
@@ -348,7 +365,18 @@ func (s *Session) RestoreLastDeleted() (string, error) {
 	if d == nil {
 		return "", fmt.Errorf("nothing to undo")
 	}
-	_, foldersP, requestsP := s.containerAtPtr(d.parent)
+	// Re-resolve the parent container by its stable folder ID and re-derive its
+	// CURRENT positional path — index-shifting ops since the delete may have
+	// moved it, so the captured d.parent path can be stale (and would restore
+	// into the wrong container / return a wrong node id).
+	foldersP, requestsP := s.containerByFolderID(d.colIdx, d.parentFolderID)
+	parentPath := strconv.Itoa(d.colIdx)
+	if d.parentFolderID != "" {
+		parentPath = s.nodeIDOfModel(d.colIdx, "f", d.parentFolderID)
+	}
+	if parentPath == "" {
+		return "", fmt.Errorf("cannot restore: parent container is gone")
+	}
 	switch d.kind {
 	case "f":
 		if foldersP == nil {
@@ -360,7 +388,7 @@ func (s *Session) RestoreLastDeleted() (string, error) {
 		if err := s.saveCollection(d.colIdx); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%s/f%d", d.parent, i), nil
+		return fmt.Sprintf("%s/f%d", parentPath, i), nil
 	case "r":
 		if requestsP == nil {
 			return "", fmt.Errorf("cannot restore: parent container is gone")
@@ -371,7 +399,7 @@ func (s *Session) RestoreLastDeleted() (string, error) {
 		if err := s.saveCollection(d.colIdx); err != nil {
 			return "", err
 		}
-		return fmt.Sprintf("%s/r%d", d.parent, i), nil
+		return fmt.Sprintf("%s/r%d", parentPath, i), nil
 	}
 	return "", fmt.Errorf("cannot restore: unknown node kind")
 }

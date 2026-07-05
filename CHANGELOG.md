@@ -74,6 +74,16 @@ label via [`.github/release.yml`](.github/release.yml).
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Fixed
+- Reordering collections (drag-and-drop in the sidebar) no longer scrambles
+  which environment each one has selected. The active-environment map was keyed
+  by collection index and wasn't remapped on a move, so after a reorder a
+  collection could resolve `{{variables}}` against a different collection's
+  environment — and the mis-selection could then be persisted.
+- Undo (restore a deleted request/folder) now re-targets its parent by a stable
+  ID, so a delete followed by an index-shifting edit (e.g. duplicating a sibling
+  folder) then an undo restores the item into the right container instead of the
+  one that shifted into its old slot. A delete whose save fails no longer leaves
+  undo armed, which could have re-inserted a duplicate with the same ID.
 - Importing a malformed OpenAPI/Swagger spec no longer crashes the app. A spec
   with `servers: [null]` (a nil server), or various null sub-objects that made
   kin-openapi's Swagger-2 conversion panic, now returns a clean error — this
