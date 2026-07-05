@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 
 	"gopkg.in/yaml.v3"
 
@@ -228,8 +227,9 @@ func authSecrets(prefix string, a *model.Auth, fn func(string, *string)) {
 // shared with the externalizer (authSecrets / variableSecrets), so it can't
 // drift.
 func ScrubRequestSecrets(r model.Request) model.Request {
-	r.Auth = cloneAuth(r.Auth)
-	r.Variables = slices.Clone(r.Variables)
+	r = r.Clone() // full deep copy — honors the doc contract and detaches every
+	// slice-backed field so the caller's live request can't be mutated (or race
+	// the history store) after Record.
 	blank := func(_ string, v *string) { *v = "" }
 	authSecrets("", &r.Auth, blank)
 	variableSecrets("", r.Variables, blank)
@@ -252,45 +252,10 @@ func cloneForSecretSplit(c model.Collection) model.Collection {
 	return c
 }
 
-func cloneAuth(a model.Auth) model.Auth {
-	if a.Basic != nil {
-		b := *a.Basic
-		a.Basic = &b
-	}
-	if a.Bearer != nil {
-		b := *a.Bearer
-		a.Bearer = &b
-	}
-	if a.APIKey != nil {
-		b := *a.APIKey
-		a.APIKey = &b
-	}
-	if a.OAuth2 != nil {
-		b := *a.OAuth2
-		a.OAuth2 = &b
-	}
-	if a.WSSE != nil {
-		b := *a.WSSE
-		a.WSSE = &b
-	}
-	if a.OAuth1 != nil {
-		b := *a.OAuth1
-		a.OAuth1 = &b
-	}
-	if a.AWSV4 != nil {
-		b := *a.AWSV4
-		a.AWSV4 = &b
-	}
-	if a.Digest != nil {
-		b := *a.Digest
-		a.Digest = &b
-	}
-	if a.NTLM != nil {
-		b := *a.NTLM
-		a.NTLM = &b
-	}
-	return a
-}
+// cloneAuth deep-copies an Auth's scheme sub-structs. It delegates to
+// model.Auth.Clone so the field list has a single home (see that method) and
+// can't drift from the send/history snapshot paths that use the same copy.
+func cloneAuth(a model.Auth) model.Auth { return a.Clone() }
 
 func cloneFolders(folders []model.Folder) []model.Folder {
 	if folders == nil {

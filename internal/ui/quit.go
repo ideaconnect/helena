@@ -72,15 +72,23 @@ func (m *MainUI) captureCleanSnapshot(t *openTab) {
 	}
 }
 
-// refreshCleanSnapshots rebaselines every tab backed by collection dir after a
-// successful save of that collection. Saving one request flushes the whole
-// collection to disk (saveCollection writes the entire tree), so all its open
-// tabs — not just the active one — are now in sync and must adopt the new
-// baseline, or an unrelated tab in the same collection would read as still
-// unsaved.
+// refreshCleanSnapshots rebaselines every already-loaded tab backed by
+// collection dir after a successful save of that collection. Saving one request
+// flushes the whole collection to disk (saveCollection writes the entire tree),
+// so all its open tabs — not just the active one — are now in sync and must
+// adopt the new baseline, or an unrelated tab in the same collection would read
+// as still unsaved.
+//
+// Tabs never activated (cleanSnapshot == "") are skipped: their live node has
+// not yet been through loadRequest's inline-query→Params fold, so baselining the
+// unfolded state here would make the tab read as dirty the moment it is later
+// activated (the fold mutates the node, and captureCleanSnapshot's never-
+// overwrite gate then refuses to re-baseline). A never-loaded tab needs no
+// baseline anyway — unsavedTabCount treats cleanSnapshot == "" as "never edited"
+// and its first activation captures the correct post-fold baseline.
 func (m *MainUI) refreshCleanSnapshots(dir string) {
 	for _, t := range m.tabs {
-		if t.scratch || t.collection != dir {
+		if t.scratch || t.collection != dir || t.cleanSnapshot == "" {
 			continue
 		}
 		if s, ok := m.liveRequestState(t); ok {

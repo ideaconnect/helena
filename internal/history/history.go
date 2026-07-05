@@ -80,12 +80,17 @@ func (s *Store) Record(e Entry) {
 	s.save()
 }
 
-// Entries returns a newest-first copy of the recorded entries.
+// Entries returns a newest-first deep copy of the recorded entries. Each
+// returned Entry.Request is Cloned so a consumer that binds it into an editor
+// (Restore / Resend) and edits in place cannot mutate the stored entry — an
+// in-place header/param edit would otherwise rewrite history to a value that was
+// never sent and persist the corruption on the next save.
 func (s *Store) Entries() []Entry {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	out := make([]Entry, len(s.entries))
 	for i, e := range s.entries {
+		e.Request = e.Request.Clone()
 		out[len(s.entries)-1-i] = e
 	}
 	return out

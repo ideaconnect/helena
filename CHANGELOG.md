@@ -74,6 +74,27 @@ label via [`.github/release.yml`](.github/release.yml).
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Fixed
+- The per-send request snapshot now also detaches the request's resolved
+  **Auth** credential sub-struct: editing the Auth tab (e.g. a password) while a
+  send or SSE stream was in flight could race the off-UI worker, which
+  dereferences the same allocation when signing the request. The slice fields
+  were already detached; auth was re-aliased by the inherit-flattening step that
+  runs after the snapshot. Request/Auth deep-copying now lives in one place
+  (`model.Request.Clone` / `model.Auth.Clone`) that the send, stream, history,
+  and secret-scrub paths all share, so the field lists can't drift.
+- Restoring or resending a **History** entry and then editing it no longer
+  corrupts the stored log: `Store.Entries()` now hands back a deep copy, so an
+  in-place header/param edit on the reopened request can't reach back and
+  rewrite a past entry to a value that was never sent (and persist it).
+- The quit guard no longer shows a phantom "unsaved changes" prompt for a
+  restored-but-never-opened tab whose URL carries an inline query. Saving a
+  sibling tab used to baseline such a tab in its pre-fold form; its first
+  open then folded the query into params and read as an edit. Never-opened
+  tabs are now left unbaselined until their first activation captures the
+  correct post-fold state.
+- `helena run --format junit` now emits the `<testcase>` `time` as a plain
+  decimal even for sub-100µs requests (previously a raw float rendered as
+  `time="5e-05"`, which strict `xs:decimal` JUnit consumers reject).
 - The per-send request snapshot now also detaches the request's **Variables**
   and **Assertions** slices (it already detached params/headers/body-form/chain):
   editing those two tabs while a send was in flight could race the off-UI

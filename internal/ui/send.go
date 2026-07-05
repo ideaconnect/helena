@@ -145,21 +145,14 @@ func (m *MainUI) setAbortButton() {
 	m.Send.Refresh()
 }
 
-// snapshotRequest returns a copy of req with every slice-backed field detached
-// from the original's backing arrays, so the off-UI send/chain worker (and the
-// history snapshot #65) never shares mutable state with the live
-// m.currentRequest the user keeps editing. (ChainStep / KeyValue / Assertion /
-// Variable are all-value structs, so a shallow element copy fully detaches
-// them.)
-func snapshotRequest(req model.Request) model.Request {
-	req.Params = append([]model.KeyValue(nil), req.Params...)
-	req.Headers = append([]model.KeyValue(nil), req.Headers...)
-	req.Body.Form = append([]model.KeyValue(nil), req.Body.Form...)
-	req.Chain = append([]model.ChainStep(nil), req.Chain...)
-	req.Assertions = append([]model.Assertion(nil), req.Assertions...)
-	req.Variables = append([]model.Variable(nil), req.Variables...)
-	return req
-}
+// snapshotRequest returns a copy of req with every reference-typed field
+// detached from the original's backing arrays, so the off-UI send/chain worker
+// (and the history snapshot #65) never shares mutable state with the live
+// m.currentRequest the user keeps editing. It delegates to model.Request.Clone
+// — the single home for that deep copy — so the field list can't drift. Note
+// the send path reassigns req.Auth to the resolved EffectiveAuth afterwards and
+// must re-Clone it there, since resolution re-aliases a live tree node's Auth.
+func snapshotRequest(req model.Request) model.Request { return req.Clone() }
 
 // sessionTransport returns the cached per-session *http.Transport, whose
 // connection pool is reused across sends so repeated requests to one host skip
@@ -280,8 +273,12 @@ func (m *MainUI) send() {
 		// a shared backing array would be an unsynchronized read/write (race).
 		req = snapshotRequest(*m.currentRequest)
 		// Flatten any Inherit on the in-memory request copy via the session's
-		// ancestor walk so httpclient sees the concrete auth.
-		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
+		// ancestor walk so httpclient sees the concrete auth. Clone it: Resolve
+		// returns the request's (or an ancestor's) own Auth value, whose scheme
+		// sub-struct pointers still alias the live tree node — the worker
+		// dereferences them (auth.ResolveValues, history scrub) while the Auth
+		// tab can mutate the same pointee on the UI thread, which would race.
+		req.Auth = m.sess.EffectiveAuth(m.currentRequestID).Clone()
 		// Fold the leaf's ancestor folder variables (#81) into its request scope
 		// so {{vars}} resolve against them; the request's own values win.
 		req.Variables = withFolderVars(m.sess.SnapshotAncestorVars(m.currentRequestID), req.Variables)

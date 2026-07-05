@@ -172,6 +172,57 @@ func TestFoldedURLNotFalsePositive(t *testing.T) {
 	}
 }
 
+// TestNeverActivatedFoldTabNotFalsePositive pins the refreshCleanSnapshots fix:
+// a restored-but-never-activated tab whose stored URL carries an inline query
+// must not be baselined (in its unfolded form) by a sibling save. If it were,
+// its first activation would fold the URL — mutating the node — while the
+// never-overwrite gate blocked a re-baseline, so the quit guard would read the
+// untouched tab as dirty.
+func TestNeverActivatedFoldTabNotFalsePositive(t *testing.T) {
+	test.NewApp()
+	c := model.Collection{
+		Name: "Fold API",
+		Requests: []model.Request{
+			{ID: "id-plain", Name: "Plain", Method: model.GET, URL: "https://x/plain"},
+			{ID: "id-fold", Name: "Search", Method: model.GET, URL: "https://x/search?q=1&page=2"},
+		},
+	}
+	dir := filepath.Join(t.TempDir(), "fold-api")
+	if err := storage.Save(c, dir); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	sess, err := session.New(filepath.Join(t.TempDir(), "config.yml"))
+	if err != nil {
+		t.Fatalf("session.New: %v", err)
+	}
+	if err := sess.OpenCollection(dir); err != nil {
+		t.Fatalf("OpenCollection: %v", err)
+	}
+	m := NewMainUI(sess)
+	defer test.NewWindow(m.Root()).Close()
+
+	m.openOrActivate("0/r0") // the plain request — activated, baselined
+	// A restored-but-never-activated tab for the inline-query request: it is in
+	// the tab set but has never been through loadRequest's fold (cleanSnapshot "").
+	m.tabs = append(m.tabs, &openTab{requestID: "id-fold", collection: dir})
+
+	// Edit the plain request in the tree and save — this rebaselines the loaded
+	// tabs of the collection, and must NOT baseline the never-activated fold tab.
+	_, r0, ok := sess.LocateRequest(m.tabs[0].collection, m.tabs[0].requestID)
+	if !ok {
+		t.Fatal("locate r0")
+	}
+	r0.URL = "https://x/plain/edited"
+	m.saveRequest()
+
+	// Now activate the fold tab: loadRequest folds its URL into Params. A pristine
+	// tab the user never touched must not read as unsaved.
+	m.activateTab(1)
+	if m.hasUnsavedEdits() {
+		t.Fatalf("never-activated fold tab reads as unsaved after sibling save + activation")
+	}
+}
+
 // TestConfirmQuitNoEditsQuitsImmediately: with nothing pending, ConfirmQuit runs
 // the quit callback without a dialog.
 func TestConfirmQuitNoEditsQuitsImmediately(t *testing.T) {

@@ -140,6 +140,26 @@ func TestReportJUnit(t *testing.T) {
 	}
 }
 
+// TestReportJUnitTimeIsPlainDecimal guards against the sub-100µs regression: a
+// raw float64 time attr marshals as scientific notation (e.g. 5e-05), which
+// strict xs:decimal JUnit consumers reject. The emitted time must be a plain
+// fixed-point decimal.
+func TestReportJUnitTimeIsPlainDecimal(t *testing.T) {
+	rep := Report{Results: []RequestResult{
+		{Path: "Fast", Method: "GET", StatusCode: 200, Duration: 50 * time.Microsecond},
+	}}
+	b, err := rep.JUnit()
+	if err != nil {
+		t.Fatalf("JUnit: %v", err)
+	}
+	if !strings.Contains(string(b), `time="0.00005"`) {
+		t.Errorf("time attr not a plain decimal:\n%s", b)
+	}
+	if strings.Contains(string(b), "e-") || strings.Contains(string(b), "E-") {
+		t.Errorf("time attr rendered in scientific notation:\n%s", b)
+	}
+}
+
 // TestReportJUnitSkippedButFailedIsFailure guards the precedence: a request that
 // was marked skipped but still failed a check before skipping must render as a
 // failure, not a skip.

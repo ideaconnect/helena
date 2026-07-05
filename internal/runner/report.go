@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -100,11 +101,15 @@ type junitTestsuite struct {
 }
 
 type junitTestcase struct {
-	Name      string        `xml:"name,attr"`
-	Classname string        `xml:"classname,attr"`
-	Time      float64       `xml:"time,attr"`
-	Failure   *junitFailure `xml:"failure,omitempty"`
-	Skipped   *junitSkipped `xml:"skipped,omitempty"`
+	Name      string `xml:"name,attr"`
+	Classname string `xml:"classname,attr"`
+	// Time is the duration in seconds, pre-formatted as a fixed-point decimal
+	// string. A raw float64 would marshal sub-100µs durations in scientific
+	// notation (e.g. time="5e-05"), which strict xs:decimal JUnit consumers
+	// reject; strconv 'f' formatting always yields a plain decimal.
+	Time    string        `xml:"time,attr"`
+	Failure *junitFailure `xml:"failure,omitempty"`
+	Skipped *junitSkipped `xml:"skipped,omitempty"`
 }
 
 type junitFailure struct {
@@ -125,7 +130,7 @@ func (rp Report) JUnit() ([]byte, error) {
 		tc := junitTestcase{
 			Name:      r.Path,
 			Classname: r.Method,
-			Time:      r.Duration.Seconds(),
+			Time:      strconv.FormatFloat(r.Duration.Seconds(), 'f', -1, 64),
 		}
 		switch {
 		case r.Skipped && r.OK():
