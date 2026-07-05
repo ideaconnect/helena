@@ -3,6 +3,7 @@ package session
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/idct/helena/internal/model"
@@ -157,6 +158,9 @@ func TestUndoRestoresIntoCorrectContainerAfterSiblingShift(t *testing.T) {
 // reload()s the item back into memory) leaves no armed undo — otherwise a
 // following restore would re-insert a duplicate with the same Request.ID.
 func TestDeleteSaveFailureDisarmsUndo(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a read-only directory does not block writes inside it on Windows")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("read-only-dir write failure does not apply when running as root")
 	}
