@@ -134,3 +134,61 @@ func TestResolveEmptyTemplate(t *testing.T) {
 		t.Errorf("got %q missing %v", got, missing)
 	}
 }
+
+// TestResolveMemoizesToAvoidExponentialExpansion pins the memoization fix: a
+// chain where each level references the next twice is 2^depth expand calls
+// without memoization (a hang) and ~depth with it. The leaf resolves to "" so
+// the OUTPUT stays bounded — isolating the call-count blowup from output size.
+// At depth 40 this completes instantly with the fix and would not terminate
+// in any reasonable time without it.
+func TestResolveMemoizesToAvoidExponentialExpansion(t *testing.T) {
+	const depth = 40
+	scope := map[string]string{}
+	for i := 0; i < depth; i++ {
+		next := "{{v" + strconv.Itoa(i+1) + "}}"
+		scope["v"+strconv.Itoa(i)] = next + next
+	}
+	scope["v"+strconv.Itoa(depth)] = "" // leaf
+	out, missing := New(scope).Resolve("{{v0}}")
+	if out != "" {
+		t.Errorf("expected empty expansion, got %d bytes", len(out))
+	}
+	if len(missing) != 0 {
+		t.Errorf("unexpected missing: %v", missing)
+	}
+}
+
+// TestResolveMemoConsistentDiamond verifies memoization does not change results:
+// a variable reached via two branches expands to the same value in both.
+func TestResolveMemoConsistentDiamond(t *testing.T) {
+	r := New(map[string]string{
+		"root":   "{{a}}-{{b}}",
+		"a":      "{{shared}}",
+		"b":      "{{shared}}!",
+		"shared": "X",
+	})
+	if out, missing := r.Resolve("{{root}}"); out != "X-X!" || len(missing) != 0 {
+		t.Errorf("diamond: out=%q missing=%v, want %q", out, missing, "X-X!")
+	}
+}
+
+// TestResolveMemoDoesNotCacheAcrossCycle guards the no-cache-on-cycle rule
+// WITHIN one Resolve: variable c is expanded once inside the a→b→c→a cycle
+// (where the back-edge truncates a) and once via the cycle-free branch d (where
+// the back-edge instead truncates c). Its result is therefore context-dependent
+// and must NOT be memoized from the first context and reused in the second.
+func TestResolveMemoDoesNotCacheAcrossCycle(t *testing.T) {
+	r := New(map[string]string{
+		"a": "{{b}}",
+		"b": "{{c}}",
+		"c": "{{a}}|end", // back-edge to a (cycle) + a literal tail
+		"d": "{{c}}",     // cycle-free reference to c
+	})
+	// The a branch enters the cycle at a (truncates "{{a}}"); the d branch
+	// enters at c (truncates "{{c}}"). A stale cache of c would make both read
+	// the same.
+	out, _ := r.Resolve("{{a}} {{d}}")
+	if out != "{{a}}|end {{c}}|end" {
+		t.Errorf("out=%q, want %q (c must not be cached across cycle contexts)", out, "{{a}}|end {{c}}|end")
+	}
+}

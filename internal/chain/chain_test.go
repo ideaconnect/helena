@@ -342,6 +342,45 @@ func TestResolveAliasRejectsReservedWord(t *testing.T) {
 	}
 }
 
+// TestResolveAliasRejectsObjectProp verifies an alias that is a JS Object
+// built-in property name (valid identifier, not a reserved word) is rejected —
+// binding it via obj.Set would corrupt the `chain` object (e.g. __proto__
+// reassigns the prototype) instead of surfacing a clear error.
+func TestResolveAliasRejectsObjectProp(t *testing.T) {
+	finder := fakeFinder{"X": model.Request{ID: "X", Name: "X"}}
+	exec := newRecordingExec()
+	for _, bad := range []string{"__proto__", "constructor", "hasOwnProperty", "toString", "valueOf"} {
+		leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+			{Alias: bad, Request: "X"},
+		}}
+		_, _, err := Resolve(context.Background(), leaf, finder, exec, nil)
+		if err == nil || !strings.Contains(err.Error(), "collides with a JavaScript object property") {
+			t.Errorf("alias %q: err = %v, want object-property collision error", bad, err)
+		}
+	}
+}
+
+// TestResolveIDOnlyStepExecutes pins that a step referencing its target only by
+// RequestID (blank Request path — a valid, documented state) resolves and runs,
+// rather than being rejected by the missing-reference check.
+func TestResolveIDOnlyStepExecutes(t *testing.T) {
+	target := model.Request{ID: "TARGET-ID", Name: "Target", Method: model.GET, URL: "https://x/t"}
+	leaf := model.Request{ID: "L", Name: "Leaf", Chain: []model.ChainStep{
+		{Alias: "tok", Request: "", RequestID: "TARGET-ID"},
+	}}
+	exec := newRecordingExec()
+	m, _, err := Resolve(context.Background(), leaf, fakeFinder{"Target": target}, exec, nil)
+	if err != nil {
+		t.Fatalf("ID-only step should resolve via RequestID, got err: %v", err)
+	}
+	if _, ok := m["tok"]; !ok {
+		t.Errorf("leaf chainMap missing the ID-only alias: %v", m)
+	}
+	if len(exec.calls) != 1 || exec.calls[0] != "Target" {
+		t.Errorf("ID-only step did not execute its target: calls=%v", exec.calls)
+	}
+}
+
 // TestResolveBothBlankRowGivesTightError verifies a step where BOTH
 // alias and request are blank surfaces the tighter "missing both"
 // error instead of a "missing alias (request \"\")" line.
@@ -721,9 +760,8 @@ func TestResolveProgressTotalCountsIDOnlyStep(t *testing.T) {
 		//    the progress callback fires and totalSeen captures the
 		//    pre-walked total.
 		{Alias: "first", Request: "Target"},
-		// 2: an ID-only step (empty Request, populated RequestID)
-		//    that countSteps must count. Resolve errors on its
-		//    blank-ref check at runtime, but countSteps already ran.
+		// 2: an ID-only step (empty Request, populated RequestID) that both
+		//    countSteps and resolveSteps must honor (RequestID resolves it).
 		{Alias: "second", Request: "", RequestID: "TARGET-ID"},
 	}}
 	finder := fakeFinder{"Target": target}

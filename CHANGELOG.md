@@ -74,6 +74,17 @@ label via [`.github/release.yml`](.github/release.yml).
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Fixed
+- A chain step that references its target only by stable ID (`RequestID` set,
+  the human path left blank — a valid, documented state) now resolves and runs
+  instead of being rejected as having "no request reference".
+- Chain aliases that are JavaScript object built-ins (`__proto__`, `constructor`,
+  `toString`, …) are now rejected with a clear error; previously they passed
+  validation and corrupted the script-side `chain` object (e.g. `__proto__`
+  reassigned its prototype) instead of binding a step result.
+- Variable resolution memoizes each variable's expansion within a single pass,
+  so a value that references another more than once (`{{a}}{{a}}`) no longer
+  re-expands exponentially — a deep, branching set of collection/environment
+  variables could previously wedge a send for minutes.
 - Credentials are no longer forwarded over cleartext on an `https`→`http`
   redirect. A same-host protocol downgrade previously kept the `Authorization`
   header and any caller-flagged credential header (e.g. an API key), because the
