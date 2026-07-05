@@ -61,6 +61,53 @@ type Auth struct {
 	NTLM   *NTLMAuth   `json:"ntlm,omitempty"`
 }
 
+// Clone returns a deep copy of a: every non-nil scheme sub-struct is copied to
+// a fresh allocation so the result shares no mutable state with the original.
+// The sub-structs are flat value structs (strings/bools), so dereferencing the
+// pointer fully detaches each. This is the single home for Auth deep-copying —
+// the storage secret-splitter and the send/history snapshot paths all route
+// through it so the field list can't drift (mirrors the "one home" rule the
+// secret-field list follows).
+func (a Auth) Clone() Auth {
+	if a.Basic != nil {
+		v := *a.Basic
+		a.Basic = &v
+	}
+	if a.Bearer != nil {
+		v := *a.Bearer
+		a.Bearer = &v
+	}
+	if a.APIKey != nil {
+		v := *a.APIKey
+		a.APIKey = &v
+	}
+	if a.OAuth2 != nil {
+		v := *a.OAuth2
+		a.OAuth2 = &v
+	}
+	if a.WSSE != nil {
+		v := *a.WSSE
+		a.WSSE = &v
+	}
+	if a.OAuth1 != nil {
+		v := *a.OAuth1
+		a.OAuth1 = &v
+	}
+	if a.AWSV4 != nil {
+		v := *a.AWSV4
+		a.AWSV4 = &v
+	}
+	if a.Digest != nil {
+		v := *a.Digest
+		a.Digest = &v
+	}
+	if a.NTLM != nil {
+		v := *a.NTLM
+		a.NTLM = &v
+	}
+	return a
+}
+
 // NTLMAuth carries NTLMv2 credentials (#78). Like Digest it is challenge/response,
 // but multi-round: the client and server exchange NEGOTIATE → CHALLENGE →
 // AUTHENTICATE messages over a single connection before the request succeeds.

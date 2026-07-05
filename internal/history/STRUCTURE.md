@@ -29,3 +29,6 @@
   (used by the headless runner and tests).
 - **Newest-first for display, oldest-first in memory.** `entries` grows at the
   tail; `Entries()` reverses a copy so the UI shows the most recent send first.
+  The copy is deep (`Request` is `Clone`d): Restore / Resend bind the returned
+  request into the editor and edit it in place, which must not reach back and
+  rewrite the stored entry.

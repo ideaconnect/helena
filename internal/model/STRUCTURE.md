@@ -8,6 +8,7 @@
 | [model.go](model.go) | Core domain types (`Workspace`, `Collection`, `Folder`, `Request`, `Environment`, `Variable`, `Settings`), enum constants (`Method`, `BodyType`, `Theme`), and helpers (`NewID`, `EnabledPairs`, `DefaultSettings`). |
 | [auth.go](auth.go) | `Auth` plus its sub-structs (`BasicAuth`, `BearerAuth`, `APIKeyAuth`, `OAuth2Auth`, `WSSEAuth` #79, `OAuth1Auth` #77, `AWSV4Auth` #76, `DigestAuth` #75, `NTLMAuth` #78) and the related enums (`AuthType`, `APIKeyPlacement`, `OAuth2Grant`). Applied by [internal/auth](../auth/). |
 | [model_test.go](model_test.go) | Unit tests for method/body validation, content-type mapping, `EnabledPairs`, ID uniqueness, a `Collection` JSON round-trip, and `Scripts.IsEmpty`. |
+| [clone_test.go](clone_test.go) | Deep-copy tests for `Auth.Clone` (all nine schemes, nil-preservation) and `Request.Clone` (slice + Auth detachment against in-place edits and append growth). |
 
 ## Type catalog
 
@@ -22,6 +23,7 @@ A single HTTP request as the user defined it.
 - `Chain` — ordered list of `ChainStep` before-hooks; see `ChainStep`.
 - `Assertions` — declarative response checks (#88): `[]Assertion` evaluated after Send by [internal/assertion](../assertion). Each is `{Enabled, Source, Op, Expected}`.
 - `Variables` — request-scoped variables (#82): the highest static resolver scope (above environment and collection; only the script overlay wins). Applied only when this request is sent.
+- `Clone()` — returns a deep copy detaching every reference-typed field (the slices plus `Auth`'s sub-structs). The single home for Request deep-copying: the off-UI send/stream snapshot, the history record, and the secret scrubber all route through it so no field list drifts.
 
 ### `ChainStep` — [model.go](model.go)
 Names another request to execute before this one and binds the result to an alias the request's scripts can read via `chain.<alias>`. Used by [internal/chain](../chain/).
@@ -72,6 +74,7 @@ Authentication configuration carried on `Request`, `Folder`, and `Collection`.
 - `Type` — selects which sub-struct is in use; see `AuthType` constants.
 - `Basic` / `Bearer` / `APIKey` / `OAuth2` / `WSSE` / `OAuth1` / `AWSV4` / `Digest` / `NTLM` — pointer fields; exactly one is non-nil for a concrete auth.
 - The zero value (`Type == ""`) is treated as `Inherit` at load time so freshly created requests inherit from their parent without the caller having to set anything.
+- `Clone()` — deep-copies every non-nil scheme sub-struct to a fresh allocation. The single home for Auth deep-copying (`storage.cloneAuth` and `Request.Clone` delegate to it), so a clone handed to an off-UI worker shares no mutable credential state with the live tree node the Auth tab edits.
 
 ### `BasicAuth` / `BearerAuth` / `APIKeyAuth` / `OAuth2Auth` — [auth.go](auth.go)
 The credential sub-structs. Every string field runs through the `{{var}}` resolver at send time via [internal/auth.ResolveValues](../auth/auth.go).

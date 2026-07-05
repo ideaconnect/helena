@@ -18,19 +18,25 @@ func TestSnapshotRequestDetachesSlices(t *testing.T) {
 		Chain:      []model.ChainStep{{Alias: "login", Request: "Auth/Login"}},
 		Assertions: []model.Assertion{{Enabled: true, Source: "status", Op: "eq", Expected: "200"}},
 		Variables:  []model.Variable{{Key: "v", Value: "1"}},
+		Auth:       model.Auth{Type: model.AuthBasic, Basic: &model.BasicAuth{Password: "secret"}},
 	}
 	snap := snapshotRequest(orig)
 
-	// In-place edits to the original must not bleed into the snapshot.
+	// In-place edits to the original must not bleed into the snapshot — including
+	// the Auth scheme sub-struct, which the off-UI worker dereferences while the
+	// Auth tab can mutate the live pointee (the race the .Clone() at the send
+	// call site closes).
 	orig.Params[0].Value = "MUT"
 	orig.Headers[0].Value = "MUT"
 	orig.Body.Form[0].Value = "MUT"
 	orig.Chain[0].Request = "MUT"
 	orig.Assertions[0].Expected = "MUT"
 	orig.Variables[0].Value = "MUT"
+	orig.Auth.Basic.Password = "MUT"
 	if snap.Params[0].Value != "1" || snap.Headers[0].Value != "v" ||
 		snap.Body.Form[0].Value != "x" || snap.Chain[0].Request != "Auth/Login" ||
-		snap.Assertions[0].Expected != "200" || snap.Variables[0].Value != "1" {
+		snap.Assertions[0].Expected != "200" || snap.Variables[0].Value != "1" ||
+		snap.Auth.Basic.Password != "secret" {
 		t.Errorf("snapshot shares a backing array with the original: %+v", snap)
 	}
 

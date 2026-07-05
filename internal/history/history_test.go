@@ -32,6 +32,26 @@ func TestRecordAndEntriesNewestFirst(t *testing.T) {
 	}
 }
 
+// TestEntriesDeepCopyIsolatesStore pins that a caller editing a returned
+// Entry.Request in place (as Restore/Resend do when they bind it into the
+// editor) cannot mutate the stored history — a header edit on the returned copy
+// must not rewrite what the next Entries() call reports.
+func TestEntriesDeepCopyIsolatesStore(t *testing.T) {
+	s := New("", 0)
+	r := model.Request{Method: "GET", URL: "https://x/1",
+		Headers: []model.KeyValue{{Key: "X", Value: "orig"}}}
+	s.Record(Entry{Method: "GET", URL: r.URL, Request: r})
+
+	got := s.Entries()
+	got[0].Request.Headers[0].Value = "MUT" // simulate a post-Restore in-place edit
+
+	again := s.Entries()
+	if again[0].Request.Headers[0].Value != "orig" {
+		t.Errorf("editing a returned entry corrupted the store: got %q, want %q",
+			again[0].Request.Headers[0].Value, "orig")
+	}
+}
+
 // TestBoundedDropsOldest: the ring keeps only the newest `max` entries.
 func TestBoundedDropsOldest(t *testing.T) {
 	s := New(filepath.Join(t.TempDir(), "history.yml"), 3)

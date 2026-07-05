@@ -128,6 +128,24 @@ type Request struct {
 	Variables []Variable `json:"variables,omitempty"`
 }
 
+// Clone returns a deep copy of r with every reference-typed field detached from
+// the original's backing arrays: the slice fields (Params, Headers, Body.Form,
+// Chain, Assertions, Variables) and Auth's scheme sub-structs. KeyValue /
+// ChainStep / Assertion / Variable are flat value structs, so a slice copy fully
+// detaches them. This is the single home for Request deep-copying — the off-UI
+// send/stream snapshot, the history record, and the secret scrubber all route
+// through it so no caller can mutate another's request and no field list drifts.
+func (r Request) Clone() Request {
+	r.Params = append([]KeyValue(nil), r.Params...)
+	r.Headers = append([]KeyValue(nil), r.Headers...)
+	r.Body.Form = append([]KeyValue(nil), r.Body.Form...)
+	r.Chain = append([]ChainStep(nil), r.Chain...)
+	r.Assertions = append([]Assertion(nil), r.Assertions...)
+	r.Variables = append([]Variable(nil), r.Variables...)
+	r.Auth = r.Auth.Clone()
+	return r
+}
+
 // ChainStep names another request to execute before this one, binding
 // the result to an alias so this request's scripts can read it via the
 // `chain` global (e.g. chain.login.response.json.token). Request is a

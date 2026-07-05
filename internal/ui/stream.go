@@ -50,7 +50,10 @@ func (m *MainUI) streamSend() {
 	if m.currentRequest != nil {
 		m.syncBodyFromEditor()
 		req = snapshotRequest(*m.currentRequest)
-		req.Auth = m.sess.EffectiveAuth(m.currentRequestID)
+		// Clone the resolved auth — its scheme sub-structs otherwise alias the
+		// live tree node the Auth tab edits, racing this off-UI stream worker
+		// (same fix as the Send path).
+		req.Auth = m.sess.EffectiveAuth(m.currentRequestID).Clone()
 		req.Variables = withFolderVars(m.sess.SnapshotAncestorVars(m.currentRequestID), req.Variables)
 	} else {
 		req = model.Request{Method: model.Method(m.Method.Selected()), URL: m.URL.Text}
