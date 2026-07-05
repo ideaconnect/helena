@@ -37,6 +37,16 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.4.0" date="2026-07-05" type="stable">
+      <description>
+        <p>
+          First tagged release. Request history, folder-scoped collection runs,
+          machine-readable JSON/JUnit run reports, a native Windows-on-ARM
+          binary, and a quit-with-unsaved-edits confirmation, plus a batch of
+          correctness and security fixes.
+        </p>
+      </description>
+    </release>
     <release version="0.1.0" date="2026-06-16" type="development">
       <description>
         <p>Initial pre-release.</p>

@@ -19,6 +19,8 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-05
+
 ### Added
 - Request history (**Help → History**): a bounded, restart-persistent log of
   your recent sends — method, URL, status, and time — with **Restore** (reopen

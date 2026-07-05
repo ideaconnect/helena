@@ -90,5 +90,6 @@ quitting with edits still pending **asks before discarding them**.
 Light / dark / system theme, a configurable request timeout and max response
 size, an invalid-SSL toggle, a cookie jar with a viewer, **request history**
 (Help&nbsp;&rarr;&nbsp;History - restore or resend a recent send; secret-scrubbed
-so no credential is written to disk), and keyboard shortcuts (Mod+Enter to send,
+so no credential is written to disk), drag-and-drop to reorder collections,
+folders, and requests in the sidebar, and keyboard shortcuts (Mod+Enter to send,
 Mod+S to save, …).

@@ -346,7 +346,14 @@ jobs:
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v4
         with:
-          subject-path: dist/helena-*.tar.gz dist/helena-*.zip dist/helena*.deb dist/helena*.rpm
+          # One glob per line: actions/attest parses subject-path as CSV, so a
+          # space-separated list collapses into a single pattern that matches no
+          # files and fails the step (and thus the whole release).
+          subject-path: |
+            dist/helena-*.tar.gz
+            dist/helena-*.zip
+            dist/helena*.deb
+            dist/helena*.rpm
 
       - name: Create release
         uses: softprops/action-gh-release@v3
