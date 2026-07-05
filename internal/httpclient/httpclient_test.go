@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -255,6 +256,97 @@ func TestRedirectStripsCustomHeaderCrossHostKeepsSameHost(t *testing.T) {
 	}
 	if gotSame != "secret" {
 		t.Errorf("X-API-Key was dropped on a same-host redirect: %q", gotSame)
+	}
+}
+
+// TestRedirectStripsCredentialsOnSchemeDowngrade pins the security fix: an
+// https→http redirect — even to the SAME host — must not forward credentials
+// (the caller-flagged headers and Authorization) over cleartext, while a
+// same-scheme same-host redirect still carries them.
+func TestRedirectStripsCredentialsOnSchemeDowngrade(t *testing.T) {
+	c := New(model.Settings{FollowRedirects: true})
+	c.SetCrossHostStripHeaders([]string{"X-API-Key"})
+
+	mkReq := func(rawurl string) *http.Request {
+		u, err := url.Parse(rawurl)
+		if err != nil {
+			t.Fatalf("parse %q: %v", rawurl, err)
+		}
+		return &http.Request{URL: u, Header: http.Header{
+			"Authorization": {"Bearer secret"}, "X-Api-Key": {"key"},
+		}}
+	}
+
+	// https → http on the same host: both credentials stripped.
+	down := mkReq("http://api.example.com/next")
+	if err := c.http.CheckRedirect(down, []*http.Request{mkReq("https://api.example.com/start")}); err != nil {
+		t.Fatalf("CheckRedirect: %v", err)
+	}
+	if down.Header.Get("Authorization") != "" || down.Header.Get("X-API-Key") != "" {
+		t.Errorf("credentials leaked over an https→http downgrade: auth=%q key=%q",
+			down.Header.Get("Authorization"), down.Header.Get("X-API-Key"))
+	}
+
+	// https → https, same host: credentials preserved.
+	keep := mkReq("https://api.example.com/next")
+	if err := c.http.CheckRedirect(keep, []*http.Request{mkReq("https://api.example.com/start")}); err != nil {
+		t.Fatalf("CheckRedirect: %v", err)
+	}
+	if keep.Header.Get("Authorization") == "" || keep.Header.Get("X-API-Key") == "" {
+		t.Errorf("credentials wrongly stripped on a same-scheme same-host redirect")
+	}
+}
+
+// TestNTLMHandshakeFailureSurfacesOriginal401 pins that a failed NTLM handshake
+// (server gives no parseable type-2 challenge) surfaces the original 401 and its
+// body, not a "read on closed body" error from the drained initial response.
+func TestNTLMHandshakeFailureSurfacesOriginal401(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Www-Authenticate", "NTLM") // bare — NTLMChallenge can't parse a token
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("ntlm-original-401"))
+	}))
+	defer srv.Close()
+
+	req := model.Request{Method: model.GET, URL: srv.URL,
+		Auth: model.Auth{Type: model.AuthNTLM, NTLM: &model.NTLMAuth{Username: "u", Password: "p"}}}
+	resp, err := New(model.Settings{}).Do(context.Background(), req, vars.New())
+	if err != nil {
+		t.Fatalf("Do surfaced an error instead of the original 401: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(string(resp.Body), "ntlm-original-401") {
+		t.Errorf("handshake failure lost the original 401: status=%d body=%q", resp.StatusCode, resp.Body)
+	}
+}
+
+// TestDigestRetryFailureSurfacesOriginal401 pins that when the authenticated
+// Digest retry fails at the transport (connection dropped), Do surfaces the
+// original 401 body rather than reading the already-closed initial response.
+func TestDigestRetryFailureSurfacesOriginal401(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.Header.Get("Authorization"), "Digest") {
+			// Drop the retry's connection so c.http.Do(req2) errors.
+			if hj, ok := w.(http.Hijacker); ok {
+				if conn, _, err := hj.Hijack(); err == nil {
+					_ = conn.Close()
+				}
+			}
+			return
+		}
+		w.Header().Set("Www-Authenticate", `Digest realm="test", nonce="abc123", qop="auth"`)
+		w.WriteHeader(http.StatusUnauthorized)
+		_, _ = w.Write([]byte("digest-original-401"))
+	}))
+	defer srv.Close()
+
+	req := model.Request{Method: model.GET, URL: srv.URL,
+		Auth: model.Auth{Type: model.AuthDigest, Digest: &model.DigestAuth{Username: "u", Password: "p"}}}
+	resp, err := New(model.Settings{}).Do(context.Background(), req, vars.New())
+	if err != nil {
+		t.Fatalf("Do surfaced an error instead of the original 401: %v", err)
+	}
+	if resp.StatusCode != http.StatusUnauthorized || !strings.Contains(string(resp.Body), "digest-original-401") {
+		t.Errorf("digest retry failure lost the original 401: status=%d body=%q", resp.StatusCode, resp.Body)
 	}
 }
 

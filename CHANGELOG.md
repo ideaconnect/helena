@@ -74,6 +74,16 @@ label via [`.github/release.yml`](.github/release.yml).
   to check `GL_RENDERER` (`glxinfo` / `wglinfo` / Task Manager's GPU column).
 
 ### Fixed
+- Credentials are no longer forwarded over cleartext on an `https`→`http`
+  redirect. A same-host protocol downgrade previously kept the `Authorization`
+  header and any caller-flagged credential header (e.g. an API key), because the
+  stripping keyed only on a host change; the downgrade now drops them too.
+- A failed **Digest** or **NTLM** authentication handshake now surfaces the
+  original `401` (status, headers, body) instead of a confusing
+  `read on closed response body` error. The challenge response's body is
+  preserved until the authenticated retry actually supersedes it — relevant when
+  a proxy drops connection affinity mid-NTLM or the Digest retry's connection is
+  reset.
 - The per-send request snapshot now also detaches the request's resolved
   **Auth** credential sub-struct: editing the Auth tab (e.g. a password) while a
   send or SSE stream was in flight could race the off-UI worker, which
