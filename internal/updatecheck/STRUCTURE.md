@@ -17,6 +17,7 @@
 ## Notable functions
 
 - `LatestGitHubRelease(ctx, client)` → `latestFromURL(ctx, client, GitHubLatestURL)`.
-- `parseVersion(s)` normalizes `v1.2.3` / `1.2.3-rc1` to `[]int`, rejecting
-  non-numeric input; `cmpVersion(a, b)` compares component-wise, padding the
-  shorter slice with zeros.
+- `parseVersion(s)` normalizes `v1.2.3` / `1.2.3-rc1` to `([]int, pre, ok)` —
+  `pre` flags a pre-release suffix (which ranks below the same numeric version),
+  build metadata (`+meta`) is dropped, non-numeric input is rejected;
+  `cmpVersion(a, b)` compares component-wise, padding the shorter slice with zeros.

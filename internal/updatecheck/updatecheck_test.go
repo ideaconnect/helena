@@ -117,14 +117,19 @@ func TestCompare(t *testing.T) {
 		{"update-available", "v0.4.0", "v0.5.0", StatusUpdateAvailable},
 		{"patch-update", "v0.4.0", "v0.4.1", StatusUpdateAvailable},
 		{"ahead", "v0.5.0", "v0.4.0", StatusAhead},
+		// Multi-digit components pin NUMERIC (not lexical) comparison: "10" > "9".
+		{"two-digit-newer", "v0.9.0", "v0.10.0", StatusUpdateAvailable},
+		{"two-digit-ahead", "v0.10.0", "v0.9.0", StatusAhead},
+		{"two-digit-major", "v1.9.0", "v1.10.0", StatusUpdateAvailable},
 		{"dev-current", "dev", "v0.4.0", StatusUnknown},
 		{"empty-current", "", "v0.4.0", StatusUnknown},
 		{"nonnumeric-latest", "v0.4.0", "nightly", StatusUnknown},
-		{"prerelease-suffix-equal", "v0.4.0", "v0.4.0-rc1", StatusUpToDate},
-		{"prerelease-current", "v0.4.0-rc1", "v0.4.0", StatusUpToDate},
+		// A pre-release ranks below the same numeric version (SemVer §11).
+		{"rc-current-vs-stable", "v0.4.0-rc1", "v0.4.0", StatusUpdateAvailable},
+		{"stable-current-vs-rc-latest", "v0.4.0", "v0.4.0-rc1", StatusAhead},
 		{"differing-length-equal", "v0.4", "v0.4.0", StatusUpToDate},
 		{"differing-length-update", "v0.4", "v0.4.1", StatusUpdateAvailable},
-		{"build-metadata", "v0.4.0+abc", "v0.4.0", StatusUpToDate},
+		{"build-metadata-ignored", "v0.4.0+abc", "v0.4.0", StatusUpToDate},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

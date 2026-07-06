@@ -109,48 +109,64 @@ func latestFromURL(ctx context.Context, client *http.Client, url string) (Releas
 	return Release{Tag: payload.TagName, HTMLURL: payload.HTMLURL}, nil
 }
 
-// Compare classifies current against latest. Either may carry a leading "v" and
-// a pre-release/build suffix (e.g. "v0.4.0-rc1"), which is ignored for the
-// numeric comparison. Anything unparseable yields StatusUnknown.
+// Compare classifies current against latest. Either may carry a leading "v".
+// Build metadata ("+meta") is ignored; a pre-release suffix ("-rc1") ranks below
+// the same numeric version without one (SemVer §11), so an rc build sees its
+// released version as an update. Anything non-numeric (e.g. "dev") yields
+// StatusUnknown.
 func Compare(current, latest string) Status {
-	cur, okCur := parseVersion(current)
-	lat, okLat := parseVersion(latest)
+	cur, curPre, okCur := parseVersion(current)
+	lat, latPre, okLat := parseVersion(latest)
 	if !okCur || !okLat {
 		return StatusUnknown
 	}
-	switch cmpVersion(cur, lat) {
-	case 0:
-		return StatusUpToDate
-	case -1:
-		return StatusUpdateAvailable
-	default:
+	if c := cmpVersion(cur, lat); c != 0 {
+		if c < 0 {
+			return StatusUpdateAvailable
+		}
 		return StatusAhead
+	}
+	// Equal numeric versions: a pre-release build ranks below the release.
+	switch {
+	case curPre && !latPre:
+		return StatusUpdateAvailable
+	case !curPre && latPre:
+		return StatusAhead
+	default:
+		return StatusUpToDate
 	}
 }
 
-// parseVersion turns "v1.2.3" / "1.2.3-rc1" into [1,2,3]. It requires at least
-// one numeric component; missing trailing components default to 0. Returns
-// false for non-numeric input such as "dev".
-func parseVersion(s string) ([]int, bool) {
+// parseVersion turns "v1.2.3" / "1.2.3-rc1" into ([1,2,3], pre, ok). pre is true
+// when a pre-release suffix ("-rc1") is present, which lowers precedence versus
+// the same numeric version. Build metadata ("+meta") does not affect precedence
+// and is discarded. Missing trailing components default to 0; non-numeric input
+// (e.g. "dev") returns ok=false.
+func parseVersion(s string) (parts []int, pre bool, ok bool) {
 	s = strings.TrimSpace(s)
 	s = strings.TrimPrefix(s, "v")
-	// Drop any pre-release ("-rc1") or build ("+meta") suffix.
-	if i := strings.IndexAny(s, "-+"); i >= 0 {
+	// Build metadata never affects precedence — drop it first.
+	if i := strings.IndexByte(s, '+'); i >= 0 {
+		s = s[:i]
+	}
+	// A pre-release suffix lowers precedence vs the same numeric version.
+	if i := strings.IndexByte(s, '-'); i >= 0 {
+		pre = true
 		s = s[:i]
 	}
 	if s == "" {
-		return nil, false
+		return nil, false, false
 	}
-	parts := strings.Split(s, ".")
-	out := make([]int, len(parts))
-	for i, p := range parts {
+	fields := strings.Split(s, ".")
+	parts = make([]int, len(fields))
+	for i, p := range fields {
 		n, err := strconv.Atoi(p)
 		if err != nil {
-			return nil, false
+			return nil, false, false
 		}
-		out[i] = n
+		parts[i] = n
 	}
-	return out, true
+	return parts, pre, true
 }
 
 // cmpVersion returns -1 if a < b, 0 if equal, 1 if a > b, comparing

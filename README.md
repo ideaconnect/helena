@@ -57,9 +57,10 @@ built in CI but not yet signed/notarized for Gatekeeper — see
 [docs/PACKAGING.md](docs/PACKAGING.md).
 
 **Updates** are delivered via package managers (as they land) or by
-re-downloading a release — Helena does not check for updates at runtime, to
-keep its [no-background-traffic guarantee](#privacy). Run `helena --version`
-to see your build. See [docs/PACKAGING.md](docs/PACKAGING.md) for the full
+re-downloading a release. Helena makes no automatic or background update check;
+the status bar has an opt-in **Check for updates** button that queries GitHub
+only when you click it (part of the [no-background-traffic guarantee](#privacy)).
+Run `helena --version` to see your build. See [docs/PACKAGING.md](docs/PACKAGING.md) for the full
 distribution status.
 
 ## Screenshots

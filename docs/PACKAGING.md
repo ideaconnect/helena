@@ -109,7 +109,8 @@ favourable of the major app stores for a small indie tool.
   code-signs it for free (no code-signing certificate to buy), hosts the binary
   on its CDN, and pushes updates to users automatically. That removes the two
   biggest Windows-distribution costs — a signing cert and an update mechanism —
-  which Helena deliberately does not build itself (no runtime update check; see
+  which Helena deliberately does not build itself (no automatic/background update
+  check — only an opt-in one; see
   [Updates](#updates-package-manager-manual-no-phone-home-decided-2026-06-16)).
 - **Revenue split favours you.** Using Microsoft's commerce you keep **85%**
   (Microsoft takes 15% for non-game apps); use your own commerce engine and you

@@ -133,7 +133,8 @@ migrate cleanly.
 
 Helena makes **no background network requests** and ships **no telemetry**. The
 only outbound traffic is what you trigger (sending a request, fetching an
-OAuth2 token, importing from a URL). Collections and credentials are stored as
+OAuth2 token, importing from a URL, or clicking **Check for updates** in the
+status bar). Collections and credentials are stored as
 plaintext YAML on your local disk today — treat those files like any secrets
 file. Secret values are masked in the UI and redacted from logs and error
 messages.

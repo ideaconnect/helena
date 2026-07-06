@@ -45,7 +45,7 @@ the next tagged release; there are no separate long-term support branches yet.
 - Helena makes **no background network requests** — see the *Privacy* section
   of the [README](README.md). Outbound traffic happens only for actions you
   explicitly trigger (sending a request, importing from a URL, fetching an
-  OAuth2 token).
+  OAuth2 token, or clicking *Check for updates* in the status bar).
 - Credentials (auth secrets + Secret env vars) are kept out of the git-tracked
   collection YAML — externalized to a per-collection store under your OS config
   dir (or `$HELENA_SECRETS_DIR`) — so a committed collection carries no
