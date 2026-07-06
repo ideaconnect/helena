@@ -94,9 +94,12 @@ picture { display: block; }
 .nav-cta a.icon-only .ic { font-size: 17px; }
 .nav-cta .ghost { color: var(--text); border: 1px solid var(--line); background: var(--surface); }
 .nav-cta .ghost:hover { border-color: var(--green); color: var(--green-bright); }
-/* Support links styled like the NUTS project: the sponsor heart is always pink,
-   and the coffee link uses the official Buy Me a Coffee brand mark (an image, so
-   it keeps its own colour). Hovers just lift the border tint. */
+/* Support links styled like the NUTS project: a white rounded badge (so the
+   pink heart and the coloured Buy Me a Coffee brand mark read against the dark
+   nav instead of washing out), the sponsor heart always pink, and the coffee
+   link using the official BMC brand mark (an image, so it keeps its colour). */
+.nav-cta .sponsor,
+.nav-cta .coffee { background: #fff; border-color: rgba(0, 0, 0, .08); box-shadow: 0 1px 3px rgba(0, 0, 0, .2); }
 .nav-cta .sponsor { color: #db61a2; }
 .nav-cta .sponsor:hover { border-color: #db61a2; color: #db61a2; }
 .nav-cta .coffee:hover { border-color: #e2b100; }
