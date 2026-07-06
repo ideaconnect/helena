@@ -376,3 +376,48 @@ jobs:
         with:
           files: dist/*
           fail_on_unmatched_files: true
+
+  msix:
+    name: Windows Store package (MSIX)
+    needs: build
+    # Build the Microsoft Store submission artifact when a release is published.
+    # It reuses the two Windows binaries the build matrix already produced, so it
+    # gates on the full test matrix (needs: build) just like the release job.
+    #
+    # The output is an UNSIGNED .msixbundle (Microsoft signs Store submissions),
+    # uploaded as a workflow artifact for manual upload in Partner Center. It is
+    # deliberately NOT attached to the public GitHub Release: an unsigned MSIX
+    # can't be installed outside the Store and would only confuse direct
+    # downloaders, who want the archives / .deb / .rpm instead.
+    #
+    # Skipped for pre-releases: MSIX package versions must be purely numeric
+    # (x.y.z.0), so a tag like v0.5.0-rc1 has no valid MSIX version — gating here
+    # skips it cleanly instead of failing the run for an otherwise-good release.
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7 # manifest + logo assets + packaging scripts
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      # build-store-bundle.ps1 packs helena-{x64,arm64}.msix from the prebuilt
+      # exes (identity baked into AppxManifest.xml) and combines them into one
+      # bundle. github.ref_name is the release tag (e.g. v0.4.0); the script
+      # strips the "v" and pads to the Store's 4-part version.
+      - name: Build Store MSIX bundle (x64 + arm64)
+        shell: pwsh
+        run: |
+          ./packaging/windows/msix/build-store-bundle.ps1 `
+            -Amd64Exe artifacts/helena-windows-amd64.exe `
+            -Arm64Exe artifacts/helena-windows-arm64.exe `
+            -Version "${{ github.ref_name }}"
+
+      - name: Upload Store bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: helena-store-msixbundle
+          path: dist/helena.msixbundle
+          if-no-files-found: error

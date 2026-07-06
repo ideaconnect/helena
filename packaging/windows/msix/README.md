@@ -11,7 +11,8 @@ this file is the mechanical "how to build the package" reference.
 | File | Purpose |
 | ---- | ------- |
 | `AppxManifest.xml` | Package manifest. The product identity is baked in (below); only `@VERSION@` / `@ARCH@` are build-time tokens. Full-trust Win32 app (`Windows.FullTrustApplication` + `runFullTrust`). |
-| `build-msix.ps1` | Stages the exe + assets, stamps version/arch into the manifest, runs `makeappx`, optionally self-signs for local testing. Run once per architecture. |
+| `build-store-bundle.ps1` | One-shot orchestrator: builds both arches and combines them into `dist\helena.msixbundle`. What CI runs, and the easiest local entry point. |
+| `build-msix.ps1` | Lower-level: stages one arch's exe + assets, stamps version/arch, runs `makeappx pack`, optionally self-signs for local testing. |
 | `Assets/` | Store logo PNGs (Square 44/71/150/310, Wide 310x150, StoreLogo 50, SplashScreen 620x300), generated from `assets/app_icon.png`. |
 
 ## Product identity (from Partner Center)
@@ -36,23 +37,33 @@ Baked into `AppxManifest.xml`; must match Partner Center exactly. For reference:
   [docs/BUILDING.md](../../../docs/BUILDING.md#release-grade-build):
   `dist\helena-windows-amd64.exe` and `dist\helena-windows-arm64.exe`.
 
-## Build
+## Build in CI (recommended)
 
-Run once per architecture, then bundle:
+When you **publish a GitHub Release**, the `msix` job in
+[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) builds the bundle
+for you and uploads it as a workflow artifact named **`helena-store-msixbundle`**.
+Download it from that run's summary page and upload it in Partner Center — no
+local Windows SDK needed. (The bundle is unsigned; Microsoft signs it.)
+
+## Build locally
+
+One command builds both arches and the bundle:
 
 ```powershell
-# amd64
-.\build-msix.ps1 -ExePath ..\..\..\dist\helena-windows-amd64.exe -Version 0.4.0.0 -Arch x64
-
-# arm64
-.\build-msix.ps1 -ExePath ..\..\..\dist\helena-windows-arm64.exe -Version 0.4.0.0 -Arch arm64
-
-# combine both into one submission artifact
-makeappx bundle /d ..\..\..\dist\msix-bundle-input /p ..\..\..\dist\helena.msixbundle
+.\build-store-bundle.ps1 `
+  -Amd64Exe ..\..\..\dist\helena-windows-amd64.exe `
+  -Arm64Exe ..\..\..\dist\helena-windows-arm64.exe `
+  -Version 0.4.0    # 3- or 4-part, with or without a leading "v"; padded to x.y.z.0
 ```
 
-(For the bundle step, drop `helena-x64.msix` and `helena-arm64.msix` into a
-folder — e.g. `dist\msix-bundle-input\` — and point `makeappx bundle` at it.)
+That writes `dist\helena.msixbundle`. To drive a single architecture (or
+self-sign for side-load testing), call the lower-level `build-msix.ps1` directly:
+
+```powershell
+.\build-msix.ps1 -ExePath ..\..\..\dist\helena-windows-amd64.exe -Version 0.4.0.0 -Arch x64
+.\build-msix.ps1 -ExePath ..\..\..\dist\helena-windows-arm64.exe -Version 0.4.0.0 -Arch arm64
+makeappx bundle /d ..\..\..\dist\msix-bundle-input /p ..\..\..\dist\helena.msixbundle /bv 0.4.0.0
+```
 
 The **package version**'s final part must be `0` (e.g. `0.4.0.0`) — Microsoft
 reserves it for Store repackaging. Keep the first three parts in step with
@@ -79,6 +90,7 @@ policy to <https://idct.tech/helena/privacy/>. Microsoft signs and hosts the
 package and delivers updates automatically. Full checklist in
 [docs/PACKAGING.md](../../../docs/PACKAGING.md#windows--microsoft-store-msix).
 
-> Not yet wired into release CI — the MSIX build is manual per release for now.
-> The identity-verification and name-reservation steps need the owner's
-> Microsoft account and can't be scripted.
+> The `.msixbundle` is built automatically by the `msix` CI job on every
+> published (non-pre-release) GitHub Release. Only the Partner Center submission
+> itself stays manual — identity verification, name reservation, and upload need
+> the owner's Microsoft account and can't be scripted.
