@@ -70,7 +70,7 @@ only for the website. The app is one static binary.
 
     Install Go from Homebrew (`brew install go`) or <https://go.dev/dl/>.
     macOS builds and passes the test suite; note that signed / notarized
-    distribution is deferred (see [PACKAGING](PACKAGING.md#macos-distribution--deferred-decided-2026-06-16)),
+    distribution is deferred (see [PACKAGING](PACKAGING.md#macos-distribution-deferred-decided-2026-06-16)),
     so building from source is the supported way to run Helena on a Mac today.
 
 ## Build it

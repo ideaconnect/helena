@@ -99,7 +99,7 @@ favourable of the major app stores for a small indie tool.
   on its CDN, and pushes updates to users automatically. That removes the two
   biggest Windows-distribution costs — a signing cert and an update mechanism —
   which Helena deliberately does not build itself (no runtime update check; see
-  [Updates](#updates--package-manager--manual-no-phone-home-decided-2026-06-16)).
+  [Updates](#updates-package-manager-manual-no-phone-home-decided-2026-06-16)).
 - **Revenue split favours you.** Using Microsoft's commerce you keep **85%**
   (Microsoft takes 15% for non-game apps); use your own commerce engine and you
   keep 100%. For a "minimal price" listing the 15% is negligible.
@@ -137,6 +137,20 @@ favourable of the major app stores for a small indie tool.
 > via the Store Submission API is a follow-up. The identity-verification and
 > name-reservation steps are inherently manual (they need the owner's Microsoft
 > account) and can't be scripted from CI.
+
+**Updates on the Store — automatic, out-of-process, no in-app updater (decided
+2026-07-06).** MSIX packages installed from the Store are updated
+**automatically by the Store client**: it checks for new package versions and
+installs them silently in the background. Publishing a new version in Partner
+Center is the whole update mechanism. This is done by the OS, not by Helena, so
+it stays fully within the [no-phone-home guarantee](#updates-package-manager-manual-no-phone-home-decided-2026-06-16):
+Helena still ships **no runtime update check**. We deliberately do **not** add an
+in-app "check for updates" call or a Store "Update" button — an app-level
+background check would violate that guarantee, and a manual Store deep-link would
+be redundant with the Store's own auto-update (and could only be wired up once a
+listing exists, since it needs the Store product ID). If that ever changes, the
+only privacy-safe shape is a *user-initiated* button that opens the Store product
+page via `OpenURL` on click, gated to the Store build alone.
 
 ### Linux — monetization is weak; pick reach + donations
 
