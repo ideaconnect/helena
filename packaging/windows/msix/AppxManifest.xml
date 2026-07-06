@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  MSIX package manifest template for the Microsoft Store submission of Helena.
+  MSIX package manifest for the Microsoft Store submission of Helena.
 
-  The @TOKENS@ below are substituted by build-msix.ps1 from the identity values
-  Partner Center assigns when you reserve the app name (Apps and games ->
-  Product identity). They MUST match Partner Center exactly or the Store rejects
-  the upload. See packaging/windows/msix/README.md and docs/PACKAGING.md.
+  The Identity values below are the ones Partner Center assigned to this product
+  (Store ID 9NWPKK6CTDR1, PFN IdeaConnectBartoszPachoek.HelenaAPIClient_aec6mzqn7e0rm)
+  and MUST match Partner Center exactly or the Store rejects the upload. Only
+  @VERSION@ and @ARCH@ are build-time tokens, substituted per build by
+  build-msix.ps1. See packaging/windows/msix/README.md and docs/PACKAGING.md.
 
   Helena ships as a full-trust Win32 executable wrapped in MSIX
   (EntryPoint="Windows.FullTrustApplication" + the runFullTrust capability), not
@@ -18,14 +19,14 @@
     IgnorableNamespaces="uap rescap">
 
   <Identity
-      Name="@IDENTITY_NAME@"
-      Publisher="@PUBLISHER@"
+      Name="IdeaConnectBartoszPachoek.HelenaAPIClient"
+      Publisher="CN=776E87F3-6B20-4A52-B4D8-AA515F574757"
       Version="@VERSION@"
       ProcessorArchitecture="@ARCH@" />
 
   <Properties>
     <DisplayName>Helena</DisplayName>
-    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <PublisherDisplayName>IDCT Bartosz Pachołek</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
     <Description>A small, single-binary API client - a native alternative to Postman and Bruno.</Description>
   </Properties>
