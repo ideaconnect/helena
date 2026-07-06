@@ -32,11 +32,16 @@ those land. Run `helena --version` to see your build.
 
 ## Build from source
 
+Building Helena yourself is free, forever, on every platform. The quick version
+is below; the full copy-paste guide (per-distro dependencies, release-grade
+build flags, cross-arch notes, troubleshooting) is in
+[BUILDING]({{ site.repo }}/blob/main/docs/BUILDING.md).
+
 **Requirements**
 
 - **Go 1.26+** (the toolchain is pinned in `go.mod`).
 - A **C compiler** - Fyne uses cgo + OpenGL.
-- **Linux:** `sudo apt-get install -y libgl1-mesa-dev xorg-dev`
+- **Linux:** `sudo apt-get install -y build-essential libgl1-mesa-dev xorg-dev`
 - **Windows:** TDM-GCC or MSYS2 mingw-w64 on `PATH`
 - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
 

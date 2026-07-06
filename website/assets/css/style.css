@@ -103,6 +103,8 @@ picture { display: block; }
 .nav-cta .sponsor { color: #db61a2; }
 .nav-cta .sponsor:hover { border-color: #db61a2; color: #db61a2; }
 .nav-cta .coffee:hover { border-color: #e2b100; }
+/* Microsoft Store CTA — ghost button with a Windows-blue hover accent. */
+.nav-cta .store:hover { border-color: #0067b8; color: #2b88d8; }
 /* Raster brand marks (e.g. Buy Me a Coffee) in the icon-only nav buttons. */
 .ic-img { height: 18px; width: auto; display: inline-block; vertical-align: -0.28em; flex: 0 0 auto; }
 .nav-cta .solid { color: #04210f; background: var(--green-bright); box-shadow: 0 6px 18px rgba(34, 197, 94, .25); }
@@ -333,6 +335,8 @@ pre code { background: none; padding: 0; }
   .nav-cta { order: 2; margin-left: auto; border-left: 0; padding-left: 0; }
   .nav-links { order: 3; width: 100%; margin-left: 0; justify-content: center; gap: 2px; }
   .nav-links a { padding: 6px 10px; }
+  /* Collapse the Microsoft Store CTA to icon-only so the top row stays compact. */
+  .nav-cta .store span { display: none; }
   .hero { padding: 44px 0 24px; }
 }
 

@@ -73,6 +73,93 @@ icon + metainfo); they're not yet wired into CI.
 > packaging path is first exercised on a real release tag — expect a round of
 > iteration there.
 
+## Store distribution & monetization
+
+Helena is and stays free to **build from source** (see
+[BUILDING.md](BUILDING.md)) and free to download from GitHub Releases. Store
+listings are an optional, paid-but-cheap convenience channel: a one-click
+install, auto-updates, and — for those who want to support the project — a
+minimal price. This section is the how-to for each store, and the honest state
+of monetization per platform.
+
+### Windows — Microsoft Store (MSIX)
+
+The Microsoft Store is the recommended paid channel: as of 2026 it is the most
+favourable of the major app stores for a small indie tool.
+
+**Why it's worth it (2026 terms):**
+
+- **Registration is free.** Microsoft waived the one-time individual developer
+  fee in late 2025 and the company fee in May 2026; new individual accounts
+  verify with a government ID + selfie instead of a card. (Historically this was
+  a US$19 one-time fee — budget for it only if you register in a market where
+  the new free-onboarding flow hasn't rolled out yet.)
+- **Microsoft signs, hosts, and updates for you.** Submit an MSIX and the Store
+  code-signs it for free (no code-signing certificate to buy), hosts the binary
+  on its CDN, and pushes updates to users automatically. That removes the two
+  biggest Windows-distribution costs — a signing cert and an update mechanism —
+  which Helena deliberately does not build itself (no runtime update check; see
+  [Updates](#updates--package-manager--manual-no-phone-home-decided-2026-06-16)).
+- **Revenue split favours you.** Using Microsoft's commerce you keep **85%**
+  (Microsoft takes 15% for non-game apps); use your own commerce engine and you
+  keep 100%. For a "minimal price" listing the 15% is negligible.
+
+**Deployment path (step by step):**
+
+1. **Create a Partner Center account** at
+   <https://partner.microsoft.com/dashboard> → *Windows & Xbox* program, and
+   complete identity verification.
+2. **Reserve the app name** (e.g. `Helena`) under *Apps and games → New
+   product*. Partner Center then assigns you three identity values — copy them:
+   *Package/Identity/Name*, *Package/Identity/Publisher* (a `CN=…` string), and
+   *Publisher display name*. The MSIX manifest must match these exactly or the
+   Store rejects the upload.
+3. **Build the Windows binaries** with the release flags (see
+   [BUILDING.md](BUILDING.md#release-grade-build)) — one `helena-windows-amd64.exe`
+   and, to cover Windows-on-ARM, one `helena-windows-arm64.exe`.
+4. **Build the MSIX package(s)** with the committed scaffold in
+   [`packaging/windows/msix/`](../packaging/windows/msix/) — an `AppxManifest.xml`
+   template, the Store logo assets, and a `build-msix.ps1` that stamps your
+   identity values and runs `makeappx`. Produce one `.msix` per architecture,
+   then combine them into a single `.msixbundle` so one submission serves both.
+   See that directory's [README](../packaging/windows/msix/README.md).
+5. **Test the package locally** by self-signing it (the script's `-Sign` switch)
+   and side-loading — the Store-signed build can't be run until it's installed
+   from the Store, so a self-signed copy is how you smoke-test the packaged app.
+6. **Create the submission** in Partner Center: upload the `.msixbundle`, set a
+   **minimal price** and markets, complete the age rating (IARC) questionnaire,
+   add screenshots (reuse `make screenshots` output) and a description, and point
+   the privacy-policy field at <https://idct.tech/helena/privacy/>. Submit for
+   certification.
+
+> **Not yet automated.** The MSIX build is a documented manual/per-release step
+> today; wiring `build-msix.ps1` into the release CI and automating submission
+> via the Store Submission API is a follow-up. The identity-verification and
+> name-reservation steps are inherently manual (they need the owner's Microsoft
+> account) and can't be scripted from CI.
+
+### Linux — monetization is weak; pick reach + donations
+
+There is **no dominant paid Linux storefront**, and Linux users overwhelmingly
+expect software to be free and buildable from source. A hard paywall on Linux
+mostly routes people to the (free, documented) source build. The realistic
+options, best-first for Helena:
+
+| Channel | Monetization | Reality in 2026 | Fit for Helena |
+| ------- | ------------ | --------------- | -------------- |
+| **[itch.io](https://itch.io)** | Fixed **or** "pay what you want" (set a minimum, e.g. \$2); configurable revenue share (default 10%) | Works today, cross-platform, no distro lock-in, one-click paid download | **Best if you want an actual price tag on Linux.** Upload the `.tar.gz` / AppImage, set a minimum price. |
+| **[Flathub](https://flathub.org)** | None yet (donation links + developer verification only) | The default cross-distro store; maximum reach; paid apps have been "coming" since 2023 but are **not live** as of mid-2026 | **Best for reach.** Ship a Flatpak (it reuses the same `.desktop` + icon + AppStream metainfo already in `packaging/linux/`), free, with your Sponsor/Buy-me-a-coffee links attached. |
+| **[elementary AppCenter](https://appcenter.elementary.io)** | "Pay what you want" (suggested price; users may pay \$0) | Real and has paid developers, but elementary-OS-specific and Flatpak-based via a reviewed GitHub submission | Optional extra reach into the elementary audience; price is not enforced. |
+| **Snap Store** | No meaningful third-party paid model | Free distribution only | Skip for monetization. |
+| **GitHub Sponsors + Buy Me a Coffee** | Direct donations | Already wired into the website nav/footer | **Already done** — this is Helena's primary Linux "monetization" and needs no store. |
+
+**Recommendation:** don't gate Linux behind a store paywall. Publish a **free
+Flathub** build for reach, keep the existing **GitHub Sponsors + Buy Me a
+Coffee** links as the donation path, and — if you want a genuine one-click paid
+download on Linux — put a "pay what you want, suggested \$X" listing on
+**itch.io**. That captures willing payers without alienating the audience or
+fragmenting into a distro-specific store.
+
 ## macOS distribution — deferred (decided 2026-06-16)
 
 macOS is **built and tested in CI** (`macos-latest`, native clang/cgo), but

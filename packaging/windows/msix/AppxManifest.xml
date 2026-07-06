@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  MSIX package manifest template for the Microsoft Store submission of Helena.
+
+  The @TOKENS@ below are substituted by build-msix.ps1 from the identity values
+  Partner Center assigns when you reserve the app name (Apps and games ->
+  Product identity). They MUST match Partner Center exactly or the Store rejects
+  the upload. See packaging/windows/msix/README.md and docs/PACKAGING.md.
+
+  Helena ships as a full-trust Win32 executable wrapped in MSIX
+  (EntryPoint="Windows.FullTrustApplication" + the runFullTrust capability), not
+  a UWP app.
+-->
+<Package
+    xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+    xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+    xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+    IgnorableNamespaces="uap rescap">
+
+  <Identity
+      Name="@IDENTITY_NAME@"
+      Publisher="@PUBLISHER@"
+      Version="@VERSION@"
+      ProcessorArchitecture="@ARCH@" />
+
+  <Properties>
+    <DisplayName>Helena</DisplayName>
+    <PublisherDisplayName>@PUBLISHER_DISPLAY_NAME@</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>A small, single-binary API client - a native alternative to Postman and Bruno.</Description>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Helena" Executable="helena.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+          DisplayName="Helena"
+          Description="A small, single-binary API client - a native alternative to Postman and Bruno."
+          BackgroundColor="transparent"
+          Square150x150Logo="Assets\Square150x150Logo.png"
+          Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile
+            Wide310x150Logo="Assets\Wide310x150Logo.png"
+            Square71x71Logo="Assets\Square71x71Logo.png"
+            Square310x310Logo="Assets\Square310x310Logo.png">
+          <uap:ShowNameOnTiles>
+            <uap:ShowOn Tile="square150x150Logo" />
+            <uap:ShowOn Tile="wide310x150Logo" />
+          </uap:ShowNameOnTiles>
+        </uap:DefaultTile>
+        <uap:SplashScreen Image="Assets\SplashScreen.png" />
+      </uap:VisualElements>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>
