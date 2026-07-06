@@ -151,19 +151,19 @@ favourable of the major app stores for a small indie tool.
 > are inherently manual (they need the owner's Microsoft account); automating
 > the upload via the Store Submission API is a possible follow-up.
 
-**Updates on the Store — automatic, out-of-process, no in-app updater (decided
-2026-07-06).** MSIX packages installed from the Store are updated
-**automatically by the Store client**: it checks for new package versions and
-installs them silently in the background. Publishing a new version in Partner
-Center is the whole update mechanism. This is done by the OS, not by Helena, so
-it stays fully within the [no-phone-home guarantee](#updates-package-manager-manual-no-phone-home-decided-2026-06-16):
-Helena still ships **no runtime update check**. We deliberately do **not** add an
-in-app "check for updates" call or a Store "Update" button — an app-level
-background check would violate that guarantee, and a manual Store deep-link would
-be redundant with the Store's own auto-update (and could only be wired up once a
-listing exists, since it needs the Store product ID). If that ever changes, the
-only privacy-safe shape is a *user-initiated* button that opens the Store product
-page via `OpenURL` on click, gated to the Store build alone.
+**Updates on the Store — automatic, out-of-process (decided 2026-07-06).** MSIX
+packages installed from the Store are updated **automatically by the Store
+client**: it checks for new package versions and installs them silently in the
+background. Publishing a new version in Partner Center is the whole update
+mechanism. This is done by the OS, not by Helena, so it stays within the
+[no-phone-home guarantee](#updates-package-manager-manual-no-phone-home-decided-2026-06-16):
+Helena still makes **no automatic/background update check**. What the app *does*
+have (the status bar, see [internal/updatecheck](../internal/updatecheck/)) is an
+**opt-in, click-only** check: the bottom bar shows your current version, a "Check
+for updates" button fetches the latest GitHub release only when clicked, and on
+Windows it links to the Store product page. There is no in-app auto-*installer*
+— on the Store the Store handles that, and elsewhere you update via re-download
+or a package manager.
 
 ### Linux — monetization is weak; pick reach + donations
 
@@ -202,16 +202,20 @@ staple, then add a Homebrew cask. Until then, macOS users build from source.
 
 ## Updates — package-manager / manual, no phone-home (decided 2026-06-16)
 
-Helena does **not** check for updates at runtime. A startup update-check would
-be a background network request, which contradicts the
-[no-background-traffic / no-telemetry guarantee](../README.md#privacy). So
-(issue #40):
+Helena does **not** check for updates automatically. A startup or background
+update-check would contradict the
+[no-background-traffic / no-telemetry guarantee](../README.md#privacy). What it
+has instead is an **opt-in, click-only** check (issue #40):
 
+- The status bar always shows your current version. A **"Check for updates"**
+  button fetches the latest GitHub release **only when you click it** — a single
+  user-initiated call, never automatic or on startup, so the guarantee holds. On
+  Windows it also links to the Microsoft Store. See
+  [internal/updatecheck](../internal/updatecheck/).
 - The official update channels are **package managers** (Flatpak / Homebrew /
-  winget / Scoop, as those land) and **manual re-download** of GitHub Releases.
-- There is no opt-in/opt-out toggle because there is nothing to phone home.
-- `helena --version` lets you compare your build against the latest release
-  yourself.
+  winget / Scoop, as those land), the **Microsoft Store** (which auto-updates
+  Store installs out-of-process), and **manual re-download** of GitHub Releases.
+- `helena --version` also prints your build for a manual comparison.
 
-This is the privacy-preserving choice and is revisited only if a clearly
-opt-in, offline-by-default mechanism is designed.
+The opt-in check is the privacy-preserving middle ground: no phone-home unless
+you ask for it.

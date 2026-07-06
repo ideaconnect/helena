@@ -320,7 +320,9 @@ explicitly trigger:
 
 - **sending a request** (to the host you typed),
 - **fetching an OAuth2 token** (from the token endpoint you configured),
-- **importing from a URL** (when you paste one into the importer).
+- **importing from a URL** (when you paste one into the importer),
+- **checking for updates** (only when you click "Check for updates" in the
+  status bar — a one-shot call to the GitHub API; never automatic or on startup).
 
 There are no other fixed-host calls anywhere in the codebase. Your
 collections, credentials, and settings stay on your local disk.

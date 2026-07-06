@@ -91,5 +91,7 @@ Light / dark / system theme, a configurable request timeout and max response
 size, an invalid-SSL toggle, a cookie jar with a viewer, **request history**
 (Help&nbsp;&rarr;&nbsp;History - restore or resend a recent send; secret-scrubbed
 so no credential is written to disk), drag-and-drop to reorder collections,
-folders, and requests in the sidebar, and keyboard shortcuts (Mod+Enter to send,
-Mod+S to save, …).
+folders, and requests in the sidebar, a status bar showing your current version
+with an **opt-in "Check for updates"** (a one-shot GitHub check only when you
+click it - never automatic, in keeping with the no-phone-home guarantee), and
+keyboard shortcuts (Mod+Enter to send, Mod+S to save, …).
