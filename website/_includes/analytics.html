@@ -1,0 +1,27 @@
+{% if jekyll.environment == "production" %}
+<!-- Google Analytics 4 — prior-consent model. gtag.js is injected ONLY after the
+     visitor Accepts (or on return with a stored, unexpired 'granted' choice), so
+     nothing contacts Google before consent. Reject / no choice => never loaded.
+     Production builds only. See assets/js/consent.js + _includes/consent.html. -->
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){ dataLayer.push(arguments); }
+  window.__gaId = 'G-28S8FGLZGC';
+  window.loadGoogleAnalytics = function () {
+    if (window.__gaLoaded) return;
+    window.__gaLoaded = true;
+    var s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtag/js?id=' + window.__gaId;
+    document.head.appendChild(s);
+    gtag('js', new Date());
+    gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'granted' });
+    gtag('config', window.__gaId);
+  };
+  // Returning visitor with a valid, unexpired 'granted' choice → load now.
+  try {
+    var __c = JSON.parse(localStorage.getItem('helena-consent') || 'null');
+    if (__c && __c.choice === 'granted' && __c.v === 1 && (Date.now() - __c.ts) < 15552000000) window.loadGoogleAnalytics();
+  } catch (e) {}
+</script>
+{% endif %}
