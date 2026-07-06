@@ -3,9 +3,10 @@
   Build a Microsoft Store MSIX package for Helena from a prebuilt Windows .exe.
 
 .DESCRIPTION
-  Stages the executable + Store logo assets, substitutes the Partner Center
-  identity values into AppxManifest.xml, and runs makeappx.exe to produce an
-  .msix. Optionally self-signs the package for local side-load testing.
+  Stages the executable + Store logo assets, stamps the version/arch into
+  AppxManifest.xml (the product identity is already baked in — Store ID
+  9NWPKK6CTDR1), and runs makeappx.exe to produce an .msix. Optionally
+  self-signs the package for local side-load testing.
 
   Run one invocation per architecture (x64, arm64), then combine the resulting
   .msix files into a single .msixbundle with:
@@ -20,39 +21,26 @@
   (e.g. dist\helena-windows-amd64.exe). Built with the release flags from
   docs/BUILDING.md (-tags no_emoji -H windowsgui ...).
 
-.PARAMETER IdentityName
-  Package/Identity/Name from Partner Center (the reserved product identity).
-
-.PARAMETER Publisher
-  Package/Identity/Publisher from Partner Center (a "CN=..." string). For a
-  self-signed test build (-Sign) this MUST match the certificate subject.
-
-.PARAMETER PublisherDisplayName
-  The human-readable publisher name shown in the Store (e.g. "IDCT").
-
 .PARAMETER Version
   Four-part package version, e.g. 0.4.0.0. The Store requires the final part to
-  be 0 (Microsoft reserves it for its own repackaging).
+  be 0 (Microsoft reserves it for its own repackaging). Keep the first three
+  parts in step with FyneApp.toml.
 
 .PARAMETER Arch
   Target architecture: x64 or arm64. Stamped into the manifest and the output
   filename.
 
 .PARAMETER Sign
-  Also create a self-signed cert and sign the package for local side-load
-  testing. Never used for the actual Store submission (Microsoft re-signs).
+  Also create a self-signed cert (subject = the manifest's Publisher) and sign
+  the package for local side-load testing. Never used for the actual Store
+  submission (Microsoft re-signs).
 
 .EXAMPLE
-  .\build-msix.ps1 -ExePath ..\..\..\dist\helena-windows-amd64.exe `
-    -IdentityName 1234ABCD.Helena -Publisher "CN=ABCD1234-..." `
-    -PublisherDisplayName IDCT -Version 0.4.0.0 -Arch x64
+  .\build-msix.ps1 -ExePath ..\..\..\dist\helena-windows-amd64.exe -Version 0.4.0.0 -Arch x64
 #>
 [CmdletBinding()]
 param(
   [Parameter(Mandatory = $true)] [string] $ExePath,
-  [Parameter(Mandatory = $true)] [string] $IdentityName,
-  [Parameter(Mandatory = $true)] [string] $Publisher,
-  [string] $PublisherDisplayName = "IDCT",
   [Parameter(Mandatory = $true)] [string] $Version,
   [Parameter(Mandatory = $true)] [ValidateSet("x64", "arm64")] [string] $Arch,
   [switch] $Sign
@@ -91,15 +79,11 @@ New-Item -ItemType Directory -Force -Path $staging | Out-Null
 Copy-Item $ExePath (Join-Path $staging "helena.exe")
 Copy-Item (Join-Path $scriptDir "Assets") (Join-Path $staging "Assets") -Recurse
 
-# --- Substitute identity tokens into the manifest ------------------------
+# --- Stamp version + arch into the manifest (identity is already baked in) ---
 $manifest = Get-Content (Join-Path $scriptDir "AppxManifest.xml") -Raw
-$manifest = $manifest.
-  Replace("@IDENTITY_NAME@", $IdentityName).
-  Replace("@PUBLISHER@", $Publisher).
-  Replace("@PUBLISHER_DISPLAY_NAME@", $PublisherDisplayName).
-  Replace("@VERSION@", $Version).
-  Replace("@ARCH@", $Arch)
-Set-Content -Path (Join-Path $staging "AppxManifest.xml") -Value $manifest -Encoding UTF8
+$manifest = $manifest.Replace("@VERSION@", $Version).Replace("@ARCH@", $Arch)
+$stagedManifest = Join-Path $staging "AppxManifest.xml"
+Set-Content -Path $stagedManifest -Value $manifest -Encoding UTF8
 
 # --- Pack ----------------------------------------------------------------
 $outDir = Join-Path $repoRoot "dist"
@@ -114,11 +98,13 @@ if ($LASTEXITCODE -ne 0) { throw "makeappx failed ($LASTEXITCODE)" }
 # --- Optional self-sign for local side-load testing ----------------------
 if ($Sign) {
   $signtool = Resolve-SdkTool "signtool.exe"
-  $cert = New-SelfSignedCertificate -Type Custom -Subject $Publisher `
+  # The signing cert subject must equal the manifest's Publisher.
+  $publisher = ([xml](Get-Content $stagedManifest -Raw)).Package.Identity.Publisher
+  $cert = New-SelfSignedCertificate -Type Custom -Subject $publisher `
     -KeyUsage DigitalSignature -FriendlyName "Helena MSIX test" `
     -CertStoreLocation "Cert:\CurrentUser\My" `
     -TextExtension @("2.5.29.37={text}1.3.6.1.5.5.7.3.3", "2.5.29.19={text}")
-  Write-Host "Self-signing with test cert $($cert.Thumbprint) (subject must equal Publisher)."
+  Write-Host "Self-signing with test cert $($cert.Thumbprint) (subject = $publisher)."
   & $signtool sign /fd SHA256 /a /sha1 $cert.Thumbprint $msix
   if ($LASTEXITCODE -ne 0) { throw "signtool failed ($LASTEXITCODE)" }
   Write-Host "To side-load: export the cert's public key, Import-Certificate it into"
