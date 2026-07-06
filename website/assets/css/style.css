@@ -341,3 +341,15 @@ pre code { background: none; padding: 0; }
   .js .reveal { opacity: 1; transform: none; transition: none; }
   .btn:hover, .card:hover, .shot img:hover { transform: none; }
 }
+
+/* ---- Cookie-consent banner (prior-consent GA; see _includes/consent.html) ---- */
+.consent-banner { position: fixed; inset-inline: 0; bottom: 0; z-index: 70; padding: 12px; }
+.consent-banner.hidden { display: none; }
+.consent-inner { max-width: 860px; margin: 0 auto; display: flex; flex-wrap: wrap; align-items: center;
+  gap: 14px 18px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  padding: 15px 18px; box-shadow: 0 14px 44px rgba(0, 0, 0, .5); }
+.consent-text { flex: 1 1 320px; margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
+.consent-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.consent-btn { padding: 8px 18px; font-size: 14px; }
+.consent-open { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+.consent-open:hover { color: var(--green-bright); }

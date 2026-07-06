@@ -59,6 +59,7 @@
   </script>
   <script>document.documentElement.className += ' js';</script>
   <noscript><style>.js .reveal{opacity:1!important;transform:none!important}</style></noscript>
+  {% include analytics.html %}
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
@@ -97,11 +98,16 @@
         <a href="{{ site.coffee }}" rel="noopener">Buy me a coffee</a> ·
         <a href="{{ '/roadmap/' | relative_url }}">Roadmap</a> ·
         <a href="{{ '/contact/' | relative_url }}">Contact</a> ·
-        <a href="{{ site.repo }}/issues">Issues</a>
+        <a href="{{ site.repo }}/issues">Issues</a> ·
+        <a href="{{ '/privacy/' | relative_url }}">Privacy</a> ·
+        <button type="button" class="consent-open" data-consent-open>Cookie preferences</button>
       </span>
     </div>
   </footer>
 
+  {% include consent.html %}
+
   <script src="{{ '/assets/js/site.js' | relative_url }}" defer></script>
+  <script src="{{ '/assets/js/consent.js' | relative_url }}" defer></script>
 </body>
 </html>

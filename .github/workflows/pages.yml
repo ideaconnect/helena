@@ -53,6 +53,11 @@ jobs:
           working-directory: website
       - name: Build website (Jekyll)
         working-directory: website
+        # JEKYLL_ENV=production gates the Google Analytics include (_includes/
+        # analytics.html) so gtag is emitted only on the deployed site, never in
+        # local `make website` (development) builds.
+        env:
+          JEKYLL_ENV: production
         run: bundle exec jekyll build --baseurl "/helena" --destination "$GITHUB_WORKSPACE/_site"
 
       # --- Reference docs (MkDocs) → /docs/ ---
