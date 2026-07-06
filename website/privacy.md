@@ -8,10 +8,27 @@ description: Helena website privacy and cookie notice — opt-in, anonymous Goog
 
 ## Who is responsible (data controller)
 
-The data controller for this site is **IDCT Bartosz Pachołek** (idct.tech).
+The data controller for this site is **IDCT Bartosz Pachołek** (idct.tech):
+
+> **IDCT Bartosz Pachołek**
+> Kaszubska 12/8C
+> 70-403 Szczecin, Poland
+> NIP (VAT EU): PL7642542255
+
 Contact: the [contact page]({{ '/contact/' | relative_url }}).
 
 ## What we collect
+
+### The Helena desktop app — nothing
+
+The Helena application collects **no data at all**. It has no accounts, no
+telemetry, no analytics, and no runtime update check, and it never phones home.
+The only network traffic it makes is the API requests **you** explicitly send;
+your collections, environments, and secrets stay on your own machine. There is
+nothing to opt out of because nothing is collected. The rest of this notice is
+about **this website only**.
+
+### This website
 
 Only if you press **Accept** in the cookie banner do we load **Google Analytics 4**
 to measure aggregate, anonymous usage — pages viewed, rough geography,
