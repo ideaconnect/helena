@@ -64,6 +64,7 @@ not_in_nav: |
 nav:
   - Home: index.md
   - Getting started: USER_GUIDE.md
+  - Build from source: BUILDING.md
   - Guides:
       - Authentication: guide/auth.md
       - Real-time — SSE & WebSocket: guide/realtime.md

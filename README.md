@@ -152,6 +152,10 @@ object shapes — is documented in
 
 ## Build from source
 
+Building Helena yourself is free on every platform. This is the short version;
+the full copy-paste guide (per-distro dependencies, release-grade build flags,
+cross-arch notes, troubleshooting) is in [docs/BUILDING.md](docs/BUILDING.md).
+
 Requirements:
 
 - Go 1.26+ to build. The exact build toolchain is pinned in `go.mod`
