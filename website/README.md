@@ -50,20 +50,19 @@ generated files stay yours and `make clean` removes them. On Windows use
 > Jekyll directly - `cd website && bundle install && bundle exec jekyll serve
 > --livereload`.
 
-(`baseurl` in `_config.yml` is `""` because the site deploys to the
-**helena.idct.tech** root. Local `make website` serves it at
-`http://localhost:4000/`. Set `baseurl` to `"/helena"` only if you switch to
-github.io project pages.)
+(`baseurl` in `_config.yml` is `"/helena"` because the site deploys as a GitHub
+Pages **project page** under the org's apex domain, at `https://idct.tech/helena/`.
+Local `make website` serves it at `http://localhost:4000/helena/`.)
 
 ## Deploy to GitHub Pages
 
 Deployment is handled by [`.github/workflows/pages.yml`](../.github/workflows/pages.yml).
 Because a repo has a **single** GitHub Pages site, that one workflow builds and
-publishes *both* public sites into one deployment on the custom domain
-**helena.idct.tech**:
+publishes *both* public sites into one deployment, served under the org's apex
+domain at **idct.tech/helena**:
 
-- `/` — this Jekyll marketing site (built with `baseurl: ""`)
-- `/docs/` — the MkDocs reference docs (`docs/` + `mkdocs.yml`)
+- `/helena/` — this Jekyll marketing site (built with `baseurl: "/helena"`)
+- `/helena/docs/` — the MkDocs reference docs (`docs/` + `mkdocs.yml`)
 
 It builds on every PR (validation) and deploys on push to `main`. The custom
 domain comes from [`CNAME`](CNAME) (copied to the site root by Jekyll).

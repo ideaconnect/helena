@@ -16,12 +16,14 @@ author: Bartosz Pachołek
 copyright: "IDCT · Bartosz Pachołek"
 author_url: "https://idct.tech"
 
-# Deployed to the custom domain helena.idct.tech (see .github/workflows/pages.yml
-# and website/CNAME), so the site lives at the domain root: baseurl is empty.
-# (For github.io project pages instead, set url to https://<user>.github.io and
-# baseurl to "/helena".)
-url: "https://helena.idct.tech"
-baseurl: ""
+# Deployed as a GitHub Pages PROJECT page under the ideaconnect org's apex custom
+# domain, so the site lives at https://idct.tech/helena/ — url is the apex and
+# baseurl is the project path. The apex domain is owned by the org's
+# ideaconnect.github.io page repo; this project repo carries NO CNAME (a project
+# CNAME would try to claim the domain at its root and conflict). Internal links
+# use relative_url/absolute_url, so baseurl must stay in sync with the deploy.
+url: "https://idct.tech"
+baseurl: "/helena"
 
 repo: "https://github.com/ideaconnect/helena"
 releases: "https://github.com/ideaconnect/helena/releases"

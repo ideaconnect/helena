@@ -95,22 +95,22 @@ mutation-auth: $(GREMLINS)
 mutation: mutation-chain mutation-storage mutation-httpclient mutation-scripting mutation-auth
 
 # website: build and serve the Jekyll site with live reload, via dockerized
-# Ruby — no local Ruby needed (only Docker). Reachable at http://localhost:4000/
-# (baseurl is "" — the site deploys to the helena.idct.tech root). The first run
-# pulls ruby:3.3 and installs the gems into website/.bundle; later runs are fast.
-# Ctrl-C to stop.
+# Ruby — no local Ruby needed (only Docker). Reachable at
+# http://localhost:4000/helena/ (baseurl is "/helena" — the site deploys as a
+# project page under idct.tech/helena). The first run pulls ruby:3.3 and installs
+# the gems into website/.bundle; later runs are fast. Ctrl-C to stop.
 website:
 	@command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker (the website builds with dockerized Ruby). See $(WEBSITE_DIR)/README.md"; exit 1; }
-	@echo "Serving $(WEBSITE_DIR) at http://localhost:$(WEBSITE_PORT)/ — Ctrl-C to stop (first run pulls ruby:3.3)"
+	@echo "Serving $(WEBSITE_DIR) at http://localhost:$(WEBSITE_PORT)/helena/ — Ctrl-C to stop (first run pulls ruby:3.3)"
 	$(DOCKER_RUBY) -it -p $(WEBSITE_PORT):4000 ruby:3.3 \
 		sh -c "bundle install && bundle exec jekyll serve -H 0.0.0.0 --livereload --force_polling"
 
 # website-build: build the static site into website/_site (dockerized Ruby), no
 # server. Useful for CI-style checks or inspecting the generated HTML. Builds at
-# baseurl "" to match production (the custom domain helena.idct.tech root).
+# baseurl "/helena" to match production (the idct.tech/helena project page).
 website-build:
 	@command -v docker >/dev/null 2>&1 || { echo "docker not found — install Docker. See $(WEBSITE_DIR)/README.md"; exit 1; }
-	$(DOCKER_RUBY) ruby:3.3 sh -c "bundle install && bundle exec jekyll build --baseurl ''"
+	$(DOCKER_RUBY) ruby:3.3 sh -c "bundle install && bundle exec jekyll build --baseurl '/helena'"
 	@echo "built $(WEBSITE_DIR)/_site"
 
 # screenshots: (re)generate the website screenshots by rendering the real UI
