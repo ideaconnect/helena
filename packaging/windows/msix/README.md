@@ -90,6 +90,7 @@ policy to <https://idct.tech/helena/privacy/>. Microsoft signs and hosts the
 package and delivers updates automatically. Full checklist in
 [docs/PACKAGING.md](../../../docs/PACKAGING.md#windows--microsoft-store-msix).
 
-> Not yet wired into release CI — the MSIX build is manual per release for now.
-> The identity-verification and name-reservation steps need the owner's
-> Microsoft account and can't be scripted.
+> The `.msixbundle` is built automatically by the `msix` CI job on every
+> published (non-pre-release) GitHub Release. Only the Partner Center submission
+> itself stays manual — identity verification, name reservation, and upload need
+> the owner's Microsoft account and can't be scripted.

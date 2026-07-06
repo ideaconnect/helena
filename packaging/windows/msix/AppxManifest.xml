@@ -27,8 +27,8 @@
   <Properties>
     <DisplayName>Helena</DisplayName>
     <PublisherDisplayName>IDCT Bartosz Pachołek</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.png</Logo>
     <Description>A small, single-binary API client - a native alternative to Postman and Bruno.</Description>
+    <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
   <Dependencies>

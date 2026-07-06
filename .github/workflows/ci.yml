@@ -389,7 +389,11 @@ jobs:
     # deliberately NOT attached to the public GitHub Release: an unsigned MSIX
     # can't be installed outside the Store and would only confuse direct
     # downloaders, who want the archives / .deb / .rpm instead.
-    if: github.event_name == 'release'
+    #
+    # Skipped for pre-releases: MSIX package versions must be purely numeric
+    # (x.y.z.0), so a tag like v0.5.0-rc1 has no valid MSIX version — gating here
+    # skips it cleanly instead of failing the run for an otherwise-good release.
+    if: github.event_name == 'release' && !github.event.release.prerelease
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7 # manifest + logo assets + packaging scripts
