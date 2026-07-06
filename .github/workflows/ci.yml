@@ -3,9 +3,16 @@ name: CI
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
     branches: [main]
+  # Publishing a GitHub Release is what cuts a release (Releases -> Draft a new
+  # release -> pick or create a v* tag -> Publish). It runs the full build/test
+  # matrix, and the `release` job then attaches the per-platform binaries and
+  # Linux packages to that release. A bare `git push` of a tag no longer creates
+  # a release on its own — the free GitHub Release is the primary distribution
+  # channel, authored in the UI (notes and all) and populated by CI.
+  release:
+    types: [published]
   schedule:
     # Nightly at 04:00 UTC — mutation testing only.
     - cron: '0 4 * * *'
@@ -15,9 +22,10 @@ permissions:
   contents: read
 
 # Cancel superseded runs for the same ref + trigger to save CI minutes — but
-# never a tag run, so an in-flight release always finishes (#31). The
-# event_name in the group keeps the nightly `schedule` cron (and Dependabot)
-# from cancelling an in-flight push/PR run on the same ref.
+# never a release run (its ref is refs/tags/v*, so cancel-in-progress is false),
+# so an in-flight release always finishes (#31). The event_name in the group
+# keeps the nightly `schedule` cron (and Dependabot) from cancelling an
+# in-flight push/PR run on the same ref.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
@@ -286,7 +294,10 @@ jobs:
   release:
     name: Publish release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Only when a GitHub Release is published. `needs: build` gates asset upload
+    # on the full build/test matrix passing, so a release never ships binaries
+    # from a commit that fails tests.
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -355,9 +366,13 @@ jobs:
             dist/helena*.deb
             dist/helena*.rpm
 
-      - name: Create release
+      # Attach the built assets to the release that triggered this run. The
+      # release and its notes are authored in the GitHub Releases UI; CI only
+      # uploads the binaries/packages (it does not create the release or touch
+      # its body). On a `release` event the action targets that release via
+      # GITHUB_REF, so no explicit tag_name is needed.
+      - name: Attach release assets
         uses: softprops/action-gh-release@v3
         with:
           files: dist/*
-          generate_release_notes: true
           fail_on_unmatched_files: true

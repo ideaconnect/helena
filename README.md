@@ -359,10 +359,14 @@ Bug reports and feature requests use the GitHub issue templates.
 
 ## Versioning & releases
 
-Helena follows [Semantic Versioning](https://semver.org): tags are
+Helena follows [Semantic Versioning](https://semver.org): release tags are
 `vMAJOR.MINOR.PATCH`. Notable changes are recorded in
-[CHANGELOG.md](CHANGELOG.md); GitHub releases additionally carry
-auto-generated, label-categorized notes.
+[CHANGELOG.md](CHANGELOG.md). A release is cut by **publishing a GitHub Release**
+(Releases -> Draft a new release -> pick or create the `v*` tag, write the notes,
+Publish); CI then builds every platform and attaches the binaries, Linux
+packages, checksums, SBOM, and a provenance attestation. The free GitHub Release
+is the primary way to get Helena — building from source is always free too, and
+the Microsoft Store listing is an optional convenience channel.
 
 ## License
 

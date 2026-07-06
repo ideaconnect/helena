@@ -237,10 +237,10 @@ runs the following jobs:
 
 | Job | Trigger | Gates? | What it does |
 | --- | --- | --- | --- |
-| `build` | push, PR | yes | gofmt, vet, `go test ./... -race`, coverage profile, **coverage gate** (Linux), build artifact. Matrix: ubuntu-latest + windows-latest. |
+| `build` | push, PR, release | yes | gofmt, vet, `go test ./... -race`, coverage profile, **coverage gate** (Linux), build artifact. Matrix: ubuntu-latest, windows-latest, windows-11-arm, macos-latest. |
 | `fuzz` | PR | yes | Matrix per fuzz target — `go test ... -fuzz=^FuzzX$ -fuzztime=20s`. A fuzz failure (crash / falsified invariant) fails the PR. |
 | `mutation` | nightly cron + manual dispatch | report-only | `make mutation` against the 5 load-bearing packages; log uploaded as artifact. Does not block PRs. |
-| `release` | tag push | n/a | Downloads build artifacts and publishes a GitHub release. |
+| `release` | GitHub Release published | n/a | Downloads the build artifacts and attaches the per-platform binaries, Linux `.deb`/`.rpm`, `SHA256SUMS`, SBOM, and provenance to the release you published. Does not author or overwrite the release notes. |
 
 The coverage gate uses the same `cmd/covergate` binary as
 `make coverage-gate`, so local runs and CI agree on the threshold

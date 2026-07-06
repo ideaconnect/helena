@@ -23,15 +23,25 @@ theme-scope reduction (11 → 3 scopes) brought the same software-GL box to
 **~200 MB resident** total. A plain `go build` /
 `go run` keeps emoji for development.
 
-A tagged `v*` push publishes a GitHub Release whose assets are (issues #27/#35):
+The free GitHub Release is the primary distribution channel. **Publishing a
+GitHub Release** (Releases -> Draft a new release -> pick or create a `v*` tag,
+write the notes, Publish) triggers CI: it runs the full build/test matrix on
+every platform and then attaches these assets to that release (issues #27/#35):
 
 - **Archives** — `helena-linux-amd64.tar.gz`, `helena-darwin-arm64.tar.gz`,
   `helena-windows-amd64.zip`, `helena-windows-arm64.zip` (each bundling the
   binary + `LICENSE` + `README.md`).
+- **Linux packages** — `helena_<version>_amd64.deb` and
+  `helena-<version>.x86_64.rpm` (nfpm, from the same binary + freedesktop assets).
 - **`SHA256SUMS`** — SHA-256 checksums over every asset.
 - **`helena.sbom.spdx.json`** — an SPDX software bill of materials.
 - **Provenance attestation** — a keyless (Sigstore) build-provenance
-  attestation for the archives, verifiable with `gh attestation verify`.
+  attestation for the archives + packages, verifiable with `gh attestation verify`.
+
+CI attaches assets to the release you published; it does not author the release
+or its notes (you write those in the UI, using its "Generate release notes"
+button if you like). Asset upload is gated on the full test matrix passing, so a
+release never ships binaries from a commit that fails tests.
 
 ## Linux desktop integration
 
@@ -51,8 +61,9 @@ files are the gateway: every Linux packaging format embeds the same `.desktop`
 
 [`packaging/nfpm.yaml`](../packaging/nfpm.yaml) drives [nfpm](https://nfpm.goreleaser.com)
 to build `.deb` and `.rpm` from the native Linux binary + the freedesktop
-assets. The release CI job runs it on a tag (`HELENA_VERSION=${tag#v} nfpm pkg
---packager deb|rpm`) and uploads the packages alongside the archives. AppImage
+assets. The release CI job runs it when a GitHub Release is published
+(`HELENA_VERSION=${tag#v} nfpm pkg --packager deb|rpm`) and uploads the packages
+alongside the archives. AppImage
 and Flatpak are the natural next formats (they consume the same `.desktop` +
 icon + metainfo); they're not yet wired into CI.
 
