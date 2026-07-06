@@ -128,26 +128,28 @@ favourable of the major app stores for a small indie tool.
 3. **Build the Windows binaries** with the release flags (see
    [BUILDING.md](BUILDING.md#release-grade-build)) — one `helena-windows-amd64.exe`
    and, to cover Windows-on-ARM, one `helena-windows-arm64.exe`.
-4. **Build the MSIX package(s)** with the committed scaffold in
-   [`packaging/windows/msix/`](../packaging/windows/msix/) — an `AppxManifest.xml`
-   template, the Store logo assets, and a `build-msix.ps1` that stamps your
-   identity values and runs `makeappx`. Produce one `.msix` per architecture,
-   then combine them into a single `.msixbundle` so one submission serves both.
-   See that directory's [README](../packaging/windows/msix/README.md).
-5. **Test the package locally** by self-signing it (the script's `-Sign` switch)
-   and side-loading — the Store-signed build can't be run until it's installed
-   from the Store, so a self-signed copy is how you smoke-test the packaged app.
-6. **Create the submission** in Partner Center: upload the `.msixbundle`, set a
-   **minimal price** and markets, complete the age rating (IARC) questionnaire,
-   add screenshots (reuse `make screenshots` output) and a description, and point
-   the privacy-policy field at <https://idct.tech/helena/privacy/>. Submit for
-   certification.
+4. **Get the `.msixbundle`.** CI does this for you: when you publish a GitHub
+   Release, the `msix` job builds the x64 + arm64 packages (identity baked into
+   [`packaging/windows/msix/AppxManifest.xml`](../packaging/windows/msix/AppxManifest.xml))
+   and uploads a **`helena-store-msixbundle`** workflow artifact — download it
+   from that run. To build it by hand instead, run
+   `packaging/windows/msix/build-store-bundle.ps1` on Windows (Windows SDK
+   required); see that directory's [README](../packaging/windows/msix/README.md).
+5. **(Optional) test the package locally** by self-signing it
+   (`build-msix.ps1 -Sign`) and side-loading — the Store-signed build can't be
+   run until installed from the Store, so a self-signed copy is how you smoke-test
+   the packaged app.
+6. **Create the submission** in Partner Center: upload the `.msixbundle`
+   **unsigned** (Microsoft signs it), set a **minimal price** and markets,
+   complete the age rating (IARC) questionnaire, add screenshots (reuse
+   `make screenshots` output) and a description, and point the privacy-policy
+   field at <https://idct.tech/helena/privacy/>. Submit for certification.
 
-> **Not yet automated.** The MSIX build is a documented manual/per-release step
-> today; wiring `build-msix.ps1` into the release CI and automating submission
-> via the Store Submission API is a follow-up. The identity-verification and
-> name-reservation steps are inherently manual (they need the owner's Microsoft
-> account) and can't be scripted from CI.
+> **CI builds the package; submission stays manual.** The `.msixbundle` is built
+> and uploaded as an artifact on every published release (the `msix` job). The
+> identity-verification, name-reservation, and Partner Center submission steps
+> are inherently manual (they need the owner's Microsoft account); automating
+> the upload via the Store Submission API is a possible follow-up.
 
 **Updates on the Store — automatic, out-of-process, no in-app updater (decided
 2026-07-06).** MSIX packages installed from the Store are updated
