@@ -337,7 +337,7 @@ Found a vulnerability? Please report it privately — see
 
 ## Documentation
 
-Full docs are published at **<https://helena.idct.tech/docs/>**
+Full docs are published at **<https://idct.tech/helena/docs/>**
 — built from [`docs/`](docs/) with MkDocs Material (see [`mkdocs.yml`](mkdocs.yml)),
 with feature guides for [authentication](docs/guide/auth.md),
 [real-time SSE & WebSocket](docs/guide/realtime.md), and

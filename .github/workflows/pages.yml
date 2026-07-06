@@ -1,15 +1,17 @@
 name: Pages
 
-# Build and deploy the public site to GitHub Pages at the custom domain
-# helena.idct.tech (see website/CNAME). One Pages deployment serves BOTH:
-#   /       → the Jekyll marketing site (website/)
-#   /docs/  → the MkDocs Material reference docs (docs/, mkdocs.yml)
+# Build and deploy the public site to GitHub Pages as a PROJECT page under the
+# ideaconnect org's apex custom domain, served at https://idct.tech/helena/. One
+# Pages deployment serves BOTH:
+#   /helena/      → the Jekyll marketing site (website/)
+#   /helena/docs/ → the MkDocs Material reference docs (docs/, mkdocs.yml)
 # A repo has a single Pages site, so this is the only workflow that owns it.
 #
-# One-time setup: Settings → Pages → Source: GitHub Actions, then point DNS
-# (CNAME helena.idct.tech → ideaconnect.github.io) and confirm the custom domain
-# under Settings → Pages. Until DNS is live the site is reachable only once the
-# domain resolves — the deploy itself still succeeds.
+# One-time setup: Settings → Pages → Source: GitHub Actions, and LEAVE the
+# custom-domain field BLANK. The project inherits the org's apex domain
+# (idct.tech, configured on the ideaconnect.github.io page repo) and serves at
+# the /helena/ path; this repo carries no CNAME (a project CNAME would claim the
+# domain root and conflict with the org page).
 
 on:
   push:
@@ -51,7 +53,7 @@ jobs:
           working-directory: website
       - name: Build website (Jekyll)
         working-directory: website
-        run: bundle exec jekyll build --baseurl "" --destination "$GITHUB_WORKSPACE/_site"
+        run: bundle exec jekyll build --baseurl "/helena" --destination "$GITHUB_WORKSPACE/_site"
 
       # --- Reference docs (MkDocs) → /docs/ ---
       - uses: actions/setup-python@v6
@@ -62,10 +64,12 @@ jobs:
           pip install mkdocs-material
           mkdocs build --site-dir "$GITHUB_WORKSPACE/_site/docs"
 
-      # website/CNAME is copied to _site/CNAME by Jekyll; assert it so a rename
-      # can't silently drop the custom domain.
-      - name: Verify custom domain
-        run: test -f _site/CNAME && grep -qx "helena.idct.tech" _site/CNAME
+      # A project page under the org's apex domain must NOT ship a CNAME — one
+      # would claim idct.tech at its root and conflict with the org page. Assert
+      # the build produced none (a stray website/CNAME would reintroduce a
+      # subdomain deploy).
+      - name: Verify no project CNAME
+        run: test ! -f _site/CNAME
 
       - name: Upload Pages artifact
         if: github.ref == 'refs/heads/main'
