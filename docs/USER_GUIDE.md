@@ -9,13 +9,16 @@ day-to-day workflow. For building from source, see the
 - [Getting started](#getting-started)
 - [Collections, folders, requests](#collections-folders-requests)
 - [Sending a request](#sending-a-request)
+- [Real-time (SSE & WebSocket)](#real-time-sse-websocket)
 - [Query, headers, body](#query-headers-body)
 - [Authentication](#authentication)
 - [Environments & variables](#environments-variables)
 - [Request chaining](#request-chaining)
-- [Scripting (pre/post)](#scripting-prepost)
+- [Scripting & assertions](#scripting-assertions)
 - [Cookies](#cookies)
+- [Request history](#request-history)
 - [Import & export](#import-export)
+- [Headless runs](#headless-runs)
 - [Settings](#settings)
 - [Privacy & secrets](#privacy-secrets)
 - [Diagnostics](#diagnostics)
@@ -26,13 +29,13 @@ day-to-day workflow. For building from source, see the
 On first launch you'll see an empty-state panel. Three ways to begin:
 
 - **Open collection…** — point Helena at an existing OpenCollection folder.
-- **Import…** — build a collection from an OpenAPI/Swagger/WSDL spec (file or
-  URL).
+- **Import…** — build a collection from an OpenAPI/Swagger/WSDL/Postman spec
+  (file or URL).
 - **Load sample** — materialize the bundled `httpbin` sample and explore it
   without any setup.
 
 The same actions live on the sidebar toolbar. In-app help is under the **?**
-button (Getting started, shortcuts, this guide, About).
+button (Getting started, shortcuts, History, this guide, About).
 
 ## Collections, folders, requests
 
@@ -52,22 +55,39 @@ long-running send can be **aborted** with the same button. Failures surface in
 a dismissible banner above the response, so they aren't lost when the status
 line updates.
 
+## Real-time (SSE & WebSocket)
+
+- **WebSocket** — enter a `ws://` or `wss://` URL and press **Send**: instead
+  of an HTTP request, Helena opens a live session with a two-way transcript —
+  type a message and press Send to write, received messages append as they
+  arrive. Pings are answered automatically and fragmented messages are
+  reassembled.
+- **SSE** — on a `text/event-stream` endpoint, press the dedicated **Stream
+  (SSE)** toolbar button (not Send): events append to the response body live,
+  and the button doubles as **Stop** while the stream is open.
+
+See the [Real-time guide](guide/realtime.md) for details.
+
 ## Query, headers, body
 
 - **Query** and the URL field are two views of one thing — edit either and the
   other follows. Disabled query rows (unchecked) are kept even though the URL
   can't express them.
 - **Headers** — enable/disable per row.
-- **Body** — None / raw (JSON, XML, text) with validate + format, or a
-  structured form editor for `form-urlencoded` / `multipart/form-data`.
+- **Body** — None / raw (JSON, XML, text) with validate + format, GraphQL
+  (query + variables, sent as a JSON envelope), a structured form editor for
+  `form-urlencoded` / `multipart/form-data`, or the raw bytes of a **file** on
+  disk.
 
 ## Authentication
 
-Per request (or inherited from the folder/collection): None, Basic, Bearer,
-API key (header or query), or OAuth2 (client-credentials and
-authorization-code, with PKCE). Secret fields — Basic password, Bearer token,
-API-key value, OAuth2 client secret — are masked in the editor. `Inherit`
-walks up the folder → collection chain.
+Per request (or inherited from the folder/collection): None, Basic, Digest,
+NTLM, Bearer, API key (header or query), OAuth 1.0a, OAuth 2.0
+(client-credentials and authorization-code, with PKCE), WS-Security (WSSE),
+or AWS Signature v4. Every scheme's secret fields — passwords, tokens,
+client/consumer secrets, the AWS secret key — are masked in the editor.
+`Inherit` walks up the folder → collection chain. See the
+[Authentication guide](guide/auth.md) for per-scheme details.
 
 ## Environments & variables
 
@@ -79,7 +99,8 @@ environment's variables — an editable key/value list (one row per variable;
 the **+** button appends a row, the row checkbox enables/disables a variable,
 the trash icon removes it). A **Secret** variable shows a masked, read-only
 value until you tick **Reveal secret values**. Variables compose — a variable's
-value may reference another `{{var}}`.
+value may reference another `{{var}}`. A `{{?Name}}` **prompt variable** isn't
+resolved from any scope: Helena asks for its value in a dialog at Send time.
 
 ## Request chaining
 
@@ -89,12 +110,18 @@ predecessor's parsed response as `{{alias.body.field}}` (and to scripts as
 scope and cycle detection. See the README's "Request chaining" section for
 worked examples.
 
-## Scripting (pre/post)
+## Scripting & assertions
 
 Each request can carry a **pre-request** script (mutates method / URL / headers
 / params / body before the request is built) and a **post-response** script
 (reads the parsed response, writes values into the environment overlay via
-`helena.env.set`). Scripts run in a sandboxed JS runtime with a short timeout.
+`helena.env.set`, and declares checks with `test()`/`expect()`). Scripts run in
+a sandboxed JS runtime with a short timeout.
+
+Prefer no code? The **Assertions** tab holds (source, operator, expected) rows
+— e.g. `res.status` equals `200`, or `res.json.user.id` exists — evaluated
+after Send and reported in the Scripts console alongside the `test()` results.
+See the [Scripting & assertions guide](guide/scripting.md).
 
 ## Cookies
 
@@ -114,29 +141,51 @@ alongside them.
 The jar is **in-memory only**: it is never written to disk (so session tokens
 can't leak into a file) and is emptied when you quit Helena.
 
+## Request history
+
+**?** → **History** lists past sends newest-first. Select an entry to
+**Restore** it (reopens the request in a tab), **Resend** it, or **Clear** the
+whole list. Snapshots are secret-scrubbed before they are recorded, so
+`history.yml` never stores a credential.
+
 ## Import & export
 
-- **Import** an OpenAPI 3 / Swagger 2 / WSDL document (file or URL) into a new
-  collection.
+- **Import** an OpenAPI 3 / Swagger 2 / WSDL / Postman (v2.x) document (file
+  or URL) into a new collection, or paste a **cURL command** to build a single
+  request.
 - **Export** the current request as a ready-to-run **cURL** or **wget**
-  command (read-only snippet you can copy).
+  command, or a **JavaScript fetch**, **Python requests**, or **Go net/http**
+  snippet (read-only, copyable).
+
+## Headless runs
+
+`helena run <collection-dir> [--env NAME] [--format text|json|junit]
+[--folder PATH]` executes every request in a collection (or a single folder)
+without opening the UI — chains, scripts, and assertions included — and exits
+non-zero when any request errors or any check fails, so it slots straight into
+CI. Flags may come before or after the directory. `{{?Name}}` prompt variables
+can't be asked headlessly, so a request that uses one fails the run.
 
 ## Settings
 
 Theme (System/Light/Dark), allow-invalid-TLS (with a risk caption — it affects
 **all** requests and imports), CORS advisory, follow-redirects, request
-timeout, and the max response size buffered into memory. Settings persist in
-your OS config directory and carry a schema version so future upgrades can
-migrate cleanly.
+timeout, the max response size buffered into memory, and a **Global
+variables** editor (app-wide, lowest-precedence variable scope). Settings
+persist in your OS config directory and carry a schema version so future
+upgrades can migrate cleanly.
 
 ## Privacy & secrets
 
 Helena makes **no background network requests** and ships **no telemetry**. The
 only outbound traffic is what you trigger (sending a request, fetching an
-OAuth2 token, importing from a URL). Collections and credentials are stored as
-plaintext YAML on your local disk today — treat those files like any secrets
-file. Secret values are masked in the UI and redacted from logs and error
-messages.
+OAuth2 token, importing from a URL). Collections are stored as plain YAML on
+your local disk; credential fields (auth secrets, Secret-flagged variables)
+are split out on save into a per-collection secrets store under your OS config
+directory — never into the collection folder, so a git-tracked collection
+can't leak them — and merged back on load. The store itself is plaintext YAML;
+treat it like any secrets file. Secret values are masked in the UI and
+redacted from logs and error messages.
 
 ## Diagnostics
 
@@ -148,5 +197,5 @@ to attach.
 ## Keyboard shortcuts
 
 Press **F1** (or **?** → Keyboard shortcuts) for the full list. Common ones:
-**Mod+Enter** send · **Mod+S** save · **Mod+E** environments · **Mod+,**
-settings.
+**Mod+Enter** send · **Mod+S** save · **Mod+Z** undo last delete · **Mod+E**
+environments · **Mod+,** settings.

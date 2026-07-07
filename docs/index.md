@@ -9,14 +9,15 @@ self-contained ~35 MB binary, no Electron, no telemetry.
 
 ## Why Helena
 
-- **Plain-text, version-controllable storage.** Workspaces, collections,
-  folders, and requests are stored as Open Collection YAML on disk — diff and
-  commit them like any other source. Credentials are kept **out** of that YAML
+- **Plain-text, version-controllable storage.** Collections, folders, and
+  requests are stored as Open Collection YAML on disk — diff and commit them
+  like any other source. Credentials are kept **out** of that YAML
   (externalized to a store under your config dir), so a committed collection
   carries no cleartext secret.
 - **Variables everywhere.** `{{variable}}` resolution in the URL, query, headers,
-  and body, across a layered scope chain (global → `.env` → collection →
-  environment → folder → request), with a live resolved-URL preview.
+  and body, across a layered scope chain (global → collection `.env` →
+  collection → environment → folder → request → script overlay), with a live
+  resolved-URL preview.
 - **A real request builder.** Method, URL, query, headers, and bodies —
   JSON / XML / text / **GraphQL** / form-urlencoded / multipart / file — with
   Validate + Format for JSON and XML.

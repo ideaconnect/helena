@@ -12,10 +12,12 @@ description: Helena's features - auth, scripting, real-time, chaining, the runne
 
 Method, URL, query params, headers, and a body that can be **JSON, XML, text,
 GraphQL, form-urlencoded, multipart, or a raw file**. JSON and XML get Validate
-and Format buttons. The response viewer shows raw, pretty JSON, pretty XML, and
-headers, with a status line like `200 OK · 1.2 KB · 87 ms` and a CORS advisory
-when a browser *would* have blocked the response (Helena, being native, sends it
-anyway).
+and Format buttons, and Send doubles as Abort while a request is in flight. The
+response viewer shows raw, pretty JSON, XML, and HTML (auto-detected), plus
+headers, with a status line like `200 OK · 1.2 KB · 87 ms`, a **Save response
+to file** button that writes the full untruncated bytes, and a CORS advisory
+when a browser *would* have blocked the response - checked when your request
+carries an `Origin` header (Helena, being native, sends the request anyway).
 
 ## Variables &amp; environments
 
@@ -44,7 +46,8 @@ authorization-code + PKCE, with token caching) · **OAuth 1.0a** (HMAC-SHA1) ·
 
 Pre/post **JavaScript** hooks (via the pure-Go goja engine) with a curated
 `helena.*` API - environment access, `interpolate`, `sendRequest`, cookie
-reads, hashing, base64, uuid, sleep, and headless runner control. Verify
+reads, hashing, base64, uuid, date/time helpers, sleep, and headless runner
+control. Verify
 responses with a scripted `test()`/`expect()` framework or the no-code
 **Assertions** tab.
 
@@ -72,15 +75,16 @@ junit`** report for CI dashboards.
 
 ## Import &amp; export
 
-Import **OpenAPI 3 / Swagger 2 / WSDL** and other collection exports from a file
-or URL. Export any request to **cURL, wget, JavaScript fetch, Python requests, or
-Go net/http**, or paste a cURL command to build a request.
+Import **OpenAPI 3 / Swagger 2 / WSDL / Postman** from a file or URL. Export any
+request to **cURL, wget, JavaScript fetch, Python requests, or Go net/http**, or
+paste a cURL command to build a request.
 
 ## Storage &amp; privacy
 
-Everything is plain **Open Collection YAML** on disk - diff and merge it like
-source code. Auth secrets and Secret-flagged variables are **externalized** to a
-store under your OS config dir (outside the repo), so a committed collection
+Collections - folders, requests, and their environments - are plain **Open
+Collection YAML** on disk; diff and merge them like source code. Auth secrets
+and Secret-flagged variables are **externalized** to a store under your OS
+config dir (outside the repo), so a committed collection
 carries no cleartext credential. The session env overlay never touches disk.
 Structural changes save as you make them; request edits save on **Mod+S**, and
 quitting with edits still pending **asks before discarding them**.
@@ -88,7 +92,8 @@ quitting with edits still pending **asks before discarding them**.
 ## Native niceties
 
 Light / dark / system theme, a configurable request timeout and max response
-size, an invalid-SSL toggle, a cookie jar with a viewer, **request history**
+size, invalid-SSL and follow-redirects toggles, a cookie jar with a viewer,
+**request history**
 (Help&nbsp;&rarr;&nbsp;History - restore or resend a recent send; secret-scrubbed
 so no credential is written to disk), drag-and-drop to reorder collections,
 folders, and requests in the sidebar, and keyboard shortcuts (Mod+Enter to send,

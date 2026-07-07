@@ -19,8 +19,11 @@ Pre-built **Linux (amd64)**, **Windows (amd64 &amp; arm64)**, and **macOS
 
 <p><a class="btn btn-primary" href="{{ site.releases }}">Releases on GitHub →</a></p>
 
-Helena is a single self-contained binary - no installer, no runtime to set up.
-Download it, make it executable, and run it.
+Helena is a single self-contained binary - the download itself needs no
+installer and no runtime to set up. Download it, make it executable, and run
+it. On Linux, each release also attaches **`.deb` and `.rpm` packages** (the
+binary plus a desktop entry and icon) if you'd rather install through your
+package manager.
 
 > **macOS builds are unsigned**, for two entirely mundane reasons: I don't have
 > a (paid) Apple Developer account, and I don't own a Mac to notarize on. The

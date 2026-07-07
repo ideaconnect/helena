@@ -26,7 +26,7 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Variables &amp; environments</h2><span class="badge shipped">Shipped</span></div>
-      <p>A layered scope chain (global → .env → collection → environment → folder → request), dynamic <code>{% raw %}{{$guid}}{% endraw %}</code>/<code>{% raw %}{{$timestamp}}{% endraw %}</code> values, and ask-at-send <code>{% raw %}{{?Name}}{% endraw %}</code> prompts, with a live resolved-URL preview.</p>
+      <p>A layered scope chain (global → collection .env → collection → environment → folder → request → script overlay), dynamic <code>{% raw %}{{$guid}}{% endraw %}</code>/<code>{% raw %}{{$timestamp}}{% endraw %}</code> values, and ask-at-send <code>{% raw %}{{?Name}}{% endraw %}</code> prompts, with a live resolved-URL preview.</p>
     </div>
   </li>
 
@@ -56,14 +56,14 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Import / export / codegen</h2><span class="badge shipped">Shipped</span></div>
-      <p>Import OpenAPI / Swagger / WSDL and other collection exports; export to cURL, wget, fetch, Python, or Go; paste-cURL to build a request.</p>
+      <p>Import OpenAPI / Swagger / WSDL / Postman; export to cURL, wget, fetch, Python, or Go; paste-cURL to build a request.</p>
     </div>
   </li>
 
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Real-time - SSE &amp; WebSocket</h2><span class="badge shipped">Shipped</span></div>
-      <p>Server-Sent Events streamed into the response view, and a bidirectional WebSocket session UI - both hand-rolled on the standard library, pinned to the specs' own test vectors.</p>
+      <p>Server-Sent Events streamed into the response view, and a bidirectional WebSocket session UI - both hand-rolled on the standard library, the WebSocket frame codec pinned to RFC 6455's own test vectors.</p>
     </div>
   </li>
 
@@ -77,7 +77,7 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item active"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Packaging &amp; app stores</h2><span class="badge progress">In progress</span></div>
-      <p>Today there's a native binary for every release (with checksums, an SBOM, and build provenance), Linux <code>.deb</code>/<code>.rpm</code> packages, and winget/Scoop manifests plus an Inno Setup installer on Windows. macOS is built in CI but not yet signed. Next, so each OS can install and update Helena the way it expects:</p>
+      <p>Today there's a native binary for every release (with checksums, an SBOM, and build provenance) and Linux <code>.deb</code>/<code>.rpm</code> packages. Windows winget/Scoop manifests and an Inno Setup installer script are committed but not yet wired into the release pipeline. macOS is built in CI but not yet signed, and CI already builds the (unsigned) Microsoft Store MSIX bundle - only the Store submission remains. Next, so each OS can install and update Helena the way it expects:</p>
       <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:14px">
         <li><b>Microsoft Store</b> (MSIX) on Windows</li>
         <li><b>Mac App Store</b> and a <b>Homebrew</b> cask on macOS, signed and notarized</li>
@@ -90,8 +90,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item active"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>UI beautification</h2><span class="badge progress">In progress</span></div>
-      <p>An ongoing visual refresh: the green accent, the Inter / JetBrains Mono type, and the icon sidebar toolbar are in; refined tabs, a cleaner top bar, and general polish are next - so Helena looks as good as it works.</p>
-      <div class="chips"><span class="chip">green accent</span><span class="chip">custom fonts</span><span class="chip">icon toolbar</span><span class="chip">tab + top-bar polish</span></div>
+      <p>An ongoing visual refresh: the green accent, the Inter / JetBrains Mono type, the icon sidebar toolbar, and the reworked top bar are in; refined tabs and general polish are next - so Helena looks as good as it works.</p>
+      <div class="chips"><span class="chip">green accent</span><span class="chip">custom fonts</span><span class="chip">icon toolbar</span><span class="chip">tab polish</span></div>
     </div>
   </li>
 

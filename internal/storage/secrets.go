@@ -14,8 +14,10 @@ import (
 
 // Secret externalization (#42).
 //
-// Credential values — Basic password, Bearer token, API-key value, OAuth2
-// client secret, and Secret-flagged environment variables — must not be written
+// Credential values — every auth scheme's secret fields (Basic/Digest/WSSE/
+// NTLM passwords, Bearer token, API-key value, OAuth1 consumer + token
+// secrets, OAuth2 client secret, AWSv4 secret key + session token; see
+// authSecrets) and Secret-flagged environment variables — must not be written
 // into the git-tracked collection YAML. On Save they are split out into a store
 // under the OS config dir (outside any repo, so it can never be committed) and
 // the collection is written with those fields blanked; on Load they are merged
