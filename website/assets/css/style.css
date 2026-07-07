@@ -310,21 +310,32 @@ pre code { background: none; padding: 0; }
 .idct-badge:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
 .idct-badge img { height: 30px; width: auto; display: block; }
 
-/* "Named after Helena" tribute on the About page — floating, slightly-tilted
-   photos like the homepage art, sized so they never dominate the layout. Fixed
-   basis with no flex-grow (the old `flex: 1 1` ballooned each to ~half the wide
-   column). */
-.tribute { margin: 10px 0 34px; }
-.tribute-photos { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start;
-  padding: 12px 10px 20px; }
-.tribute-photos picture { flex: 0 1 280px; display: block; }
-.tribute-photos img { width: 100%; height: auto; display: block; border-radius: 14px;
-  border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--ink); }
-.tribute-photos picture:nth-child(1) { transform: rotate(-2deg); animation: tribute-float-a 7s ease-in-out infinite; }
-.tribute-photos picture:nth-child(2) { transform: rotate(2deg); animation: tribute-float-b 8s ease-in-out .6s infinite; }
-@keyframes tribute-float-a { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-8px); } }
-@keyframes tribute-float-b { 0%, 100% { transform: rotate(2deg) translateY(0); } 50% { transform: rotate(2deg) translateY(-8px); } }
-.tribute-text { margin: 26px 0 0; color: var(--muted); max-width: 58ch; }
+/* "Named after Helena" — the two photos "fly" on the right, mirroring the
+   homepage hero: a faded, tilted back photo behind a larger floating front one,
+   with the note in the left column. */
+.tribute-grid { display: grid; grid-template-columns: 1fr 1.02fr; gap: 40px;
+  align-items: center; margin: 8px 0 36px; }
+.tribute-text { color: var(--muted); max-width: 46ch; }
+/* Photo widths capped in px so the box height stays predictable at any column
+   width (a % width would let the tall portrait grow into the section below). */
+.tribute-box { position: relative; min-height: 400px; }
+.tribute-box::before { content: ""; position: absolute; inset: -8% -6% -12% -6%; z-index: 0;
+  background: radial-gradient(60% 60% at 58% 42%, rgba(34, 197, 94, .22), transparent 70%); filter: blur(10px); }
+.tribute-box .cat-win { position: absolute; margin: 0; display: block; border-radius: 14px;
+  overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--ink); }
+.tribute-box .cat-win img { width: 100%; height: auto; display: block; }
+.tribute-box .cat-win-back { top: 0; right: 0; width: min(56%, 236px); z-index: 1; opacity: .9; transform: rotate(3deg); }
+.tribute-box .cat-win-front { top: 44px; left: 0; width: min(70%, 300px); z-index: 2; transform: rotate(-2deg);
+  animation: tribute-float 7s ease-in-out infinite; }
+@keyframes tribute-float { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-10px); } }
+
+@media (max-width: 640px) {
+  .tribute-grid { grid-template-columns: 1fr; gap: 22px; }
+  .tribute-box { min-height: 0; display: flex; flex-direction: column; gap: 16px; }
+  .tribute-box::before { display: none; }
+  .tribute-box .cat-win { position: relative; width: 100%; inset: auto;
+    transform: none; animation: none; opacity: 1; }
+}
 
 /* ---- Scroll reveal (progressive enhancement; visible by default) ---- */
 .reveal { opacity: 1; }
