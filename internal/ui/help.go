@@ -13,9 +13,10 @@ import (
 )
 
 const (
-	repoURL      = "https://github.com/ideaconnect/helena"
-	userGuideURL = repoURL + "/blob/main/docs/USER_GUIDE.md"
-	issuesURL    = repoURL + "/issues"
+	repoURL    = "https://github.com/ideaconnect/helena"
+	issuesURL  = repoURL + "/issues"
+	websiteURL = "https://idct.tech/helena"
+	coffeeURL  = "https://buymeacoffee.com/idct"
 )
 
 // SetVersion records the build version for the Help → About entry (#61). main
@@ -26,13 +27,16 @@ func (m *MainUI) SetVersion(v string) { m.appVersion = v }
 // web links to the guide and issue tracker, and About — more than just the
 // shortcuts list (#61).
 func (m *MainUI) helpMenuItems() []*fyne.MenuItem {
+	coffee := fyne.NewMenuItem("Buy me a coffee", func() { m.openURL(coffeeURL) })
+	coffee.Icon = fyne.NewStaticResource("bmc_coffee.png", assets.CoffeeIcon)
 	return []*fyne.MenuItem{
 		fyne.NewMenuItem("Getting started", m.showGettingStarted),
 		fyne.NewMenuItem("Keyboard shortcuts", m.showShortcuts),
 		fyne.NewMenuItem("History", m.showHistory),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("User guide (web)", func() { m.openURL(userGuideURL) }),
-		fyne.NewMenuItem("Report an issue (web)", func() { m.openURL(issuesURL) }),
+		fyne.NewMenuItem("Website", func() { m.openURL(websiteURL) }),
+		fyne.NewMenuItem("Report an issue", func() { m.openURL(issuesURL) }),
+		coffee,
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("About Helena", m.showAbout),
 	}
@@ -83,7 +87,7 @@ func (m *MainUI) showGettingStarted() {
 		"   dropdown.\n" +
 		"4. Send (Mod+Enter). The response shows body, headers, timing, and any\n" +
 		"   script console output.\n\n" +
-		"See the User guide (Help → User guide) for chaining, scripting, and more."
+		"See the online docs at idct.tech/helena for chaining, scripting, and more."
 	dialog.ShowInformation("Getting started", body, m.win)
 }
 

@@ -29,6 +29,12 @@ var AppIcon []byte
 //go:embed helena_cat.jpg
 var HelenaCat []byte
 
+// CoffeeIcon is the Buy Me a Coffee brand mark (same icon as the website nav),
+// used for the Help → "Buy me a coffee" menu entry. 44×64 PNG (~3 KB).
+//
+//go:embed bmc_coffee.png
+var CoffeeIcon []byte
+
 // iconFS holds every SVG under assets/icons/. Use Icon(name) to fetch
 // a Fyne resource ready for widget.NewButtonWithIcon and friends.
 //

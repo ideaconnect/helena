@@ -24,7 +24,7 @@ func TestHelpMenuOffersMoreThanShortcuts(t *testing.T) {
 			labels[it.Label] = true
 		}
 	}
-	for _, want := range []string{"Getting started", "Keyboard shortcuts", "User guide (web)", "Report an issue (web)", "About Helena"} {
+	for _, want := range []string{"Getting started", "Keyboard shortcuts", "Website", "Report an issue", "Buy me a coffee", "About Helena"} {
 		if !labels[want] {
 			t.Errorf("Help menu missing %q (have %v)", want, labels)
 		}
@@ -72,9 +72,15 @@ func TestShowAboutWithWindow(t *testing.T) {
 
 // TestHelpURLsWellFormed guards the hard-coded help links.
 func TestHelpURLsWellFormed(t *testing.T) {
-	for _, u := range []string{repoURL, userGuideURL, issuesURL} {
+	for _, u := range []string{repoURL, issuesURL} {
 		if !strings.HasPrefix(u, "https://github.com/ideaconnect/helena") {
-			t.Errorf("unexpected help URL %q", u)
+			t.Errorf("unexpected github URL %q", u)
 		}
+	}
+	if websiteURL != "https://idct.tech/helena" {
+		t.Errorf("websiteURL = %q, want https://idct.tech/helena", websiteURL)
+	}
+	if coffeeURL != "https://buymeacoffee.com/idct" {
+		t.Errorf("coffeeURL = %q, want https://buymeacoffee.com/idct", coffeeURL)
 	}
 }
