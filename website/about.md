@@ -15,6 +15,22 @@ description: About Helena and its author, Bartosz Pachołek.
   </div>
 </div>
 
+## Named after Helena
+
+<div class="tribute">
+  <div class="tribute-photos">
+    <picture>
+      <source srcset="{{ '/assets/img/helena-cat-2.webp' | relative_url }}" type="image/webp">
+      <img src="{{ '/assets/img/helena-cat-2.jpg' | relative_url }}" alt="Helena, a green-eyed tabby cat, sitting and looking at the camera" width="767" height="900" loading="lazy" decoding="async">
+    </picture>
+    <picture>
+      <source srcset="{{ '/assets/img/helena-cat-1.webp' | relative_url }}" type="image/webp">
+      <img src="{{ '/assets/img/helena-cat-1.jpg' | relative_url }}" alt="Helena the cat, stretched out and relaxed on a wooden shelf" width="900" height="900" loading="lazy" decoding="async">
+    </picture>
+  </div>
+  <p class="tribute-text">Helena is named after our cat, <strong>Helena</strong> — a gentle tabby and our great friend for almost nineteen years. She passed away on the second day of Christmas, 2025. The app carries her name so that a little of her stays with us.</p>
+</div>
+
 ## Why Helena exists
 
 Most desktop API clients are capable, but they ship a browser engine inside
