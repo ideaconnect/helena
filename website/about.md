@@ -6,15 +6,6 @@ lead: Helena is built and maintained by Bartosz Pachołek.
 description: About Helena and its author, Bartosz Pachołek.
 ---
 
-<div class="author" style="margin:6px 0 26px">
-  <div class="avatar photo"><img src="{{ '/assets/img/author.jpg' | relative_url }}" alt="Bartosz Pachołek" width="256" height="256" loading="lazy" decoding="async"></div>
-  <div>
-    <h2 style="margin:.1em 0">Bartosz Pachołek</h2>
-    <p style="margin:0;color:var(--muted)">Author &amp; maintainer · <a href="{{ site.repo }}">ideaconnect/helena</a></p>
-    <a class="idct-badge" href="{{ site.author_url }}" title="IDCT - idct.tech"><img src="{{ '/assets/img/idct-logo.png' | relative_url }}" alt="IDCT - idct.tech" width="229" height="240" loading="lazy" decoding="async"></a>
-  </div>
-</div>
-
 ## Named after Helena
 
 <div class="tribute-grid">
@@ -62,6 +53,16 @@ engine. Where a protocol needs crypto the standard library omits - like MD4 for
 NTLM - it's implemented from the spec and pinned to published test vectors
 rather than pulling in a dependency. Every behaviour-affecting change ships with
 tests and docs, and the non-UI packages hold a 90% coverage floor.
+
+## The author
+
+<div class="author-bio">
+  <figure class="author-figure">
+    <span class="avatar photo"><img src="{{ '/assets/img/author.jpg' | relative_url }}" alt="Bartosz Pachołek" width="256" height="256" loading="lazy" decoding="async"></span>
+    <a class="idct-badge" href="{{ site.author_url }}" title="IDCT - idct.tech"><img src="{{ '/assets/img/idct-logo.png' | relative_url }}" alt="IDCT - idct.tech" width="229" height="240" loading="lazy" decoding="async"></a>
+  </figure>
+  <p>Helena is a solo project by <strong>Bartosz Pachołek</strong> at <a href="{{ site.author_url }}">IDCT</a> — designed, built, and maintained by one developer, with a good deal of help from AI, and kept free and open source. The source lives on <a href="{{ site.repo }}">GitHub</a>; say hello on the <a href="{{ '/contact/' | relative_url }}">contact page</a> or in the <a href="{{ site.discord }}">Discord</a>.</p>
+</div>
 
 ## Get involved
 
