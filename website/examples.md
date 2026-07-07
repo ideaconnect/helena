@@ -101,7 +101,8 @@ helena.env.set("TOKEN", response.json.token);   // -> {{TOKEN}} anywhere
 Enter a `wss://` URL and press **Send** - Helena opens a live session. Type
 messages to send; received messages stream into the transcript. Pings are
 answered automatically and fragmented messages are reassembled. Server-Sent
-Events work the same way: a `text/event-stream` response appends events live.
+Events have their own control: point at a `text/event-stream` endpoint and
+press **Stream (SSE)** - events append live into the response view.
 
 ## Run a collection in CI
 

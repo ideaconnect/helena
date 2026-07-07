@@ -19,6 +19,15 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+### Changed
+- Docs/website accuracy sweep: README's feature list now covers request
+  history, the cookie jar, drag-and-drop reordering, and the full variables
+  system; the website names the Postman importer and the `.deb`/`.rpm`
+  release packages; the roadmap no longer presents winget/Scoop/Inno Setup as
+  shipped (committed but not wired into CI); the User Guide gained Real-time,
+  Request history, and Headless runs sections plus complete auth/body/export
+  enumerations.
+
 ## [0.4.0] - 2026-07-05
 
 ### Added

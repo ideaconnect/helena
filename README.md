@@ -8,13 +8,18 @@ self-contained ~35 MB binary, no Electron, no telemetry.
 
 ## Features
 
-- **Workspaces, collections, folders, requests** stored as plain Open
-  Collection YAML on disk — version-control them like any other source code.
-  Credentials (auth secrets + Secret env vars) are kept out of that YAML —
-  externalized to a store under your config dir — so a committed collection
-  carries no cleartext secret (see [Privacy](#privacy)).
-- **Environments per collection** with `{{variable}}` resolution everywhere
-  (URL, query params, headers, body) plus a live preview of the resolved URL.
+- **Collections, folders, requests** stored as plain Open Collection YAML on
+  disk — version-control them like any other source code. (Workspaces group
+  your open collections and live in the app config, not in the collection
+  YAML.) Credentials (auth secrets + Secret env vars) are kept out of that
+  YAML — externalized to a store under your config dir — so a committed
+  collection carries no cleartext secret (see [Privacy](#privacy)).
+- **Variables & environments** — `{{variable}}` resolution everywhere (URL,
+  query params, headers, body) through a layered scope chain (global →
+  collection `.env` → collection → environment → folder → request → script
+  overlay), with a live preview of the resolved URL, dynamic values
+  (`{{$guid}}`, `{{$timestamp}}`, `{{$randomInt}}`, …), and ask-at-send
+  `{{?Name}}` prompt variables.
 - **Authentication — nine schemes**, all with `{{variable}}` substitution and
   credentials kept out of the committed YAML: Basic, Bearer, API Key,
   OAuth 2.0 (client-credentials and authorization-code + PKCE, with token
@@ -30,15 +35,26 @@ self-contained ~35 MB binary, no Electron, no telemetry.
   transcript. Both are hand-rolled on the Go standard library.
 - **Request builder** — method, URL, query params, headers, body
   (JSON / XML / text / GraphQL / form-urlencoded / multipart / file). Validate +
-  Format buttons for JSON and XML.
-- **Response viewer** — raw, pretty JSON, pretty XML, headers. Status line
-  shows `200 OK · 1.2 KB · 87 ms`.
+  Format buttons for JSON and XML; Send doubles as Abort while a request is
+  in flight.
+- **Response viewer** — raw, pretty JSON, XML, and HTML (auto-detected), plus
+  headers. Status line shows `200 OK · 1.2 KB · 87 ms`; **Save response to
+  file** writes the full untruncated bytes.
 - **CORS advisory.** Helena always sends the request (it isn't a browser),
-  but flags responses a browser would have blocked.
+  but when your request carries an `Origin` header it flags responses a
+  browser would have blocked.
 - **Import** OpenAPI 3, Swagger 2, WSDL, or Postman — from a local file or a
   URL — or paste a cURL command to build a request.
 - **Export** any request to cURL, wget, JavaScript fetch, Python requests, or
   Go net/http, with Copy-to-clipboard.
+- **Request history** — every send is logged (Help → History) with Restore,
+  Resend, and Clear. Snapshots are secret-scrubbed before they touch disk, so
+  `history.yml` never stores a credential.
+- **Cookie jar** — `Set-Cookie` responses are captured in an in-memory,
+  session-lifetime jar (never written to disk) and replayed on matching
+  requests, with a viewer/editor behind the Cookies toolbar button.
+- **Drag-and-drop sidebar** — reorder collections, folders, and requests (or
+  move a request/folder into another folder) by dragging rows in the tree.
 - **Settings** — invalid-SSL toggle, CORS warning, follow-redirects, request
   timeout, max response size (MiB), light/dark/system theme. Persisted in your OS's standard config
   dir (`AppData\Roaming` on Windows, `~/Library/Application Support` on
@@ -46,7 +62,8 @@ self-contained ~35 MB binary, no Electron, no telemetry.
 - **Keyboard shortcuts** (Mod = Ctrl on Linux/Windows, ⌘ on macOS):
   - **Mod+Enter** Send · **Mod+S** Save · **Mod+O** Open · **Mod+I** Import
   - **Mod+N** New request · **Mod+Shift+N** New collection · **Mod+D** Duplicate
-  - **Mod+E** Environments · **Mod+,** Settings · **F1** show all shortcuts
+  - **Mod+Z** Undo last delete · **Mod+E** Environments · **Mod+,** Settings
+  - **F1** show all shortcuts
 
 ## Download
 
@@ -216,8 +233,11 @@ checks); `--format junit` emits JUnit XML (one `<testcase>` per request) that
 CI systems ingest directly. `--folder <name-path>` scopes the run to a single
 folder's subtree (report paths stay collection-relative); an unknown folder is a
 usage error. Flags may come before or after the collection dir. `{{var}}`
-references resolve from the same scopes as a GUI Send; interactive prompt
-variables (`{{?Name}}`) stay unresolved since a headless run can't ask.
+references resolve from the same scopes as a GUI Send. Interactive prompt
+variables (`{{?Name}}`) can't be asked for headlessly, so a request that uses
+one fails with an `unresolved variables` error and the run exits non-zero —
+supply the value another way (an `--env` environment or collection variable)
+in CI.
 
 App identity/version for packaging lives in [`FyneApp.toml`](FyneApp.toml) at
 the repo root, consumed by Fyne's native tooling (`go run fyne.io/tools/cmd/fyne
@@ -256,10 +276,12 @@ Its `ID` must match `cmd/helena`'s `appID` (a test enforces this).
   `Extra map[string]yaml.Node` catch-all, so YAML keys written by other
   tools (auth, runtime scripts, custom docs, …) survive a load → save cycle
   even though Helena itself doesn't expose them in the UI yet.
-- **CORS is advisory, not a toggle.** A native client can't actually enforce
-  CORS. Helena compares the request `Origin` against the response
-  `Access-Control-Allow-Origin` and shows an orange warning if a browser
-  would have blocked the response. The request is sent regardless.
+- **CORS is advisory, not enforcement.** A native client can't actually
+  enforce CORS. When the request carries an `Origin` header, Helena compares
+  it against the response `Access-Control-Allow-Origin` and shows an orange
+  warning if a browser would have blocked the response. The request is sent
+  regardless; the warning can be switched off in Settings, but nothing makes
+  Helena enforce CORS.
 - **Native CI, no cross-compile.** GitHub Actions runs `ubuntu-latest`,
   `windows-latest`, `windows-11-arm`, and `macos-latest` in a matrix so each
   binary is produced by its own OS's native cgo toolchain. No fyne-cross, no
@@ -325,9 +347,11 @@ explicitly trigger:
 There are no other fixed-host calls anywhere in the codebase. Your
 collections, credentials, and settings stay on your local disk.
 
-**Credentials & git-safety.** Auth secrets (Basic password, Bearer token,
-API-key value, OAuth2 client secret) and Secret-flagged environment variables
-are **not** written into the collection YAML. They're externalized to a
+**Credentials & git-safety.** Auth secrets across all nine schemes
+(Basic/Digest/WSSE/NTLM passwords, Bearer token, API-key value, OAuth 1.0a
+consumer & token secrets, OAuth 2.0 client secret, AWS secret access key &
+session token) and Secret-flagged environment variables are **not** written
+into the collection YAML. They're externalized to a
 per-collection store under your OS config dir (override with `$HELENA_SECRETS_DIR`),
 so you can commit a collection directory without leaking cleartext credentials.
 The store itself is plaintext on local disk today — at-rest encryption (OS
@@ -366,7 +390,8 @@ Helena follows [Semantic Versioning](https://semver.org): release tags are
 Publish); CI then builds every platform and attaches the binaries, Linux
 packages, checksums, SBOM, and a provenance attestation. The free GitHub Release
 is the primary way to get Helena — building from source is always free too, and
-the Microsoft Store listing is an optional convenience channel.
+a Microsoft Store listing is planned as an optional convenience channel
+(coming soon).
 
 ## License
 
