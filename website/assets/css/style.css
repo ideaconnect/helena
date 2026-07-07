@@ -310,14 +310,19 @@ pre code { background: none; padding: 0; }
 .idct-badge:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
 .idct-badge img { height: 30px; width: auto; display: block; }
 
-/* "The author" bio: the photo + IDCT logo float left in the paragraph, with the
-   same gentle bob as the hero art (text wraps around them). */
-.author-bio { overflow: hidden; margin: 4px 0 10px; }
-.author-figure { float: left; margin: 6px 30px 14px 0; display: flex; flex-direction: column;
-  align-items: flex-start; gap: 12px; animation: float-soft 6s ease-in-out infinite; }
-.author-figure .avatar { width: 120px; height: 120px; }
+/* "The author" bio: the photo + IDCT logo sit on the left with the bio text
+   vertically centred beside them (like the cat-photos section), with the same
+   gentle bob. */
+.author-bio { display: flex; align-items: center; gap: 30px; margin: 6px 0 12px; }
+.author-figure { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start;
+  gap: 14px; animation: float-soft 6s ease-in-out infinite; }
+.author-figure .avatar { width: 150px; height: 150px; }
 .author-figure .idct-badge { margin-top: 0; }
+.author-figure .idct-badge img { height: 36px; }
 .author-bio p { margin: 0; color: var(--muted); }
+@media (max-width: 640px) {
+  .author-bio { flex-direction: column; align-items: flex-start; gap: 18px; }
+}
 
 /* "Named after Helena" — the two photos "fly" on the right, mirroring the
    homepage hero: a faded, tilted back photo behind a larger floating front one,
