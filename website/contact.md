@@ -27,9 +27,10 @@ description: Get in touch about Helena - questions, ideas, and bug reports.
   </div>
 
   <form class="contact-form reveal" action="https://api.web3forms.com/submit" method="POST">
-    <input type="hidden" name="access_key" value="3bb680f8-d4ed-4eb6-a7e5-f3650c726b8f">
+    <input type="hidden" name="access_key" value="d777bd78-135d-4c53-82fd-d3ace8453ba0">
     <input type="hidden" name="subject" value="New message from the Helena website">
     <input type="hidden" name="from_name" value="Helena website">
+    <input type="hidden" name="redirect" value="{{ '/contact/thank-you/' | absolute_url }}">
     <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
 
     <div class="field">
@@ -47,11 +48,14 @@ description: Get in touch about Helena - questions, ideas, and bug reports.
       <textarea name="message" id="message" rows="5" placeholder="What's on your mind?" required></textarea>
     </div>
 
-    <div class="h-captcha" data-captcha="true"></div>
+    <div class="h-captcha" data-sitekey="50b2fe65-b00b-4b9e-ad62-3ba471098be2"></div>
 
     <button type="submit" class="btn btn-primary" style="width:100%">Send message</button>
-    <div id="result" class="form-note"></div>
   </form>
 </div>
 
-<script src="https://web3forms.com/client/script.js" async defer></script>
+<!-- Standard (non-JS) POST so Web3Forms honours the `redirect` field above and
+     sends the visitor to /contact/thank-you/. hCaptcha renders via its own API
+     with the Web3Forms shared site key (the AJAX client script would ignore the
+     redirect). -->
+<script src="https://js.hcaptcha.com/1/api.js" async defer></script>
