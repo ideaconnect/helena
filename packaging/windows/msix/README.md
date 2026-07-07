@@ -23,6 +23,7 @@ Baked into `AppxManifest.xml`; must match Partner Center exactly. For reference:
 | ----- | ----- |
 | Package/Identity/Name | `IdeaConnectBartoszPachoek.HelenaAPIClient` |
 | Package/Identity/Publisher | `CN=776E87F3-6B20-4A52-B4D8-AA515F574757` |
+| Package/Properties/DisplayName | `Helena API Client` — must match a **reserved** app name; `Helena` alone is not reserved. (The on-device tile name stays `Helena`.) |
 | PublisherDisplayName | `IDCT Bartosz Pachołek` |
 | Package Family Name | `IdeaConnectBartoszPachoek.HelenaAPIClient_aec6mzqn7e0rm` |
 | Store ID | `9NWPKK6CTDR1` |
@@ -44,6 +45,13 @@ When you **publish a GitHub Release**, the `msix` job in
 for you and uploads it as a workflow artifact named **`helena-store-msixbundle`**.
 Download it from that run's summary page and upload it in Partner Center — no
 local Windows SDK needed. (The bundle is unsigned; Microsoft signs it.)
+
+**Regenerate without a new release.** To rebuild the bundle for an
+already-released version — e.g. after Partner Center rejects a submission and
+you fix the manifest — run the CI workflow manually (Actions → CI → *Run
+workflow*) with the **`version`** input set to that release (e.g. `0.5.0`), or
+`gh workflow run ci.yml -f version=0.5.0`. The `msix` job rebuilds and re-uploads
+`helena-store-msixbundle` without cutting another GitHub Release.
 
 ## Build locally
 

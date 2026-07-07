@@ -17,6 +17,15 @@ on:
     # Nightly at 04:00 UTC — mutation testing only.
     - cron: '0 4 * * *'
   workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Rebuild the unsigned Store MSIX bundle for an already-released
+          version (e.g. 0.5.0) — use this to regenerate the bundle after a
+          Partner Center rejection without cutting a new release. Leave blank
+          for an ordinary manual run (build/test only, no MSIX).
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -167,7 +176,10 @@ jobs:
       - name: Build (Windows)
         if: runner.os == 'Windows'
         # -H windowsgui suppresses the console window when launched from Explorer.
-        run: go build -tags no_emoji -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
+        # On a workflow_dispatch Store rebuild, stamp the exe with the supplied
+        # version instead of the branch ref ("main") so the Store binary reports
+        # the real release version; otherwise (release/push/PR) use github.ref_name.
+        run: go build -tags no_emoji -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.event.inputs.version || github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
@@ -400,7 +412,10 @@ jobs:
     # Skipped for pre-releases: MSIX package versions must be purely numeric
     # (x.y.z.0), so a tag like v0.5.0-rc1 has no valid MSIX version — gating here
     # skips it cleanly instead of failing the run for an otherwise-good release.
-    if: github.event_name == 'release' && !github.event.release.prerelease
+    # Runs on a (non-pre) release, or on a manual workflow_dispatch that supplies
+    # a `version` input — the latter regenerates the Store bundle on demand (e.g.
+    # after a Partner Center rejection) without cutting a new GitHub release.
+    if: ${{ (github.event_name == 'release' && !github.event.release.prerelease) || (github.event_name == 'workflow_dispatch' && github.event.inputs.version != '') }}
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7 # manifest + logo assets + packaging scripts
@@ -412,15 +427,16 @@ jobs:
 
       # build-store-bundle.ps1 packs helena-{x64,arm64}.msix from the prebuilt
       # exes (identity baked into AppxManifest.xml) and combines them into one
-      # bundle. github.ref_name is the release tag (e.g. v0.4.0); the script
-      # strips the "v" and pads to the Store's 4-part version.
+      # bundle. The version is the release tag (e.g. v0.4.0) or the dispatch
+      # `version` input; the script strips a leading "v" and pads to the Store's
+      # 4-part version.
       - name: Build Store MSIX bundle (x64 + arm64)
         shell: pwsh
         run: |
           ./packaging/windows/msix/build-store-bundle.ps1 `
             -Amd64Exe artifacts/helena-windows-amd64.exe `
             -Arm64Exe artifacts/helena-windows-arm64.exe `
-            -Version "${{ github.ref_name }}"
+            -Version "${{ github.event.inputs.version || github.ref_name }}"
 
       - name: Upload Store bundle
         uses: actions/upload-artifact@v7
