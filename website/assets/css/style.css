@@ -310,6 +310,14 @@ pre code { background: none; padding: 0; }
 .idct-badge:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
 .idct-badge img { height: 30px; width: auto; display: block; }
 
+/* "Named after Helena" tribute on the About page. */
+.tribute { margin: 8px 0 30px; }
+.tribute-photos { display: flex; flex-wrap: wrap; gap: 14px; }
+.tribute-photos picture { flex: 1 1 240px; min-width: 0; }
+.tribute-photos img { width: 100%; height: auto; border-radius: 14px; display: block;
+  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
+.tribute-text { margin: 16px 0 0; color: var(--muted); max-width: 60ch; }
+
 /* ---- Scroll reveal (progressive enhancement; visible by default) ---- */
 .reveal { opacity: 1; }
 .js .reveal { opacity: 0; transform: translateY(18px); transition: opacity .6s ease, transform .6s ease; }
