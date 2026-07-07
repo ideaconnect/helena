@@ -60,15 +60,15 @@ func TestApplyUpdateResult(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			m.updateCheckBtn.Disable()
+			m.updateChecking = true
 			m.updateLink.Hide()
 			m.applyUpdateResult(tc.rel, tc.err)
 
 			if m.updateStatus.Text != tc.wantText {
 				t.Errorf("status = %q, want %q", m.updateStatus.Text, tc.wantText)
 			}
-			if m.updateCheckBtn.Disabled() {
-				t.Error("check button left disabled")
+			if m.updateChecking {
+				t.Error("check guard left set (would block re-check)")
 			}
 			if m.updateLink.Visible() != tc.wantLink {
 				t.Errorf("download link visible = %v, want %v", m.updateLink.Visible(), tc.wantLink)

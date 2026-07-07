@@ -127,11 +127,15 @@ type MainUI struct {
 	helpBtn    *ttwidget.Button // anchors the Help popup menu (#61)
 	appVersion string           // build version for the About entry; set via SetVersion
 
-	// Bottom status-bar update-check widgets (opt-in; no background traffic).
+	// Bottom status-bar update-check widgets (opt-in; no background traffic). All
+	// are regular-weight text so the bottom bar shares one font + size — the
+	// "Check for updates" action is a Hyperlink (not a Button, whose label is
+	// force-bold), matching the Download / Store links and the labels.
 	statusVersion  *widget.Label     // persistent "current version" segment
-	updateCheckBtn *widget.Button    // "Check for updates" (user-initiated)
+	updateCheck    *widget.Hyperlink // "Check for updates" action (OnTapped)
 	updateStatus   *widget.Label     // result text of the last check
 	updateLink     *widget.Hyperlink // "Download" link to the release page
+	updateChecking bool              // a check is in flight; ignore re-taps
 
 	currentRequest     *model.Request
 	currentRequestID   string

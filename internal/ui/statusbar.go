@@ -32,12 +32,15 @@ func (m *MainUI) buildStatusBar() fyne.CanvasObject {
 	m.updateLink = widget.NewHyperlink("", nil)
 	m.updateLink.Hide()
 
-	m.updateCheckBtn = widget.NewButton("Check for updates", m.checkForUpdates)
-	m.updateCheckBtn.Importance = widget.LowImportance
+	// A Hyperlink (not a Button, whose label Fyne force-bolds) so the action is
+	// regular weight like the rest of the bar; OnTapped runs the check rather
+	// than navigating a URL.
+	m.updateCheck = widget.NewHyperlink("Check for updates", nil)
+	m.updateCheck.OnTapped = m.checkForUpdates
 
 	trailing := container.NewHBox(
 		m.statusVersion,
-		m.updateCheckBtn,
+		m.updateCheck,
 		m.updateStatus,
 		m.updateLink,
 	)
@@ -69,7 +72,10 @@ func currentVersionText(v string) string {
 // guarantee. The fetch and comparison happen off-thread; only the final widget
 // updates marshal back via fyne.Do.
 func (m *MainUI) checkForUpdates() {
-	m.updateCheckBtn.Disable()
+	if m.updateChecking {
+		return // a check is already in flight; ignore the re-tap
+	}
+	m.updateChecking = true
 	m.updateLink.Hide()
 	m.updateStatus.SetText("Checking…")
 	m.updateStatus.Show()
@@ -78,7 +84,7 @@ func (m *MainUI) checkForUpdates() {
 		defer func() {
 			if r := recover(); r != nil {
 				fyne.Do(func() {
-					m.updateCheckBtn.Enable()
+					m.updateChecking = false
 					m.updateStatus.SetText("Update check failed")
 				})
 			}
@@ -96,7 +102,7 @@ func (m *MainUI) checkForUpdates() {
 // It runs on the UI goroutine (via fyne.Do, or directly in tests) and is the
 // synchronous, testable core of checkForUpdates.
 func (m *MainUI) applyUpdateResult(rel updatecheck.Release, err error) {
-	m.updateCheckBtn.Enable()
+	m.updateChecking = false
 	if err != nil {
 		m.updateStatus.SetText("Update check failed")
 		return
