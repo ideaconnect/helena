@@ -241,7 +241,10 @@ jobs:
       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
       - name: golangci-lint
-        run: $(go env GOPATH)/bin/golangci-lint run ./...
+        # 5m, not the 3m default: this repo's lint type-checks the Fyne-heavy
+        # internal/ui package under go1.26, which sits right at the 3m edge and
+        # intermittently times out on a loaded runner ("Timeout exceeded").
+        run: $(go env GOPATH)/bin/golangci-lint run --timeout=5m ./...
 
   vuln:
     name: govulncheck
