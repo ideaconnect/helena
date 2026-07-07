@@ -6,6 +6,7 @@ import (
 
 	"fyne.io/fyne/v2/test"
 
+	"github.com/idct/helena/assets"
 	"github.com/idct/helena/internal/session"
 )
 
@@ -45,6 +46,28 @@ func TestAboutUsesSetVersion(t *testing.T) {
 		t.Errorf("appVersion = %q, want v9.9.9", m.appVersion)
 	}
 	m.showAbout() // window-less: must not panic
+}
+
+// TestShowAboutWithWindow verifies the About dialog — which now carries Helena's
+// photo and the tribute note — opens as a modal overlay when a window is set,
+// and that the photo is actually embedded.
+func TestShowAboutWithWindow(t *testing.T) {
+	test.NewApp()
+	sess, _ := session.New("")
+	m := NewMainUI(sess)
+	m.SetVersion("v1.2.3")
+	w := test.NewWindow(m.Root())
+	defer w.Close()
+	m.SetWindow(w)
+
+	if len(assets.HelenaCat) == 0 {
+		t.Fatal("embedded Helena photo is empty")
+	}
+	before := len(w.Canvas().Overlays().List())
+	m.showAbout()
+	if after := len(w.Canvas().Overlays().List()); after <= before {
+		t.Fatalf("About dialog did not open (before=%d after=%d)", before, after)
+	}
 }
 
 // TestHelpURLsWellFormed guards the hard-coded help links.

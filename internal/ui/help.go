@@ -4,8 +4,12 @@ import (
 	"net/url"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/idct/helena/assets"
 )
 
 const (
@@ -83,7 +87,8 @@ func (m *MainUI) showGettingStarted() {
 	dialog.ShowInformation("Getting started", body, m.win)
 }
 
-// showAbout shows the app name, version (when set), and repo link.
+// showAbout shows the app name, version, repo link, and — since Helena is named
+// after the maintainer's cat — a photo of her with a short note (#tribute).
 func (m *MainUI) showAbout() {
 	if m.win == nil {
 		return
@@ -92,9 +97,32 @@ func (m *MainUI) showAbout() {
 	if v == "" {
 		v = "dev"
 	}
-	dialog.ShowInformation("About Helena",
-		"Helena — a free, open-source, devs-for-devs API client.\n\n"+
-			"Version: "+v+"\n"+
-			repoURL,
-		m.win)
+
+	photo := canvas.NewImageFromResource(fyne.NewStaticResource("helena_cat.jpg", assets.HelenaCat))
+	photo.FillMode = canvas.ImageFillContain
+	photo.SetMinSize(fyne.NewSize(205, 240)) // 341×400 source, preserving aspect
+
+	story := widget.NewLabel("Helena is named after our cat, Helena — a gentle tabby and our " +
+		"great friend for almost nineteen years, who passed away on the second day of " +
+		"Christmas, 2025.")
+	story.Wrapping = fyne.TextWrapWord
+	story.Alignment = fyne.TextAlignCenter
+
+	tagline := widget.NewLabel("A free, open-source, devs-for-devs API client.\nVersion " + v)
+	tagline.Alignment = fyne.TextAlignCenter
+
+	repo, _ := url.Parse(repoURL) // const is a valid URL
+	link := widget.NewHyperlink(repoURL, repo)
+	link.Alignment = fyne.TextAlignCenter
+
+	content := container.NewVBox(
+		container.NewCenter(photo),
+		story,
+		widget.NewSeparator(),
+		tagline,
+		container.NewCenter(link),
+	)
+	d := dialog.NewCustom("About Helena", "Close", content, m.win)
+	d.Resize(fyne.NewSize(380, 540))
+	d.Show()
 }

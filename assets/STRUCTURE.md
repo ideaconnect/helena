@@ -4,9 +4,10 @@
 
 | File | Purpose |
 | ---- | ------- |
-| [assets.go](assets.go) | Package declaration, the `import _ "embed"` line that enables the directive, the `//go:embed app_icon_window.png` directive (the 256×256 window icon — the full-res `app_icon.png` stays unembedded for packaging), and the `AppIcon []byte` variable. |
+| [assets.go](assets.go) | Package declaration, the `import _ "embed"` line, the `//go:embed` directives, and the exported byte slices: `AppIcon` (the 256×256 window icon — the full-res `app_icon.png` stays unembedded for packaging) and `HelenaCat` (the Help → About photo). |
 | `app_icon_window.png` | The 256×256 PNG embedded into `AppIcon` (~92 KB). |
 | `app_icon.png` | The full-resolution (896×896) mascot art, kept for packaging/marketing. Not embedded — shipping it cost ~1 MB of binary and resident memory for pixels no dock ever shows. |
+| `helena_cat.jpg` | Photo of Helena (the cat the app is named after) embedded into `HelenaCat`, shown in the About dialog. 341×400, EXIF-stripped (~40 KB). |
 
 ## Bundled artifact
 
