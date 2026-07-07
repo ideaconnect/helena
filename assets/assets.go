@@ -22,6 +22,19 @@ import (
 //go:embed app_icon_window.png
 var AppIcon []byte
 
+// HelenaCat is a photo of Helena — the cat the app is named after — shown in the
+// Help → About dialog. Resized to 341×400 and EXIF-stripped (~40 KB); the full
+// original is not kept in-repo.
+//
+//go:embed helena_cat.jpg
+var HelenaCat []byte
+
+// CoffeeIcon is the Buy Me a Coffee brand mark (same icon as the website nav),
+// used for the Help → "Buy me a coffee" menu entry. 44×64 PNG (~3 KB).
+//
+//go:embed bmc_coffee.png
+var CoffeeIcon []byte
+
 // iconFS holds every SVG under assets/icons/. Use Icon(name) to fetch
 // a Fyne resource ready for widget.NewButtonWithIcon and friends.
 //
