@@ -946,7 +946,7 @@ func (m *MainUI) openCollection() {
 	if m.win == nil {
 		return
 	}
-	dialog.ShowFolderOpen(func(u fyne.ListableURI, err error) {
+	m.showFileDialog(dialog.NewFolderOpen(func(u fyne.ListableURI, err error) {
 		switch {
 		case err != nil:
 			dialog.ShowError(err, m.win)
@@ -962,5 +962,5 @@ func (m *MainUI) openCollection() {
 			m.refreshEmptyState()
 			m.Status.SetText("Opened collection: " + u.Name())
 		}
-	}, m.win)
+	}, m.win))
 }

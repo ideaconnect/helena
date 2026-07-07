@@ -42,7 +42,7 @@ func (m *MainUI) chooseBodyFile() {
 	if m.win == nil || m.currentRequest == nil {
 		return
 	}
-	dialog.ShowFileOpen(func(rc fyne.URIReadCloser, err error) {
+	m.showFileDialog(dialog.NewFileOpen(func(rc fyne.URIReadCloser, err error) {
 		if err != nil || rc == nil {
 			return
 		}
@@ -52,7 +52,7 @@ func (m *MainUI) chooseBodyFile() {
 			m.currentRequest.Body.FilePath = path
 		}
 		m.bodyFilePathLabel.SetText(path)
-	}, m.win)
+	}, m.win))
 }
 
 // clearBodyFile drops the chosen file from the current request.

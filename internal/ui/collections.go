@@ -19,7 +19,7 @@ func (m *MainUI) actionNewCollection() {
 		return
 	}
 	m.promptName("New collection", "Collection name", "New Collection", func(name string) {
-		dialog.ShowFolderOpen(func(parent fyne.ListableURI, err error) {
+		m.showFileDialog(dialog.NewFolderOpen(func(parent fyne.ListableURI, err error) {
 			if err != nil {
 				dialog.ShowError(err, m.win)
 				return
@@ -46,6 +46,6 @@ func (m *MainUI) actionNewCollection() {
 			m.refreshEnvironments()
 			m.refreshEmptyState()
 			m.Status.SetText("Created: " + name)
-		}, m.win)
+		}, m.win))
 	})
 }

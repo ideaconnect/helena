@@ -177,8 +177,7 @@ func (m *MainUI) importFromFile() {
 		})
 	}, m.win)
 	open.SetFilter(fynestorage.NewExtensionFileFilter([]string{".yaml", ".yml", ".json", ".wsdl", ".xml"}))
-	open.Resize(fyne.NewSize(640, 480))
-	open.Show()
+	m.showFileDialog(open)
 }
 
 // importFromURL fetches and parses a spec from url off the UI goroutine.
@@ -200,7 +199,7 @@ func (m *MainUI) importFromURL(url string) {
 }
 
 func (m *MainUI) chooseImportDestination(c model.Collection) {
-	dialog.ShowFolderOpen(func(uri fyne.ListableURI, err error) {
+	m.showFileDialog(dialog.NewFolderOpen(func(uri fyne.ListableURI, err error) {
 		m.guard("Import", func() {
 			if err != nil {
 				dialog.ShowError(err, m.win)
@@ -228,7 +227,7 @@ func (m *MainUI) chooseImportDestination(c model.Collection) {
 			m.refreshEmptyState()
 			m.Status.SetText("Imported: " + c.Name)
 		})
-	}, m.win)
+	}, m.win))
 }
 
 var importSlugRe = regexp.MustCompile(`[^a-z0-9]+`)
