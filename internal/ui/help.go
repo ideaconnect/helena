@@ -14,9 +14,16 @@ const (
 	issuesURL    = repoURL + "/issues"
 )
 
-// SetVersion records the build version for the Help → About entry (#61). main
-// calls it after NewMainUI so the UI package needn't import the build vars.
-func (m *MainUI) SetVersion(v string) { m.appVersion = v }
+// SetVersion records the build version for the Help → About entry (#61) and the
+// bottom status-bar version segment. main calls it after NewMainUI so the UI
+// package needn't import the build vars; the status-bar label (built during
+// NewMainUI, before this runs) is refreshed here.
+func (m *MainUI) SetVersion(v string) {
+	m.appVersion = v
+	if m.statusVersion != nil {
+		m.statusVersion.SetText(currentVersionText(v))
+	}
+}
 
 // helpMenuItems builds the Help menu: a getting-started pointer, the keymap,
 // web links to the guide and issue tracker, and About — more than just the

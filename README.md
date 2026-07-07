@@ -74,9 +74,10 @@ built in CI but not yet signed/notarized for Gatekeeper — see
 [docs/PACKAGING.md](docs/PACKAGING.md).
 
 **Updates** are delivered via package managers (as they land) or by
-re-downloading a release — Helena does not check for updates at runtime, to
-keep its [no-background-traffic guarantee](#privacy). Run `helena --version`
-to see your build. See [docs/PACKAGING.md](docs/PACKAGING.md) for the full
+re-downloading a release. Helena makes no automatic or background update check;
+the status bar has an opt-in **Check for updates** button that queries GitHub
+only when you click it (part of the [no-background-traffic guarantee](#privacy)).
+Run `helena --version` to see your build. See [docs/PACKAGING.md](docs/PACKAGING.md) for the full
 distribution status.
 
 ## Screenshots
@@ -342,7 +343,9 @@ explicitly trigger:
 
 - **sending a request** (to the host you typed),
 - **fetching an OAuth2 token** (from the token endpoint you configured),
-- **importing from a URL** (when you paste one into the importer).
+- **importing from a URL** (when you paste one into the importer),
+- **checking for updates** (only when you click "Check for updates" in the
+  status bar — a one-shot call to the GitHub API; never automatic or on startup).
 
 There are no other fixed-host calls anywhere in the codebase. Your
 collections, credentials, and settings stay on your local disk.
