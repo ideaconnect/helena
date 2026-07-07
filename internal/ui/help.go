@@ -4,31 +4,46 @@ import (
 	"net/url"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/idct/helena/assets"
 )
 
 const (
-	repoURL      = "https://github.com/ideaconnect/helena"
-	userGuideURL = repoURL + "/blob/main/docs/USER_GUIDE.md"
-	issuesURL    = repoURL + "/issues"
+	repoURL    = "https://github.com/ideaconnect/helena"
+	issuesURL  = repoURL + "/issues"
+	websiteURL = "https://idct.tech/helena"
+	coffeeURL  = "https://buymeacoffee.com/idct"
 )
 
-// SetVersion records the build version for the Help → About entry (#61). main
-// calls it after NewMainUI so the UI package needn't import the build vars.
-func (m *MainUI) SetVersion(v string) { m.appVersion = v }
+// SetVersion records the build version for the Help → About entry (#61) and the
+// bottom status-bar version segment. main calls it after NewMainUI so the UI
+// package needn't import the build vars; the status-bar label (built during
+// NewMainUI, before this runs) is refreshed here.
+func (m *MainUI) SetVersion(v string) {
+	m.appVersion = v
+	if m.statusVersion != nil {
+		m.statusVersion.SetText(currentVersionText(v))
+	}
+}
 
 // helpMenuItems builds the Help menu: a getting-started pointer, the keymap,
 // web links to the guide and issue tracker, and About — more than just the
 // shortcuts list (#61).
 func (m *MainUI) helpMenuItems() []*fyne.MenuItem {
+	coffee := fyne.NewMenuItem("Buy me a coffee", func() { m.openURL(coffeeURL) })
+	coffee.Icon = fyne.NewStaticResource("bmc_coffee.png", assets.CoffeeIcon)
 	return []*fyne.MenuItem{
 		fyne.NewMenuItem("Getting started", m.showGettingStarted),
 		fyne.NewMenuItem("Keyboard shortcuts", m.showShortcuts),
 		fyne.NewMenuItem("History", m.showHistory),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("User guide (web)", func() { m.openURL(userGuideURL) }),
-		fyne.NewMenuItem("Report an issue (web)", func() { m.openURL(issuesURL) }),
+		fyne.NewMenuItem("Website", func() { m.openURL(websiteURL) }),
+		fyne.NewMenuItem("Report an issue", func() { m.openURL(issuesURL) }),
+		coffee,
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("About Helena", m.showAbout),
 	}
@@ -79,11 +94,12 @@ func (m *MainUI) showGettingStarted() {
 		"   dropdown.\n" +
 		"4. Send (Mod+Enter). The response shows body, headers, timing, and any\n" +
 		"   script console output.\n\n" +
-		"See the User guide (Help → User guide) for chaining, scripting, and more."
+		"See the online docs at idct.tech/helena for chaining, scripting, and more."
 	dialog.ShowInformation("Getting started", body, m.win)
 }
 
-// showAbout shows the app name, version (when set), and repo link.
+// showAbout shows the app name, version, repo link, and — since Helena is named
+// after the maintainer's cat — a photo of her with a short note (#tribute).
 func (m *MainUI) showAbout() {
 	if m.win == nil {
 		return
@@ -92,9 +108,32 @@ func (m *MainUI) showAbout() {
 	if v == "" {
 		v = "dev"
 	}
-	dialog.ShowInformation("About Helena",
-		"Helena — a free, open-source, devs-for-devs API client.\n\n"+
-			"Version: "+v+"\n"+
-			repoURL,
-		m.win)
+
+	photo := canvas.NewImageFromResource(fyne.NewStaticResource("helena_cat.jpg", assets.HelenaCat))
+	photo.FillMode = canvas.ImageFillContain
+	photo.SetMinSize(fyne.NewSize(205, 240)) // 341×400 source, preserving aspect
+
+	story := widget.NewLabel("Helena is named after our cat, Helena — a gentle tabby and our " +
+		"great friend for almost nineteen years, who passed away on the second day of " +
+		"Christmas, 2025.")
+	story.Wrapping = fyne.TextWrapWord
+	story.Alignment = fyne.TextAlignCenter
+
+	tagline := widget.NewLabel("A free, open-source, devs-for-devs API client.\nVersion " + v)
+	tagline.Alignment = fyne.TextAlignCenter
+
+	repo, _ := url.Parse(repoURL) // const is a valid URL
+	link := widget.NewHyperlink(repoURL, repo)
+	link.Alignment = fyne.TextAlignCenter
+
+	content := container.NewVBox(
+		container.NewCenter(photo),
+		story,
+		widget.NewSeparator(),
+		tagline,
+		container.NewCenter(link),
+	)
+	d := dialog.NewCustom("About Helena", "Close", content, m.win)
+	d.Resize(fyne.NewSize(380, 540))
+	d.Show()
 }

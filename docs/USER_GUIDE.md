@@ -179,7 +179,8 @@ upgrades can migrate cleanly.
 
 Helena makes **no background network requests** and ships **no telemetry**. The
 only outbound traffic is what you trigger (sending a request, fetching an
-OAuth2 token, importing from a URL). Collections are stored as plain YAML on
+OAuth2 token, importing from a URL, or clicking **Check for updates** in the
+status bar). Collections are stored as plain YAML on
 your local disk; credential fields (auth secrets, Secret-flagged variables)
 are split out on save into a per-collection secrets store under your OS config
 directory — never into the collection folder, so a git-tracked collection

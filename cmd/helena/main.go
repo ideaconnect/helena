@@ -33,6 +33,10 @@ var (
 // test guards against drift.
 const appID = "tech.idct.helena"
 
+// savingSpinnerHold keeps the "Saving…" close spinner visible for a short extra
+// beat so it renders at least a frame and doesn't flicker on a fast save.
+const savingSpinnerHold = 100 * time.Millisecond
+
 // versionString renders the build metadata for `helena --version`. The commit
 // is trimmed to a short hash for readability; empty fields are omitted.
 func versionString(version, commit, date string) string {
@@ -157,11 +161,28 @@ func main() {
 	// thing a quit can drop, which ConfirmQuit guards.
 	w.SetCloseIntercept(func() {
 		mainUI.ConfirmQuit(func() {
-			t0 := time.Now()
-			saveWindowState()
-			logging.L().Info("window closed; exiting", "save", time.Since(t0))
-			_ = closeLog()
-			os.Exit(0)
+			// Show a small "Saving…" spinner so the close shows feedback rather
+			// than a frozen window. The save is marshaled back onto the UI
+			// goroutine via fyne.Do, while the hold + os.Exit run off it — leaving
+			// the UI loop free to paint the spinner. The extra savingSpinnerHold
+			// keeps it up long enough that it doesn't flicker on a fast save.
+			mainUI.ShowSaving()
+			go func() {
+				done := make(chan struct{})
+				fyne.Do(func() {
+					t0 := time.Now()
+					saveWindowState()
+					logging.L().Info("window closed; exiting", "save", time.Since(t0))
+					_ = closeLog()
+					close(done)
+				})
+				select {
+				case <-done:
+				case <-time.After(3 * time.Second): // never hang the close on a stuck flush
+				}
+				time.Sleep(savingSpinnerHold)
+				os.Exit(0)
+			}()
 		})
 	})
 

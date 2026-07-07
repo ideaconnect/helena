@@ -22,11 +22,13 @@ Contact: the [contact page]({{ '/contact/' | relative_url }}).
 ### The Helena desktop app — nothing
 
 The Helena application collects **no data at all**. It has no accounts, no
-telemetry, no analytics, and no runtime update check, and it never phones home.
-The only network traffic it makes is the API requests **you** explicitly send;
-your collections, environments, and secrets stay on your own machine. There is
-nothing to opt out of because nothing is collected. The rest of this notice is
-about **this website only**.
+telemetry, no analytics, and makes **no automatic or background network
+requests** — it never phones home on its own. Its only outbound traffic is what
+**you** explicitly trigger: the API requests you send, and — only if you click
+"Check for updates" in the status bar — a single one-shot call to the GitHub API
+to compare your version. Your collections, environments, and secrets stay on
+your own machine. There is nothing to opt out of because nothing is collected.
+The rest of this notice is about **this website only**.
 
 ### This website
 

@@ -37,6 +37,15 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.5.0" date="2026-07-08" type="stable">
+      <description>
+        <p>
+          A status bar with an opt-in update check, an About-dialog tribute to
+          Helena the cat, Help-menu Website and Buy-me-a-coffee links, a brief
+          saving spinner on close, and roomier open/save dialogs.
+        </p>
+      </description>
+    </release>
     <release version="0.4.0" date="2026-07-05" type="stable">
       <description>
         <p>

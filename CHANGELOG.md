@@ -19,7 +19,26 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-08
+
+### Added
+- **Status bar** with the running version and an **opt-in "Check for updates"**
+  that queries the latest GitHub release only when clicked — never
+  automatically, keeping the no-background-traffic guarantee.
+- **About dialog tribute**: Help → About now shows a photo of Helena, the cat
+  the app is named after, with a short note.
+- **Help menu**: a **Website** link (idct.tech/helena) and a **Buy me a coffee**
+  link, and the issue-tracker link cleaned up.
+- A brief **"Saving…" spinner** when closing the window, so a close that flushes
+  state shows feedback instead of a frozen window.
+- **Roomier Open / Save / Folder dialogs** — they open larger than Fyne's
+  cramped default.
+
 ### Changed
+- **Releases are now cut by publishing a GitHub Release** (Releases → Draft a new
+  release → publish): CI builds every platform + the Linux packages and attaches
+  them, and separately builds the **Windows Store `.msixbundle`** as a workflow
+  artifact. A bare tag push no longer creates a release.
 - Docs/website accuracy sweep: README's feature list now covers request
   history, the cookie jar, drag-and-drop reordering, and the full variables
   system; the website names the Postman importer and the `.deb`/`.rpm`

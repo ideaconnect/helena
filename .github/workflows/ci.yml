@@ -348,6 +348,10 @@ jobs:
           path: .
           format: spdx-json
           output-file: dist/helena.sbom.spdx.json
+          # sbom-action auto-attaches to the release on a release event; leave the
+          # release assets solely to the softprops step below (which uploads
+          # dist/* incl. this SBOM) so the two don't collide.
+          upload-release-assets: false
 
       # SHA-256 checksums over every artifact (#27/#35). Globbing happens
       # before SHA256SUMS is created, so it never checksums itself.
