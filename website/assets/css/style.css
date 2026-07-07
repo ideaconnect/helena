@@ -310,13 +310,21 @@ pre code { background: none; padding: 0; }
 .idct-badge:hover { text-decoration: none; transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0, 0, 0, .4); }
 .idct-badge img { height: 30px; width: auto; display: block; }
 
-/* "Named after Helena" tribute on the About page. */
-.tribute { margin: 8px 0 30px; }
-.tribute-photos { display: flex; flex-wrap: wrap; gap: 14px; }
-.tribute-photos picture { flex: 1 1 240px; min-width: 0; }
-.tribute-photos img { width: 100%; height: auto; border-radius: 14px; display: block;
-  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, .3); }
-.tribute-text { margin: 16px 0 0; color: var(--muted); max-width: 60ch; }
+/* "Named after Helena" tribute on the About page — floating, slightly-tilted
+   photos like the homepage art, sized so they never dominate the layout. Fixed
+   basis with no flex-grow (the old `flex: 1 1` ballooned each to ~half the wide
+   column). */
+.tribute { margin: 10px 0 34px; }
+.tribute-photos { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start;
+  padding: 12px 10px 20px; }
+.tribute-photos picture { flex: 0 1 280px; display: block; }
+.tribute-photos img { width: 100%; height: auto; display: block; border-radius: 14px;
+  border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--ink); }
+.tribute-photos picture:nth-child(1) { transform: rotate(-2deg); animation: tribute-float-a 7s ease-in-out infinite; }
+.tribute-photos picture:nth-child(2) { transform: rotate(2deg); animation: tribute-float-b 8s ease-in-out .6s infinite; }
+@keyframes tribute-float-a { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-8px); } }
+@keyframes tribute-float-b { 0%, 100% { transform: rotate(2deg) translateY(0); } 50% { transform: rotate(2deg) translateY(-8px); } }
+.tribute-text { margin: 26px 0 0; color: var(--muted); max-width: 58ch; }
 
 /* ---- Scroll reveal (progressive enhancement; visible by default) ---- */
 .reveal { opacity: 1; }
