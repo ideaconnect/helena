@@ -58,5 +58,5 @@ func (m *MainUI) saveResponseToFile() {
 		}
 		m.Status.SetText("Saved response to " + wc.URI().Name())
 	}, m.win)
-	save.Show()
+	m.showFileDialog(save)
 }
