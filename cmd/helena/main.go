@@ -162,9 +162,10 @@ func main() {
 	w.SetCloseIntercept(func() {
 		mainUI.ConfirmQuit(func() {
 			// Show a small "Saving…" spinner so the close shows feedback rather
-			// than a frozen window. The save + exit run off the UI goroutine so
-			// the spinner can render; the extra savingSpinnerHold keeps it up long
-			// enough that it doesn't flicker on a fast save.
+			// than a frozen window. The save is marshaled back onto the UI
+			// goroutine via fyne.Do, while the hold + os.Exit run off it — leaving
+			// the UI loop free to paint the spinner. The extra savingSpinnerHold
+			// keeps it up long enough that it doesn't flicker on a fast save.
 			mainUI.ShowSaving()
 			go func() {
 				done := make(chan struct{})
