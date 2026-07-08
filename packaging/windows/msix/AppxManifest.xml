@@ -25,7 +25,11 @@
       ProcessorArchitecture="@ARCH@" />
 
   <Properties>
-    <DisplayName>Helena</DisplayName>
+    <!-- MUST exactly match a name reserved in Partner Center. "Helena" alone is
+         not reserved; the reserved product name is "Helena API Client", so the
+         package display name has to be the full string. The on-device app name
+         (Applications/.../VisualElements @DisplayName below) can stay "Helena". -->
+    <DisplayName>Helena API Client</DisplayName>
     <PublisherDisplayName>IDCT Bartosz Pachołek</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>

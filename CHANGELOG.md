@@ -19,6 +19,16 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-08
+
+### Fixed
+- **Microsoft Store package name**: the Store `.msixbundle` now declares the
+  reserved product name **Helena API Client** as its package display name
+  (`Package/Properties/DisplayName`). v0.5.0's bundle was rejected at upload for
+  using the unreserved name "Helena". The on-device app/tile name stays
+  "Helena", and the desktop binaries are functionally identical to v0.5.0 apart
+  from the version stamp.
+
 ## [0.5.0] - 2026-07-08
 
 ### Added

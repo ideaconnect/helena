@@ -37,6 +37,15 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.5.1" date="2026-07-08" type="stable">
+      <description>
+        <p>
+          Packaging fix: the Microsoft Store bundle now uses the reserved
+          product name "Helena API Client". The application itself is unchanged
+          from 0.5.0.
+        </p>
+      </description>
+    </release>
     <release version="0.5.0" date="2026-07-08" type="stable">
       <description>
         <p>
