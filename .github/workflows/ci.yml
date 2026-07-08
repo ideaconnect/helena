@@ -21,9 +21,11 @@ on:
       version:
         description: >-
           Rebuild the unsigned Store MSIX bundle for an already-released
-          version (e.g. 0.5.0) — use this to regenerate the bundle after a
-          Partner Center rejection without cutting a new release. Leave blank
-          for an ordinary manual run (build/test only, no MSIX).
+          version (e.g. v0.5.0 — match the release tag exactly, incl. the "v",
+          so the exe's version string byte-matches the released binary). Use
+          this to regenerate the bundle after a Partner Center rejection without
+          cutting a new release. Leave blank for an ordinary manual run
+          (build/test only, no MSIX).
         required: false
         default: ''
 
@@ -175,11 +177,17 @@ jobs:
 
       - name: Build (Windows)
         if: runner.os == 'Windows'
+        shell: pwsh
         # -H windowsgui suppresses the console window when launched from Explorer.
         # On a workflow_dispatch Store rebuild, stamp the exe with the supplied
         # version instead of the branch ref ("main") so the Store binary reports
         # the real release version; otherwise (release/push/PR) use github.ref_name.
-        run: go build -tags no_emoji -trimpath -ldflags="-s -w -H windowsgui -X main.version=${{ github.event.inputs.version || github.ref_name }} -X main.commit=${{ github.sha }}" -o ${{ matrix.artifact }} ./cmd/helena
+        # Route version/commit through env (not inline ${{ }}) so a dispatch
+        # input can never be shell-interpolated into the build command.
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
+          COMMIT: ${{ github.sha }}
+        run: go build -tags no_emoji -trimpath -ldflags="-s -w -H windowsgui -X main.version=$env:VERSION -X main.commit=$env:COMMIT" -o ${{ matrix.artifact }} ./cmd/helena
 
       - name: Build (macOS)
         if: runner.os == 'macOS'
@@ -433,11 +441,16 @@ jobs:
       # 4-part version.
       - name: Build Store MSIX bundle (x64 + arm64)
         shell: pwsh
+        # Version via env (not inline ${{ }}) — same injection-hardening as the
+        # Windows build step. On a release it's the tag (v0.5.1); on a dispatch
+        # it's the supplied input. build-store-bundle.ps1 strips a leading "v".
+        env:
+          VERSION: ${{ github.event.inputs.version || github.ref_name }}
         run: |
           ./packaging/windows/msix/build-store-bundle.ps1 `
             -Amd64Exe artifacts/helena-windows-amd64.exe `
             -Arm64Exe artifacts/helena-windows-arm64.exe `
-            -Version "${{ github.event.inputs.version || github.ref_name }}"
+            -Version $env:VERSION
 
       - name: Upload Store bundle
         uses: actions/upload-artifact@v7
