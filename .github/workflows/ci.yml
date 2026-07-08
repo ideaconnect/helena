@@ -281,10 +281,11 @@ jobs:
   mutation:
     name: Mutation testing (nightly)
     # Mutation runs are slow (a few minutes per package). Triggered
-    # only on the nightly cron and on manual dispatch — never on
-    # per-PR pushes. Results upload as an artifact; the job is
-    # report-only and does not gate merges.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    # only on the nightly cron and on a bare manual dispatch — never on
+    # per-PR pushes, and skipped on a versioned dispatch (that's a Store
+    # MSIX rebuild, not a code run). Results upload as an artifact; the
+    # job is report-only and does not gate merges.
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.version == '')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
