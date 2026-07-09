@@ -26,6 +26,13 @@ label via [`.github/release.yml`](.github/release.yml).
   and top-bar CTA), and packaging docs now link to the live listing instead of a
   "coming soon" placeholder.
 
+### Security
+- **Go toolchain bumped to 1.26.5** to pick up the `crypto/tls` fix for
+  [GO-2026-5856](https://pkg.go.dev/vuln/GO-2026-5856) (Encrypted Client Hello
+  privacy leak), which `govulncheck` flagged as reachable via the WebSocket/TLS
+  paths. No source changes; the pinned `toolchain` directive in `go.mod` was the
+  only edit.
+
 ## [0.5.1] - 2026-07-08
 
 ### Fixed
