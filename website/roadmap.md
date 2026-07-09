@@ -77,9 +77,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item active"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Packaging &amp; app stores</h2><span class="badge progress">In progress</span></div>
-      <p>Today there's a native binary for every release (with checksums, an SBOM, and build provenance) and Linux <code>.deb</code>/<code>.rpm</code> packages. Windows winget/Scoop manifests and an Inno Setup installer script are committed but not yet wired into the release pipeline. macOS is built in CI but not yet signed, and CI already builds the (unsigned) Microsoft Store MSIX bundle - only the Store submission remains. Next, so each OS can install and update Helena the way it expects:</p>
+      <p>Today there's a native binary for every release (with checksums, an SBOM, and build provenance), Linux <code>.deb</code>/<code>.rpm</code> packages, and - live now - a <a href="{{ site.msstore }}" rel="noopener"><b>Microsoft Store</b></a> listing on Windows for a one-click, auto-updating install. Windows winget/Scoop manifests and an Inno Setup installer script are committed but not yet wired into the release pipeline, and macOS is built in CI but not yet signed. Next, so each remaining OS can install and update Helena the way it expects:</p>
       <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted);font-size:14px">
-        <li><b>Microsoft Store</b> (MSIX) on Windows</li>
         <li><b>Mac App Store</b> and a <b>Homebrew</b> cask on macOS, signed and notarized</li>
         <li><b>Flatpak / Flathub</b> (the AppStream metadata already lives in the repo), plus AppImage, on Linux</li>
       </ul>

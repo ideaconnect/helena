@@ -15,9 +15,13 @@ paywall, and no feature held back.
 ## Pre-built binaries
 
 Pre-built **Linux (amd64)**, **Windows (amd64 &amp; arm64)**, and **macOS
-(arm64)** binaries are attached to each release.
+(arm64)** binaries are attached to each release. On **Windows**, Helena is also
+on the **Microsoft Store** for a one-click install that keeps itself up to date.
 
-<p><a class="btn btn-primary" href="{{ site.releases }}">Releases on GitHub →</a></p>
+<p>
+  <a class="btn btn-primary" href="{{ site.releases }}">Releases on GitHub →</a>
+  <a class="btn btn-ghost" href="{{ site.msstore }}" rel="noopener">Microsoft Store →</a>
+</p>
 
 Helena is a single self-contained binary - the download itself needs no
 installer and no runtime to set up. Download it, make it executable, and run
@@ -48,8 +52,8 @@ Helena is free - none of this is required, and nothing is locked behind it. But
 if it's useful to you and you'd like to chip in toward its development, thank you.
 A few entirely voluntary ways:
 
-- **Microsoft Store** - a minimal-price listing for a one-click install that also
-  supports the work *(coming soon)*.
+- **[Microsoft Store]({{ site.msstore }})** - a minimal-price listing for a
+  one-click install (with automatic updates) that also supports the work.
 - **Buy Me a Coffee** - a one-off tip at [buymeacoffee.com/idct]({{ site.coffee }}).
 - **GitHub Sponsors** - recurring support at [github.com/sponsors/ideaconnect]({{ site.sponsor }}).
 
