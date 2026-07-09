@@ -19,6 +19,13 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+### Added
+- **Microsoft Store listing is live.** Helena is now published on the Microsoft
+  Store (<https://apps.microsoft.com/detail/9NWPKK6CTDR1>) for a one-click,
+  auto-updating install on Windows. The README, website (download page, roadmap,
+  and top-bar CTA), and packaging docs now link to the live listing instead of a
+  "coming soon" placeholder.
+
 ## [0.5.1] - 2026-07-08
 
 ### Fixed

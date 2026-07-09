@@ -27,7 +27,7 @@ Baked into `AppxManifest.xml`; must match Partner Center exactly. For reference:
 | PublisherDisplayName | `IDCT Bartosz Pachołek` |
 | Package Family Name | `IdeaConnectBartoszPachoek.HelenaAPIClient_aec6mzqn7e0rm` |
 | Store ID | `9NWPKK6CTDR1` |
-| Store page (once live) | `https://apps.microsoft.com/detail/9NWPKK6CTDR1` |
+| Store page (live) | <https://apps.microsoft.com/detail/9NWPKK6CTDR1> |
 
 ## Prerequisites
 

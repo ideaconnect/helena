@@ -73,6 +73,10 @@ are attached to each
 built in CI but not yet signed/notarized for Gatekeeper — see
 [docs/PACKAGING.md](docs/PACKAGING.md).
 
+On Windows, Helena is also on the
+**[Microsoft Store](https://apps.microsoft.com/detail/9NWPKK6CTDR1)** for a
+one-click install that keeps itself up to date.
+
 **Updates** are delivered via package managers (as they land) or by
 re-downloading a release. Helena makes no automatic or background update check;
 the status bar has an opt-in **Check for updates** button that queries GitHub
@@ -393,8 +397,8 @@ Helena follows [Semantic Versioning](https://semver.org): release tags are
 Publish); CI then builds every platform and attaches the binaries, Linux
 packages, checksums, SBOM, and a provenance attestation. The free GitHub Release
 is the primary way to get Helena — building from source is always free too, and
-a Microsoft Store listing is planned as an optional convenience channel
-(coming soon).
+the [Microsoft Store](https://apps.microsoft.com/detail/9NWPKK6CTDR1) carries a
+minimal-price, one-click listing as an optional convenience channel.
 
 ## License
 

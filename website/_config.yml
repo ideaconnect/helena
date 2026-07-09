@@ -27,6 +27,9 @@ baseurl: "/helena"
 
 repo: "https://github.com/ideaconnect/helena"
 releases: "https://github.com/ideaconnect/helena/releases"
+# Live Microsoft Store listing (Store ID 9NWPKK6CTDR1). Canonical URL with no
+# region/share query params, so the link isn't pinned to a locale or campaign.
+msstore: "https://apps.microsoft.com/detail/9NWPKK6CTDR1"
 discord: "https://discord.gg/uYsuaa8HNm"
 sponsor: "https://github.com/sponsors/ideaconnect"
 coffee: "https://buymeacoffee.com/idct"
