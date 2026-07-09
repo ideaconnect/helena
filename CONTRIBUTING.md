@@ -15,8 +15,8 @@ make run     # launch the app
 make lint    # golangci-lint (a CI gate)
 ```
 
-The Go toolchain is pinned in `go.mod` (`toolchain go1.26.4`); `go` selects it
-automatically.
+The Go toolchain is pinned in `go.mod` via a full-patch `go` directive
+(`go 1.26.5`); `go` selects it automatically.
 
 ## Project conventions (please read before a non-trivial change)
 

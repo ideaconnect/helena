@@ -41,9 +41,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
 
-# Lock the Go toolchain to exactly what go.mod's `toolchain` directive pins,
-# so CI never silently auto-downloads a different one (#32). setup-go installs
-# that version from go.mod; `local` then forbids any further switch.
+# Lock the Go toolchain to exactly what go.mod's `go` directive pins — a full
+# patch version (e.g. go 1.26.5), because setup-go resolves `go-version-file`
+# from the `go` directive, and a bare minor (`go 1.26`) would let it settle on
+# whatever 1.26.x the runner has cached (#32). `local` then forbids any switch.
 env:
   GOTOOLCHAIN: local
 
