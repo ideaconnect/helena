@@ -22,24 +22,25 @@ Postman events/scripts, response examples, and binary file bodies have no Helena
 
 ## Hoisting OpenAPI server URL to `{{base_url}}`
 
-`convertOAS3` ([openapi.go:94](openapi.go#L94)) inspects `doc.Servers`. If at least one server is declared, the first server's `URL` is hoisted into a single-environment, single-variable structure:
+`convertOAS3` ([openapi.go:107](openapi.go#L107)) inspects `doc.Servers`. It takes the first non-nil server whose `URL` is non-empty **after trailing slashes are trimmed** (`strings.TrimRight(url, "/")`) and hoists it into a single-environment, single-variable structure. The environment is **named after that server's `description`** (an OpenAPI server is a deployment target and its description is the human name — e.g. `"Api aplikacji developerskiej"`), falling back to `"Default"` only when the server has no description:
 
 ```text
 Collection.Environments = [Environment{
-    Name: "Default",
-    Variables: [Variable{Enabled: true, Key: "base_url", Value: doc.Servers[0].URL}],
+    Name: server.Description (trimmed) or "Default",
+    Variables: [Variable{Enabled: true, Key: "base_url", Value: strings.TrimRight(server.URL, "/")}],
 }]
 ```
 
-`buildRequest` ([openapi.go:150](openapi.go#L150)) then uses `hasBaseVar=true` to prefix every request's URL with `{{base_url}}`. When `doc.Servers` is empty, no environment is created and the request URL is the raw path. This means edits to the environment update every imported request consistently — which is the point of hoisting.
+`buildRequest` ([openapi.go:180](openapi.go#L180)) then uses `hasBaseVar=true` to prefix every request's URL with `{{base_url}}`. Because OpenAPI paths always start with `/` and `base_url` is stored slash-free, the join yields exactly one slash — a server URL like `https://api/` no longer renders `https://api//pets` (issue #181); `buildRequest` also prepends a leading `/` if a spec hands it a path without one, as a belt-and-braces guard. When `doc.Servers` is empty, no environment is created and the request URL is the raw path. This means edits to the environment update every imported request consistently — which is the point of hoisting.
 
 ## Mapping OpenAPI `requestBody.Content` example to `model.Body`
 
 For each operation, `buildRequest` iterates `op.RequestBody.Value.Content` in sorted key order and picks the **first** media-type entry it finds (`break` after the first non-nil one):
 
-1. Content-type string -> `model.BodyType` via `bodyTypeFromContentType` ([openapi.go:226](openapi.go#L226)) — substring matches for `json`, `xml`, `form-urlencoded`, `multipart`, `text/`, defaulting to `BodyText`.
-2. Example body string -> `extractExample` ([openapi.go:244](openapi.go#L244)) which prefers `mt.Example`, then any `mt.Examples[*].Value.Value`, then `mt.Schema.Value.Example`.
-3. Structured examples are pretty-printed JSON via `formatExample` ([openapi.go:259](openapi.go#L259)); string examples pass through verbatim.
+1. Content-type string -> `model.BodyType` via `bodyTypeFromContentType` ([openapi.go:268](openapi.go#L268)) — substring matches for `json`, `xml`, `form-urlencoded`, `multipart`, `text/`, plus an explicit `*/*` -> `BodyJSON` case (Swagger-2 body params with no `consumes` convert to a `*/*` media type, and JSON is the overwhelming body default), defaulting to `BodyText`.
+2. Example body string -> `extractExample` ([openapi.go:291](openapi.go#L291)) which prefers `mt.Example`, then any `mt.Examples[*].Value.Value`, then `mt.Schema.Value.Example`.
+3. When `extractExample` returns empty **and** the body type is JSON, `synthesizeJSONBody` ([openapi.go:309](openapi.go#L309)) builds a skeleton body from `mt.Schema` via `sampleForSchema` ([openapi.go:328](openapi.go#L328)) — most real specs describe the body with a `$ref` schema and no inline example, so without this the request would import blank (issue #180). `sampleForSchema` walks the schema (explicit `example`/`default`/`const`/`enum` win; `allOf` merges, `oneOf`/`anyOf` take the first branch; objects recurse over `Properties` skipping `readOnly` fields; arrays wrap one element; strings use format-aware placeholders from `placeholderString`; numbers/booleans use `0`/`false`), bounded by `sampleMaxDepth` and an on-path set that breaks cyclic resolved `$ref`s. Synthesis is JSON-only — emitting JSON into an XML/form/multipart body would be wrong.
+4. Structured examples (real or synthesized) are pretty-printed JSON via `formatExample` ([openapi.go:417](openapi.go#L417)); string examples pass through verbatim.
 
 Sorting the media-type keys gives deterministic output — without it, the choice between e.g. `application/json` and `application/xml` would depend on map iteration order.
 

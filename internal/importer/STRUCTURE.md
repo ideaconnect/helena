@@ -46,14 +46,17 @@ This is deliberately simple: WSDL files always start with `<?xml` or `<definitio
 
 ### OpenAPI helpers ([openapi.go](openapi.go))
 
-- `toJSON` ([openapi.go:57](openapi.go#L57)) — fast-paths valid JSON; otherwise YAML-unmarshals and re-marshals as JSON. Exists because kin-openapi only consumes JSON.
-- `normalizeYAML` ([openapi.go:72](openapi.go#L72)) — recursively converts `map[any]any` (still produced by `yaml.v3` for some nested maps) into `map[string]any`, which is what `json.Marshal` requires.
-- `convertOAS3` ([openapi.go:94](openapi.go#L94)) — walks the OAS3 document: hoists the first non-nil server's `URL` into a `{{base_url}}` environment variable (a spec may carry `servers: [null]`, so the nil `*Server` is skipped rather than deref'd), groups paths-and-operations into folders by `Tags[0]`, leaves tag-less operations as root requests. Path/operation keys are ordered with `slices.Sort` (O(n log n)) for deterministic output.
-- `buildRequest` ([openapi.go:150](openapi.go#L150)) — assembles a single `model.Request`: prepends `{{base_url}}` when present, deduplicates path-item + operation parameters by `(in,name)`, maps `query` to `Params`, `header` to `Headers`, leaves `path` placeholders embedded in the URL.
-- `bodyTypeFromContentType` ([openapi.go:226](openapi.go#L226)) — case-insensitive content-type sniff: `json`, `xml`, `form-urlencoded`, `multipart`, `text/*`, default text.
-- `extractExample` ([openapi.go:244](openapi.go#L244)) — pulls `Example`, then any first `Examples[i].Value.Value`, then `Schema.Value.Example`.
-- `formatExample` ([openapi.go:259](openapi.go#L259)) — strings pass through; structured values are pretty-printed JSON.
-- `sortedKeys` / `sortStrings` ([openapi.go:277](openapi.go#L277), [openapi.go:288](openapi.go#L288)) — keep import output deterministic without adding a `sort` import.
+- `toJSON` ([openapi.go:70](openapi.go#L70)) — fast-paths valid JSON; otherwise YAML-unmarshals and re-marshals as JSON. Exists because kin-openapi only consumes JSON.
+- `normalizeYAML` ([openapi.go:85](openapi.go#L85)) — recursively converts `map[any]any` (still produced by `yaml.v3` for some nested maps) into `map[string]any`, which is what `json.Marshal` requires.
+- `convertOAS3` ([openapi.go:107](openapi.go#L107)) — walks the OAS3 document: hoists the first non-nil server's `URL` (trailing slashes trimmed, so the join stays single-slash — issue #181) into a `{{base_url}}` environment variable named after that server's `description` (fallback `"Default"`; a spec may carry `servers: [null]`, so the nil `*Server` is skipped rather than deref'd), groups paths-and-operations into folders by `Tags[0]`, leaves tag-less operations as root requests. Path/operation keys are ordered with `slices.Sort` (O(n log n)) for deterministic output.
+- `buildRequest` ([openapi.go:180](openapi.go#L180)) — assembles a single `model.Request`: prepends `{{base_url}}` when present (ensuring a single leading slash on the path), deduplicates path-item + operation parameters by `(in,name)`, maps `query` to `Params`, `header` to `Headers`, leaves `path` placeholders embedded in the URL. For the body it sniffs the type, tries a real example, and — for JSON bodies with none — synthesizes a skeleton from the schema.
+- `bodyTypeFromContentType` ([openapi.go:268](openapi.go#L268)) — case-insensitive content-type sniff: `json`, `xml`, `form-urlencoded`, `multipart`, `text/*`, an explicit `*/*` -> JSON case (unspecified Swagger-2 body params), default text.
+- `extractExample` ([openapi.go:291](openapi.go#L291)) — pulls `Example`, then any first `Examples[i].Value.Value`, then `Schema.Value.Example`.
+- `synthesizeJSONBody` ([openapi.go:309](openapi.go#L309)) — builds a skeleton JSON body from a media type's schema when no explicit example exists, so `$ref`-described bodies don't import blank (issue #180). Returns `""` when there is no schema.
+- `sampleForSchema` ([openapi.go:328](openapi.go#L328)) — recursively synthesizes a representative value from a schema (explicit `example`/`default`/`const`/`enum` win; `allOf` merges, `oneOf`/`anyOf` first branch; objects recurse skipping `readOnly` props; arrays wrap one element; primitives get placeholders). Bounded by `sampleMaxDepth` and an on-path set that breaks cyclic resolved `$ref`s.
+- `placeholderString` ([openapi.go:397](openapi.go#L397)) — format-aware sample strings (`date-time`, `date`, `email`, `uuid`, `uri`/`url`, `hostname`, `ipv4`), else `"string"`.
+- `formatExample` ([openapi.go:417](openapi.go#L417)) — strings pass through; structured values are pretty-printed JSON.
+- `sortedKeys` ([openapi.go:435](openapi.go#L435)) — keeps import output deterministic without adding a `sort` import.
 
 ### Postman parser ([postman.go](postman.go))
 
