@@ -11,7 +11,7 @@ layout: default
       </div>
       {% if page.hero_image %}
       <div class="page-hero-art">
-        <span class="glow"></span>
+        <span class="glow" aria-hidden="true"></span>
         <picture>
           <source srcset="{{ page.hero_image | replace: '.png', '.webp' | relative_url }}" type="image/webp">
           <img src="{{ page.hero_image | relative_url }}" alt="{{ page.hero_alt | default: page.title }}" width="{{ page.hero_w | default: 1600 }}" height="{{ page.hero_h | default: 1116 }}" fetchpriority="high" decoding="async">

@@ -13,6 +13,7 @@ description: About Helena and its author, Bartosz Pachołek.
     <p class="tribute-text">Helena is named after our cat, <strong>Helena</strong> — a gentle tabby and our great friend for almost nineteen years. She passed away on the second day of Christmas, 2025. The app carries her name so that a little of her stays with us.</p>
   </div>
   <div class="tribute-box">
+    <span class="glow" aria-hidden="true"></span>
     <figure class="cat-win cat-win-back">
       <picture>
         <source srcset="{{ '/assets/img/helena-cat-1.webp' | relative_url }}" type="image/webp">
