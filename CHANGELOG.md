@@ -19,12 +19,42 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-07-15
+
 ### Added
 - **Microsoft Store listing is live.** Helena is now published on the Microsoft
   Store (<https://apps.microsoft.com/detail/9NWPKK6CTDR1>) for a one-click,
   auto-updating install on Windows. The README, website (download page, roadmap,
   and top-bar CTA), and packaging docs now link to the live listing instead of a
   "coming soon" placeholder.
+
+### Fixed
+- **Imported OpenAPI/Swagger requests now populate their body.** Specs that
+  describe a body with a `$ref` schema and no inline example (the common case)
+  previously imported with a blank body; Helena now synthesizes a representative
+  JSON body from the schema. Swagger-2 body parameters with no `consumes` (a
+  `*/*` media type) are also treated as JSON. (#183)
+- **No double slash between base URL and path on import.** A server URL with a
+  trailing slash used to render `base//path`; the hoisted `base_url` is now
+  trimmed so the join stays single-slash. (#183)
+- **Imported environments are named after the spec's server.** The environment
+  now takes the OpenAPI server's `description` (e.g. "Api aplikacji
+  developerskiej") instead of a generic "Default". (#183)
+- **Postman collections using the `request` string shorthand import again.** A
+  bare-URL `request` (valid Postman v2.1) no longer fails the whole import. (#188)
+- **A pre-request script can no longer hang the app.** A hostile accessor on the
+  request object (e.g. an infinite-loop getter) wedged the Send worker forever;
+  the post-script read-back is now bounded by the same interrupt guard as
+  execution. (#187)
+- **Runaway script output is capped.** A `while(true) console.log(...)` (or a
+  runaway `test(...)`) no longer grows unbounded and OOMs/freezes the UI —
+  console and test output are limited with a truncation marker. (#190)
+- **A stalled WebSocket server no longer freezes the app.** Frame writes (called
+  from the UI thread) now use a write deadline, so a server that stops reading
+  can't block indefinitely. (#189)
+- **Microsoft Store taskbar icon no longer shows a blue background.** The MSIX
+  package now ships unplated icon variants (and a resources.pri) so Windows draws
+  the cat without the system-accent plate. (#184)
 
 ### Security
 - **Go toolchain bumped to 1.26.5** to pick up the `crypto/tls` fix for

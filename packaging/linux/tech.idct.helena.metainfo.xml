@@ -37,6 +37,17 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.5.2" date="2026-07-15" type="stable">
+      <description>
+        <p>
+          Bug-fix release. OpenAPI/Swagger and Postman imports now populate
+          request bodies, join URLs without a double slash, and name the
+          environment after the spec's server. Pre-request scripts can no longer
+          hang the app or exhaust memory, a stalled WebSocket server no longer
+          freezes it, and the Microsoft Store taskbar icon drops its blue plate.
+        </p>
+      </description>
+    </release>
     <release version="0.5.1" date="2026-07-08" type="stable">
       <description>
         <p>
