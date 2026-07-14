@@ -60,6 +60,7 @@ picture { display: block; }
 /* ---- Top nav ---- */
 .nav {
   position: sticky; top: 0; z-index: 20;
+  -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
   background: rgba(13, 17, 23, .72);
   border-bottom: 1px solid var(--line);
