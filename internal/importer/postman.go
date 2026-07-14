@@ -245,6 +245,27 @@ type pmRequest struct {
 	Description string     `json:"description"`
 }
 
+// UnmarshalJSON accepts Postman's two `request` forms: a bare URL string
+// shorthand (`"request": "https://x"`), which the v2.1 schema defines as a GET
+// to that URL, or the full request object. Without this a collection that uses
+// the string shorthand for even one request fails the entire import.
+func (r *pmRequest) UnmarshalJSON(b []byte) error {
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*r = pmRequest{URL: pmURL{Raw: s}} // method left empty → pmMethod defaults to GET
+		return nil
+	}
+	// Alias sheds this method so the object decode doesn't recurse; the nested
+	// pmURL/pmBody/... still use their own UnmarshalJSON.
+	type raw pmRequest
+	var rr raw
+	if err := json.Unmarshal(b, &rr); err != nil {
+		return err
+	}
+	*r = pmRequest(rr)
+	return nil
+}
+
 type pmHeader struct {
 	Key         string `json:"key"`
 	Value       string `json:"value"`
