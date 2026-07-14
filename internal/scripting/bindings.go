@@ -142,12 +142,33 @@ func (rt *Runtime) bindHelena(ctx context.Context, cfg runConfig, vm *goja.Runti
 	return vm.Set("helena", helena)
 }
 
+// Caps on captured script output. A runaway loop — `while(true)
+// console.log(x)` or `while(true) test(...)` — runs for the whole ScriptTimeout
+// window and would otherwise grow these slices to hundreds of MB and freeze the
+// UI rendering millions of lines. Vars, not consts, so tests can shrink them.
+var (
+	maxConsoleLines = 1000
+	maxConsoleBytes = 256 * 1024
+	maxTestResults  = 1000
+)
+
+const consoleTruncatedMsg = "… console output truncated (limit reached)"
+
 // bindConsole installs console.log / info / error / warn. Each call
 // appends one line — space-joined arguments — to res.Console so the UI
-// can show the user what their script printed during the last run.
+// can show the user what their script printed during the last run. Total output
+// is capped (see maxConsoleLines/maxConsoleBytes); past the cap one truncation
+// marker is emitted and further lines are dropped.
 func bindConsole(vm *goja.Runtime, res *Result) {
+	// Shared across all four console fns; the script VM is single-threaded so no
+	// lock is needed.
+	captured := 0
+	truncated := false
 	emit := func(prefix string) func(goja.FunctionCall) goja.Value {
 		return func(call goja.FunctionCall) goja.Value {
+			if truncated {
+				return goja.Undefined()
+			}
 			parts := make([]string, 0, len(call.Arguments))
 			for _, a := range call.Arguments {
 				parts = append(parts, stringify(a))
@@ -156,7 +177,13 @@ func bindConsole(vm *goja.Runtime, res *Result) {
 			if prefix != "" {
 				line = prefix + line
 			}
+			if len(res.Console) >= maxConsoleLines || captured+len(line) > maxConsoleBytes {
+				res.Console = append(res.Console, consoleTruncatedMsg)
+				truncated = true
+				return goja.Undefined()
+			}
 			res.Console = append(res.Console, line)
+			captured += len(line)
 			return goja.Undefined()
 		}
 	}
