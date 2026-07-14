@@ -237,7 +237,10 @@ func (rt *Runtime) RunPreRequest(ctx context.Context, script string, r *model.Re
 	if err := runWithTimeout(ctx, vm, script); err != nil {
 		return *res, err
 	}
-	if err := writeBackRequest(reqObj, r); err != nil {
+	// Guard the read-back too: request-object getters are attacker-controllable
+	// JS, and a hostile getter would otherwise hang the Send worker un-abortably
+	// now that the script's own timeout guard is gone.
+	if err := writeBackGuarded(ctx, vm, reqObj, r); err != nil {
 		return *res, err
 	}
 	return *res, nil

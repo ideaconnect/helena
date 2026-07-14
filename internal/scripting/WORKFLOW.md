@@ -26,9 +26,17 @@ plumbing.
      - `vm.RunProgram(compileCached(script))` evaluates the user source —
        the compiled program is cached process-wide per distinct source, so a
        re-sent request skips recompiling its scripts.
-     - On normal return, `writeBackRequest` reads the JS object back
-       into the model: scalars become direct writes; headers and params
-       merge through `mergeKVFromObject` (see the merge rules below).
+     - On normal return, `writeBackGuarded` reads the JS object back
+       into the model **under the same interrupt guard** (`runGuarded`):
+       scalars become direct writes; headers and params merge through
+       `mergeKVFromObject` (see the merge rules below). The read-back is
+       guarded because the request object's property getters and value
+       `toString`s are attacker-controllable JS — a script can install
+       `Object.defineProperty(request,'method',{get(){while(1){}}})`,
+       which would otherwise hang the Send worker forever now that the
+       script's own guard is torn down. It mutates a copy and updates the
+       model only on completion, so an abandoned (stuck-in-native)
+       read-back never races the outgoing request.
      - The watcher's `done` channel is closed so it exits cleanly.
      - On interrupt, the captured reason is returned as a plain Go
        error ("script execution timed out", "script execution

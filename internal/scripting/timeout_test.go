@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/dop251/goja"
+
+	"github.com/idct/helena/internal/model"
 )
 
 // swapTimeout temporarily shortens ScriptTimeout + interruptGrace for fast
@@ -76,5 +78,55 @@ func TestRunWithTimeoutCancelAbandonsStuckNativeCall(t *testing.T) {
 		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("runWithTimeout never returned on cancel + stuck native call")
+	}
+}
+
+// TestRunPreRequestHostileGetterReturnsErrorNotHang pins the read-back guard:
+// a script that installs an infinite-loop getter on the request object used to
+// wedge the Send worker forever, because writeBackRequest's obj.Get ran after
+// the script's timeout guard was gone, with no interrupt armed. The read-back
+// must now be interrupted — returning an error, in bounded time, and leaving
+// the request untouched (the mutation never committed).
+func TestRunPreRequestHostileGetterReturnsErrorNotHang(t *testing.T) {
+	defer swapTimeout(50 * time.Millisecond)()
+	rt := New(newFakeBridge())
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	src := `Object.defineProperty(request, "method", { configurable: true, get: function(){ while(true){} } });`
+	done := make(chan error, 1)
+	go func() {
+		_, err := rt.RunPreRequest(context.Background(), src, &r, nil)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected an error from the interrupted read-back, got nil")
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunPreRequest hung on a hostile request getter — read-back not guarded")
+	}
+	if r.Method != model.GET {
+		t.Errorf("Method = %q, want unchanged GET (abandoned read-back must not commit)", r.Method)
+	}
+}
+
+// TestRunPreRequestHostileToStringDoesNotHang covers the sibling vector: a
+// request value whose toString never returns hangs safeString's .String() call
+// during the read-back. The guard must interrupt it so RunPreRequest returns in
+// bounded time rather than freezing the caller.
+func TestRunPreRequestHostileToStringDoesNotHang(t *testing.T) {
+	defer swapTimeout(50 * time.Millisecond)()
+	rt := New(newFakeBridge())
+	r := model.Request{Method: model.GET, URL: "https://x/"}
+	src := `request.url = { toString: function(){ while(true){} } };`
+	done := make(chan struct{})
+	go func() {
+		_, _ = rt.RunPreRequest(context.Background(), src, &r, nil)
+		close(done)
+	}()
+	select {
+	case <-done: // returned — the point is it did not hang
+	case <-time.After(5 * time.Second):
+		t.Fatal("RunPreRequest hung on a hostile toString — read-back not guarded")
 	}
 }
