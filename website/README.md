@@ -19,6 +19,7 @@ website/
 ├── about.md             # about the author
 ├── contact.md           # contact form (Web3Forms)
 ├── tools/frame-shot.sh  # dress a screenshot as a window (hero-box art)
+├── tools/og-card.sh     # compose the 1200x630 social / OpenGraph card
 └── assets/
     ├── css/style.css       # the whole design system (Helena green accent)
     ├── js/site.js          # tiny vanilla enhancements (reveal-on-scroll, nav)
@@ -28,6 +29,7 @@ website/
         ├── idct-logo.png    # IDCT brand mark (About page)
         ├── discord-qr.png   # QR code for the Discord invite (Contact page)
         ├── *-fancy.png      # window-framed hero-box art (baked, see below)
+        ├── og-card.png      # 1200x630 social card (baked from app-hero-fancy)
         └── *.png            # real UI captures (see "Screenshots" below)
 ```
 
@@ -99,7 +101,9 @@ suite. The brand/favicon `helena-icon.png` is the app's real icon
 The hero box uses **window-framed** versions of those captures
 (`*-fancy.png`) - a title bar with traffic lights, rounded corners, and a soft
 drop shadow on a transparent background, baked with ImageMagick by
-[`tools/frame-shot.sh`](tools/frame-shot.sh). Rebuild them with `make
+[`tools/frame-shot.sh`](tools/frame-shot.sh). The 1200x630 social / OpenGraph
+card (`og-card.png`, used for link previews) is composed from the framed hero by
+[`tools/og-card.sh`](tools/og-card.sh). Both are (re)baked by `make
 screenshots-fancy` (needs ImageMagick).
 
 ## Contact form

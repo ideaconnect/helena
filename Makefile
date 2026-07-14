@@ -131,6 +131,7 @@ screenshots-fancy:
 	$(WEBSITE_DIR)/tools/frame-shot.sh $(IMG)/shot-auth.png $(IMG)/shot-auth-fancy.png
 	$(WEBSITE_DIR)/tools/frame-shot.sh $(IMG)/shot-request.png $(IMG)/shot-request-fancy.png
 	$(WEBSITE_DIR)/tools/frame-shot.sh $(IMG)/shot-chain.png $(IMG)/shot-chain-fancy.png
+	$(WEBSITE_DIR)/tools/og-card.sh $(IMG)/app-hero-fancy.png $(IMG)/og-card.png
 	$(MAKE) webp
 
 # webp: emit WebP copies of the screenshots the site displays via <picture>
