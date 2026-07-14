@@ -395,6 +395,13 @@ pre code { background: none; padding: 0; }
   .btn:hover, .card:hover, .shot img:hover { transform: none; }
 }
 
+/* ---- Small utilities (replace one-off inline styles) ---- */
+.muted { color: var(--muted); }
+.text-center { text-align: center; }
+.pt-0 { padding-top: 0; }
+.pb-0 { padding-bottom: 0; }
+.btn-block { width: 100%; }
+
 /* ---- Cookie-consent banner (prior-consent GA; see _includes/consent.html) ---- */
 .consent-banner { position: fixed; inset-inline: 0; bottom: 0; z-index: 70; padding: 12px; }
 .consent-banner.hidden { display: none; }

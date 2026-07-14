@@ -17,7 +17,7 @@ description: Get in touch about Helena - questions, ideas, and bug reports.
       <li><b>Code:</b> <a href="{{ site.repo }}">{{ site.repo | remove: "https://" }}</a></li>
       <li><b>Web:</b> <a href="{{ site.author_url }}">idct.tech</a></li>
     </ul>
-    <p style="color:var(--muted)">The form goes straight to my inbox. I read everything and try to reply within a few days.</p>
+    <p class="muted">The form goes straight to my inbox. I read everything and try to reply within a few days.</p>
 
     <a class="discord-cta" href="{{ site.discord }}">{% include icon-discord.svg %} Join the Discord</a>
     <div class="qr-card">
@@ -31,7 +31,7 @@ description: Get in touch about Helena - questions, ideas, and bug reports.
     <input type="hidden" name="subject" value="New message from the Helena website">
     <input type="hidden" name="from_name" value="Helena website">
     <input type="hidden" name="redirect" value="{{ '/contact/thank-you/' | absolute_url }}">
-    <input type="checkbox" name="botcheck" style="display:none" tabindex="-1" autocomplete="off">
+    <input type="checkbox" name="botcheck" hidden tabindex="-1" autocomplete="off">
 
     <div class="field">
       <label for="name">Name</label>
@@ -50,7 +50,7 @@ description: Get in touch about Helena - questions, ideas, and bug reports.
 
     <div class="h-captcha" data-sitekey="50b2fe65-b00b-4b9e-ad62-3ba471098be2"></div>
 
-    <button type="submit" class="btn btn-primary" style="width:100%">Send message</button>
+    <button type="submit" class="btn btn-primary btn-block">Send message</button>
   </form>
 </div>
 

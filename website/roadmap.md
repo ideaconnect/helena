@@ -110,4 +110,4 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
 
 </ul>
 
-<p style="color:var(--muted)">Have a request? <a href="{{ site.repo }}/issues">Open an issue →</a></p>
+<p class="muted">Have a request? <a href="{{ site.repo }}/issues">Open an issue →</a></p>
