@@ -121,9 +121,14 @@ func convertOAS3(doc *openapi3.T) model.Collection {
 	for _, srv := range doc.Servers {
 		// A spec may carry `servers: [null]`; the loader stores a nil *Server, so
 		// guard the deref and take the first server that actually names a URL.
-		if srv != nil && srv.URL != "" {
-			baseURL = srv.URL
-			break
+		// Trim any trailing slash: OpenAPI paths always start with "/", so a
+		// server URL like "https://api/" would otherwise render "https://api//x"
+		// once joined (issue #181).
+		if srv != nil {
+			if u := strings.TrimRight(srv.URL, "/"); u != "" {
+				baseURL = u
+				break
+			}
 		}
 	}
 	if baseURL != "" {
@@ -180,6 +185,11 @@ func buildRequest(method, path string, hasBaseVar bool, op *openapi3.Operation, 
 		Body:   model.Body{Type: model.BodyNone},
 	}
 	if hasBaseVar {
+		// base_url is stored without a trailing slash; keep exactly one slash at
+		// the join even if a spec hands us a path without a leading one (#181).
+		if path != "" && !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
 		r.URL = "{{base_url}}" + path
 	} else {
 		r.URL = path
@@ -218,10 +228,17 @@ func buildRequest(method, path string, hasBaseVar bool, op *openapi3.Operation, 
 			if mt == nil {
 				continue
 			}
-			r.Body = model.Body{
-				Type:    bodyTypeFromContentType(ct),
-				Content: extractExample(mt),
+			bt := bodyTypeFromContentType(ct)
+			content := extractExample(mt)
+			// Most real specs describe the body with a schema (often a $ref) and
+			// carry no inline example, so extractExample comes back empty and the
+			// request imports with a blank body (issue #180). Synthesize a
+			// skeleton JSON body from the schema. Restricted to JSON bodies —
+			// emitting JSON into an XML/form/multipart body would be wrong.
+			if content == "" && bt == model.BodyJSON {
+				content = synthesizeJSONBody(mt)
 			}
+			r.Body = model.Body{Type: bt, Content: content}
 			break
 		}
 	}
@@ -253,6 +270,11 @@ func bodyTypeFromContentType(ct string) model.BodyType {
 	switch {
 	case strings.Contains(ct, "json"):
 		return model.BodyJSON
+	case ct == "*/*":
+		// Swagger 2 body params with no `consumes` are converted with a "*/*"
+		// content type; treat the wildcard as JSON, the overwhelming default for
+		// request bodies, so the body is both typed and populated (issue #180).
+		return model.BodyJSON
 	case strings.Contains(ct, "xml"):
 		return model.BodyXML
 	case strings.Contains(ct, "form-urlencoded"):
@@ -279,6 +301,117 @@ func extractExample(mt *openapi3.MediaType) string {
 		return formatExample(mt.Schema.Value.Example)
 	}
 	return ""
+}
+
+// synthesizeJSONBody builds a representative JSON body from a media type's
+// schema when the spec carries no explicit example. Returns "" when there is no
+// schema to work from or nothing could be synthesized.
+func synthesizeJSONBody(mt *openapi3.MediaType) string {
+	if mt.Schema == nil {
+		return ""
+	}
+	sample := sampleForSchema(mt.Schema, map[*openapi3.Schema]bool{}, 0)
+	if sample == nil {
+		return ""
+	}
+	return formatExample(sample)
+}
+
+// sampleMaxDepth caps synthesis recursion; deeply nested or (via resolved $refs)
+// cyclic schemas must not recurse forever.
+const sampleMaxDepth = 12
+
+// sampleForSchema synthesizes a representative Go value from an OpenAPI schema.
+// onPath tracks the schemas currently on the recursion stack so a schema that
+// (after $ref resolution) points back into its own subtree terminates instead
+// of looping; depth is a secondary bound.
+func sampleForSchema(ref *openapi3.SchemaRef, onPath map[*openapi3.Schema]bool, depth int) any {
+	if ref == nil || ref.Value == nil || depth > sampleMaxDepth {
+		return nil
+	}
+	s := ref.Value
+	// Anything the spec states explicitly wins over a synthesized placeholder.
+	switch {
+	case s.Example != nil:
+		return s.Example
+	case s.Default != nil:
+		return s.Default
+	case s.Const != nil:
+		return s.Const
+	case len(s.Enum) > 0:
+		return s.Enum[0]
+	}
+	if onPath[s] {
+		return nil
+	}
+	onPath[s] = true
+	defer delete(onPath, s)
+
+	// Composition: allOf merges member objects; oneOf/anyOf take the first branch.
+	if len(s.AllOf) > 0 {
+		merged := map[string]any{}
+		for _, sub := range s.AllOf {
+			if m, ok := sampleForSchema(sub, onPath, depth+1).(map[string]any); ok {
+				for k, v := range m {
+					merged[k] = v
+				}
+			}
+		}
+		if len(merged) > 0 {
+			return merged
+		}
+	}
+	if len(s.OneOf) > 0 {
+		return sampleForSchema(s.OneOf[0], onPath, depth+1)
+	}
+	if len(s.AnyOf) > 0 {
+		return sampleForSchema(s.AnyOf[0], onPath, depth+1)
+	}
+
+	switch {
+	case s.Type.Includes("object") || len(s.Properties) > 0:
+		obj := map[string]any{}
+		for _, name := range sortedKeys(s.Properties) {
+			p := s.Properties[name]
+			// readOnly fields are server-populated; a request body sample omits them.
+			if p != nil && p.Value != nil && p.Value.ReadOnly {
+				continue
+			}
+			obj[name] = sampleForSchema(p, onPath, depth+1)
+		}
+		return obj
+	case s.Type.Includes("array"):
+		return []any{sampleForSchema(s.Items, onPath, depth+1)}
+	case s.Type.Includes("boolean"):
+		return false
+	case s.Type.Includes("integer") || s.Type.Includes("number"):
+		return 0
+	case s.Type.Includes("string"):
+		return placeholderString(s)
+	}
+	return nil
+}
+
+// placeholderString returns a sensible sample string for a string schema,
+// keyed off the OpenAPI `format` so date/uuid/email fields look plausible.
+func placeholderString(s *openapi3.Schema) string {
+	switch s.Format {
+	case "date-time":
+		return "2020-01-01T00:00:00Z"
+	case "date":
+		return "2020-01-01"
+	case "email":
+		return "user@example.com"
+	case "uuid":
+		return "00000000-0000-0000-0000-000000000000"
+	case "uri", "url":
+		return "https://example.com"
+	case "hostname":
+		return "example.com"
+	case "ipv4":
+		return "127.0.0.1"
+	}
+	return "string"
 }
 
 func formatExample(v any) string {
