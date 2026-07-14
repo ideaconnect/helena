@@ -243,6 +243,34 @@ var interruptGrace = 250 * time.Millisecond
 // run. Interruptions surface as the captured reason ("script execution timed
 // out" / "… cancelled: …") rather than the raw goja.InterruptedError.
 func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
+	// Compile (or fetch the cached program) before spawning the worker: a
+	// syntax error surfaces synchronously with the same source positions
+	// vm.RunString reported (minus its doubled "SyntaxError:" prefix), and a
+	// repeated script skips recompilation entirely.
+	prog, err := compileCached(src)
+	if err != nil {
+		return err
+	}
+	return runGuarded(ctx, vm, func() error {
+		_, err := vm.RunProgram(prog)
+		return err
+	})
+}
+
+// runGuarded runs work — the ONLY thing permitted to drive vm — on its own
+// goroutine under a hard ScriptTimeout cap that also honours ctx cancellation.
+// On timeout/cancel it signals goja's Interrupt and waits only interruptGrace
+// before returning regardless, so work that ignores Interrupt (stuck in native
+// code) can't hold the caller — the orphaned goroutine drains into the buffered
+// channel and exits on its own. Each caller uses a fresh goja.Runtime, so an
+// abandoned VM never affects a later run.
+//
+// This guards not just script execution but the post-run read-back of the
+// request object: its property getters are attacker-controllable JS (a script
+// can install `Object.defineProperty(request,'method',{get(){while(1){}}})`),
+// so the read-back must be interruptible too — otherwise it wedges the Send
+// worker forever after the script's own guard has already been torn down.
+func runGuarded(ctx context.Context, vm *goja.Runtime, work func() error) error {
 	resultCh := make(chan error, 1) // buffered: a late finish never blocks the goroutine
 	var (
 		mu     sync.Mutex
@@ -273,18 +301,9 @@ func runWithTimeout(ctx context.Context, vm *goja.Runtime, src string) error {
 		return err
 	}
 
-	// Compile (or fetch the cached program) before spawning the worker: a
-	// syntax error surfaces synchronously with the same source positions
-	// vm.RunString reported (minus its doubled "SyntaxError:" prefix), and a
-	// repeated script skips recompilation entirely.
-	prog, err := compileCached(src)
-	if err != nil {
-		return err
-	}
-
 	timer := time.NewTimer(ScriptTimeout)
 	defer timer.Stop()
-	go func() { _, err := vm.RunProgram(prog); resultCh <- err }()
+	go func() { resultCh <- work() }()
 
 	select {
 	case err := <-resultCh:
@@ -347,6 +366,26 @@ func kvToObject(vm *goja.Runtime, kvs []model.KeyValue) *goja.Object {
 		_ = obj.Set(kv.Key, kv.Value)
 	}
 	return obj
+}
+
+// writeBackGuarded runs writeBackRequest under runGuarded so a hostile accessor
+// on the request object — e.g. a getter installed via Object.defineProperty, or
+// a value with an infinite-loop toString — can be interrupted instead of
+// wedging the Send worker forever. Without this, the read-back runs after the
+// script's own timeout guard is already gone, with no interrupt armed.
+//
+// The read-back mutates a COPY; r is updated only on success. So if the
+// read-back is abandoned (stuck in native code past the grace), the orphaned
+// goroutine keeps writing the throwaway copy and never races the caller's
+// request. writeBackRequest reassigns whole slices (via mergeKVFromObject)
+// rather than mutating in place, so the copy shares no mutable backing with r.
+func writeBackGuarded(ctx context.Context, vm *goja.Runtime, obj *goja.Object, r *model.Request) error {
+	tmp := *r
+	if err := runGuarded(ctx, vm, func() error { return writeBackRequest(obj, &tmp) }); err != nil {
+		return err
+	}
+	*r = tmp
+	return nil
 }
 
 // writeBackRequest reads the (possibly mutated) JS request object back
