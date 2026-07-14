@@ -10,7 +10,7 @@
 | [curl_test.go](curl_test.go) | `FromCurl` + `tokenizeShell` tests: method/URL/headers/data variants, multipart, basic auth, `-G`, quoting, line continuations, noise-flag skipping, and error paths. |
 | [openapi.go](openapi.go) | OpenAPI 3 / Swagger 2 parsing: `FromOpenAPI`, YAML→JSON normalization, OAS3-to-collection conversion. |
 | [openapi_test.go](openapi_test.go) | OpenAPI tests with embedded `oas3Sample` / `swagger2Sample` fixtures (also reused by url_test.go and wsdl_test.go). |
-| [postman.go](postman.go) | `FromPostman` + the `looksLikePostman` sniffer; the `pm*` decode structs (incl. `pmURL.UnmarshalJSON` accepting string-or-object URLs) and the body/auth mappers. |
+| [postman.go](postman.go) | `FromPostman` + the `looksLikePostman` sniffer; the `pm*` decode structs (incl. `pmRequest`/`pmURL` `UnmarshalJSON` accepting string-or-object `request`/URLs) and the body/auth mappers. |
 | [postman_test.go](postman_test.go) | Postman tests: folder/request tree, header disabled-flag, query params, raw/urlencoded/formdata/graphql bodies, bearer/basic/apikey/noauth, URL reconstruction, detection, and `From` routing. |
 | [wsdl.go](wsdl.go) | `FromWSDL`, the `wsdl*` XML structs, and the SOAP envelope template builder. |
 | [wsdl_test.go](wsdl_test.go) | WSDL fixture (`wsdlSample`), `FromWSDL` tests, and the `From` dispatcher smoke test covering all three input flavors. |
@@ -59,7 +59,8 @@ This is deliberately simple: WSDL files always start with `<?xml` or `<definitio
 
 - `FromPostman` ([postman.go:14](postman.go#L14)) — unmarshals the v2.x document and walks `item` recursively via `pmAppendItem` (request leaf vs. folder), mapping collection/folder/request auth through `pmConvertAuth`.
 - `pmConvertRequest` / `pmConvertBody` / `pmConvertAuth` — field mappers from the `pm*` decode structs to `model.Request` / `Body` / `Auth`. `pmConvertBody` switches on `mode` (raw/urlencoded/formdata/graphql); `pmRawBodyType` reads `options.raw.language`.
-- `pmURL.UnmarshalJSON` ([postman.go:264](postman.go#L264)) — accepts a URL as a bare string or an object; `effectiveRaw` reconstructs from host + path when `raw` is absent. `pmStringList` decodes host/path as either a string array or a single string.
+- `pmRequest.UnmarshalJSON` ([postman.go:249](postman.go#L249)) — accepts a `request` as a bare URL string (the v2.1 shorthand for a GET) or the full object, so a shorthand request no longer fails the whole import.
+- `pmURL.UnmarshalJSON` ([postman.go:281](postman.go#L281)) — accepts a URL as a bare string or an object; `effectiveRaw` reconstructs from host + path when `raw` is absent. `pmStringList` decodes host/path as either a string array or a single string.
 - `looksLikePostman` — structural sniffer; see "Auto-detection" above.
 
 ### WSDL types and helpers ([wsdl.go](wsdl.go))

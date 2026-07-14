@@ -11,7 +11,7 @@ WSDL files always start with `<?xml` or `<definitions>`; OpenAPI documents never
 
 ## Postman collection → Helena tree
 
-`FromPostman` ([postman.go:14](postman.go#L14)) decodes the v2.x JSON into the `pm*` structs and walks `item` recursively (`pmAppendItem`): an item with a non-nil `request` is a leaf request, otherwise it is a folder (whose children recurse). Per request it maps:
+`FromPostman` ([postman.go:14](postman.go#L14)) decodes the v2.x JSON into the `pm*` structs and walks `item` recursively (`pmAppendItem`): an item with a non-nil `request` is a leaf request, otherwise it is a folder (whose children recurse). A `request` is itself either the full object or a **bare URL string** — the v2.1 shorthand for a GET to that URL — and `pmRequest.UnmarshalJSON` accepts both, so a collection mixing the two forms imports rather than failing wholesale. Per request it maps:
 
 - **URL**: `request.url` is either a bare string or an object; `pmURL.UnmarshalJSON` accepts both, and `effectiveRaw` rebuilds `host.join('.') + '/' + path.join('/')` when the object omits `raw`. Object `query` entries become `Params` (Postman `disabled` → `Enabled=false`).
 - **Headers**: `request.header` → `Headers`, with the same disabled-flag mapping.

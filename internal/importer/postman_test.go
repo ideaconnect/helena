@@ -164,6 +164,36 @@ func TestFromPostmanReconstructsURL(t *testing.T) {
 	}
 }
 
+// TestFromPostmanRequestStringShorthand pins the Postman v2.1 `request` string
+// shorthand: `"request": "https://x"` means a GET to that URL. Before the fix a
+// single shorthand request failed the entire import (json: cannot unmarshal
+// string into pmRequest). A shorthand and an object request must coexist.
+func TestFromPostmanRequestStringShorthand(t *testing.T) {
+	doc := `{"info":{"name":"n"},"item":[
+		{"name":"bare","request":"https://api.example.com/ping"},
+		{"name":"obj","request":{"method":"POST","url":"https://api.example.com/thing"}}
+	]}`
+	c, err := FromPostman([]byte(doc))
+	if err != nil {
+		t.Fatalf("FromPostman: %v", err)
+	}
+	if len(c.Requests) != 2 {
+		t.Fatalf("requests = %d, want 2 (%+v)", len(c.Requests), c.Requests)
+	}
+	// The shorthand request: GET to the bare URL, named after the item.
+	bare := c.Requests[0]
+	if bare.Method != model.GET || bare.URL != "https://api.example.com/ping" {
+		t.Errorf("shorthand request = {method:%q url:%q}, want GET https://api.example.com/ping", bare.Method, bare.URL)
+	}
+	if bare.Name != "bare" {
+		t.Errorf("shorthand name = %q, want %q", bare.Name, "bare")
+	}
+	// The object request still decodes normally.
+	if obj := c.Requests[1]; obj.Method != model.POST || obj.URL != "https://api.example.com/thing" {
+		t.Errorf("object request = {method:%q url:%q}, want POST https://api.example.com/thing", obj.Method, obj.URL)
+	}
+}
+
 // TestFromPostmanNoauthAndDefaults verifies noauth maps to explicit None and an
 // empty method defaults to GET.
 func TestFromPostmanNoauthAndDefaults(t *testing.T) {
