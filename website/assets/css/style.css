@@ -359,11 +359,17 @@ pre code { background: none; padding: 0; }
 
 @media (max-width: 860px) {
   .hero-grid { grid-template-columns: 1fr; gap: 30px; }
-  .hero-box { min-height: 0; margin-top: 8px; }
+  /* The desktop hero is two rotated, overlapping windows floating over a glow;
+     that composition doesn't read on a phone. Collapse it to a single, centred
+     screenshot capped to a sensible width so it looks deliberate instead of a
+     shrunken leftover of the animation. */
+  .hero-box { min-height: 0; margin: 8px auto 0; max-width: 520px; }
   .hero-box::before { inset: -6% 0 -6% 0; }
   .hero-box .win { position: relative; width: 100%; transform: none; animation: none; }
   .hero-box .win-back { display: none; }
-  .hero-box .win-front { top: 0; left: 0; }
+  /* The fancy PNG already carries its own window frame + shadow, so just clear
+     the default <figure> margin and let it fill the column. */
+  .hero-box .win-front { top: 0; left: 0; margin: 0; }
   .contact-grid { grid-template-columns: 1fr; gap: 22px; }
   .page-hero-grid { grid-template-columns: 1fr; gap: 22px; }
   .page-hero-art { max-width: 460px; }
@@ -371,10 +377,11 @@ pre code { background: none; padding: 0; }
 }
 
 @media (max-width: 640px) {
-  /* Two-row nav: brand + buttons on top, page links wrap onto a second row. */
-  .nav .wrap { flex-wrap: wrap; height: auto; padding-top: 10px; padding-bottom: 10px; row-gap: 8px; }
-  .brand { order: 1; }
-  .nav-cta { order: 2; margin-left: auto; border-left: 0; padding-left: 0; }
+  /* Stacked, centred nav: brand on top, button cluster below it, page links
+     last — every row centred on its own line. */
+  .nav .wrap { flex-wrap: wrap; height: auto; padding-top: 10px; padding-bottom: 10px; row-gap: 10px; }
+  .brand { order: 1; width: 100%; justify-content: center; }
+  .nav-cta { order: 2; width: 100%; margin-left: 0; justify-content: center; border-left: 0; padding-left: 0; }
   .nav-links { order: 3; width: 100%; margin-left: 0; justify-content: center; gap: 2px; }
   .nav-links a { padding: 6px 10px; }
   /* Collapse the Microsoft Store CTA to icon-only so the top row stays compact. */
