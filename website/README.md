@@ -22,7 +22,7 @@ website/
 ├── tools/og-card.sh     # compose the 1200x630 social / OpenGraph card
 └── assets/
     ├── css/style.css       # the whole design system (Helena green accent)
-    ├── js/site.js          # tiny vanilla enhancements (reveal-on-scroll, nav)
+    ├── js/site.js          # tiny vanilla enhancements (reveal, nav, ext links)
     └── img/
         ├── helena-icon.png # the real app icon (favicon + brand)
         ├── author.jpg       # About-page photo of the author

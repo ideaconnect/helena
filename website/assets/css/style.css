@@ -401,6 +401,12 @@ pre code { background: none; padding: 0; }
 .pt-0 { padding-top: 0; }
 .pb-0 { padding-bottom: 0; }
 .btn-block { width: 100%; }
+/* Visually hidden but announced to screen readers (e.g. the "opens in new tab"
+   cue appended to external links by site.js). */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
 
 /* ---- Cookie-consent banner (prior-consent GA; see _includes/consent.html) ---- */
 .consent-banner { position: fixed; inset-inline: 0; bottom: 0; z-index: 70; padding: 12px; }
