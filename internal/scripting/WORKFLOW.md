@@ -112,6 +112,14 @@ falls back to `json.Marshal(value.Export())` for everything else so
 `console.log({a: 1})` shows `{"a":1}` instead of the JS engine's
 `[object Object]`.
 
+Capture is bounded: once `Result.Console` reaches `maxConsoleLines`
+(1000) or `maxConsoleBytes` (256 KiB), `bindConsole` appends a single
+`"… console output truncated"` marker and drops the rest. Without this a
+`while (true) console.log(x)` loop — which runs for the entire
+`ScriptTimeout` — would grow the slice to hundreds of MB and freeze the
+UI rendering millions of lines. The test recorder is capped the same way
+(`maxTestResults`, dropped silently so pass/fail tallies aren't skewed).
+
 ## Interrupt handling
 
 goja exposes asynchronous interruption via `vm.Interrupt(reason)`,

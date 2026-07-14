@@ -9,6 +9,12 @@ import "github.com/dop251/goja"
 // phases, though assertions are most useful post-response.
 func bindTest(vm *goja.Runtime, res *Result) error {
 	if err := vm.Set("__helenaRecordTest", func(call goja.FunctionCall) goja.Value {
+		// Cap captured results: a runaway `while(true) test(...)` loop must not
+		// grow res.Tests without bound (OOM / UI freeze). Drop silently past the
+		// cap — no synthetic result, so pass/fail tallies aren't skewed.
+		if len(res.Tests) >= maxTestResults {
+			return goja.Undefined()
+		}
 		res.Tests = append(res.Tests, TestResult{
 			Name:   call.Argument(0).String(),
 			Passed: call.Argument(1).ToBoolean(),

@@ -13,6 +13,7 @@
 | [xml.go](xml.go) | `tryParseXML` and the recursive `readXMLElement` helper that converts response XML bodies into a JS-friendly nested map. |
 | [helpers_test.go](helpers_test.go) | Known-answer tests for the hash/HMAC digests, UUID v4 shape + randomness, RFC 3339 date / Unix timestamp, and helper availability in the post-response phase. |
 | [scripting_test.go](scripting_test.go) | The full behavioural suite — 18 tests covering both phases, env bridge writes, console capture, JSON / XML parsing, timeout, cancellation, error propagation. |
+| [capture_test.go](capture_test.go) | The output-capture caps: console line/byte truncation and the test-result cap that keep a runaway script from OOMing the app. |
 
 ## Public types
 
@@ -84,8 +85,8 @@ tests.
 | ------ | ------------ |
 | `bindHelena` | Attaches `helena.env.{get,set}`, `helena.vars.get`, `helena.interpolate` (#92 — backed by the per-call `WithInterpolator`, identity when none is supplied), `helena.sendRequest` (#92 — backed by `WithRequester`; throws when unwired; `parseSendSpec` reads the arg object), `helena.cookies.{get,getAll}` (#92 — backed by `WithCookies`; empty when unwired), and `helena.runner.{stop,skip}` (#92 — backed by `WithRunner`; no-op when unwired) to the VM (env flows through `Runtime.env`), then calls `bindHelpers` to add the curated helper surface to the same `helena` object. |
 | `bindHelpers` | Attaches `helena.uuid()`, `helena.hash.{md5,sha1,sha256,sha512,hmacSha1,hmacSha256}`, `helena.date.{now,timestamp}`, `helena.base64.{encode,decode}` (#92), and `helena.sleep(ms)` (#92). Pure-compute (crypto/hash, `crypto/rand`, clock); `sleep` only delays the calling script (clamped to `ScriptTimeout`, ctx-aware) and adds no I/O, so the sandbox boundary is unchanged. Takes the run `ctx` so `sleep` aborts on cancel/timeout. |
-| `bindConsole` | Attaches `console.{log,info,warn,error}`. Each emits one space-joined line into `Result.Console`. |
-| `bindTest` | Attaches `test()` / `expect()` (#87): binds the Go `__helenaRecordTest` collector (appends to `Result.Tests`) and runs `testPrelude`, the JS that defines the runner + matcher chain. |
+| `bindConsole` | Attaches `console.{log,info,warn,error}`. Each emits one space-joined line into `Result.Console`, capped at `maxConsoleLines`/`maxConsoleBytes` — past the cap one truncation marker is emitted and further lines dropped, so a runaway log loop can't OOM/freeze the app. |
+| `bindTest` | Attaches `test()` / `expect()` (#87): binds the Go `__helenaRecordTest` collector (appends to `Result.Tests`, capped at `maxTestResults`) and runs `testPrelude`, the JS that defines the runner + matcher chain. |
 | `stringify` | Turns a `goja.Value` into a console line: strings pass through, `null` / `undefined` become their names, everything else is JSON-encoded so `console.log({a:1})` shows useful structure. |
 | `runGuarded` | Runs an arbitrary `func() error` (the sole driver of `vm`) on its own goroutine under the `ScriptTimeout` watchdog + ctx-cancel watcher: on timeout/cancel it calls `vm.Interrupt`, waits only `interruptGrace`, then returns regardless so work stuck in native code can't freeze the caller. Stores the reason behind a mutex so the error names the cause. Backs both `runWithTimeout` and `writeBackGuarded`. |
 | `runWithTimeout` | Compiles via `compileCached` (surfacing syntax errors synchronously, exactly as `vm.RunString` formatted them) then runs `vm.RunProgram` under `runGuarded`. |
