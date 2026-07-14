@@ -85,8 +85,23 @@ $manifest = $manifest.Replace("@VERSION@", $Version).Replace("@ARCH@", $Arch)
 $stagedManifest = Join-Path $staging "AppxManifest.xml"
 Set-Content -Path $stagedManifest -Value $manifest -Encoding UTF8
 
-# --- Pack ----------------------------------------------------------------
+# --- Build the resource index (resources.pri) ----------------------------
+# Without a resources.pri, Windows ignores the qualified asset variants
+# (targetsize-*, altform-unplated) and always renders the base Square44x44Logo
+# on an accent-coloured plate — the blue taskbar background reported in
+# issue #182. makepri indexes Assets/ so Windows can pick the *unplated*
+# taskbar/Start icon. The priconfig is a scratch file kept out of the package.
+$makepri = Resolve-SdkTool "makepri.exe"
 $outDir = Join-Path $repoRoot "dist"
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+$priConfig = Join-Path $outDir "priconfig-$Arch.xml"
+if (Test-Path $priConfig) { Remove-Item -Force $priConfig }
+& $makepri createconfig /cf $priConfig /dq en-US /o
+if ($LASTEXITCODE -ne 0) { throw "makepri createconfig failed ($LASTEXITCODE)" }
+& $makepri new /pr $staging /cf $priConfig /mn $stagedManifest /of (Join-Path $staging "resources.pri") /o
+if ($LASTEXITCODE -ne 0) { throw "makepri new failed ($LASTEXITCODE)" }
+
+# --- Pack ----------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 $msix = Join-Path $outDir "helena-$Arch.msix"
 if (Test-Path $msix) { Remove-Item -Force $msix }

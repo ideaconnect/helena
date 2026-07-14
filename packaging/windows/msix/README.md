@@ -12,8 +12,8 @@ this file is the mechanical "how to build the package" reference.
 | ---- | ------- |
 | `AppxManifest.xml` | Package manifest. The product identity is baked in (below); only `@VERSION@` / `@ARCH@` are build-time tokens. Full-trust Win32 app (`Windows.FullTrustApplication` + `runFullTrust`). |
 | `build-store-bundle.ps1` | One-shot orchestrator: builds both arches and combines them into `dist\helena.msixbundle`. What CI runs, and the easiest local entry point. |
-| `build-msix.ps1` | Lower-level: stages one arch's exe + assets, stamps version/arch, runs `makeappx pack`, optionally self-signs for local testing. |
-| `Assets/` | Store logo PNGs (Square 44/71/150/310, Wide 310x150, StoreLogo 50, SplashScreen 620x300), generated from `assets/app_icon.png`. |
+| `build-msix.ps1` | Lower-level: stages one arch's exe + assets, stamps version/arch, builds `resources.pri` with `makepri`, runs `makeappx pack`, optionally self-signs for local testing. |
+| `Assets/` | Store logo PNGs (Square 44/71/150/310, Wide 310x150, StoreLogo 50, SplashScreen 620x300), generated from `assets/app_icon.png`. Includes `Square44x44Logo.targetsize-{16,24,32,48,256}[_altform-unplated].png` — the **unplated** variants give the taskbar/Start icon no background plate. Without them Windows draws the icon on the system-accent plate (the blue background from issue #182). These qualified variants only take effect once indexed into `resources.pri`. |
 
 ## Product identity (from Partner Center)
 
@@ -31,8 +31,8 @@ Baked into `AppxManifest.xml`; must match Partner Center exactly. For reference:
 
 ## Prerequisites
 
-- The **Windows SDK** (`makeappx.exe`, and `signtool.exe` for `-Sign`). The
-  script finds them under `Windows Kits\10\bin` or on `PATH`; a
+- The **Windows SDK** (`makeappx.exe`, `makepri.exe`, and `signtool.exe` for
+  `-Sign`). The script finds them under `Windows Kits\10\bin` or on `PATH`; a
   *Developer Command Prompt for VS* has them ready.
 - Prebuilt Helena executables for each arch, built with the release flags in
   [docs/BUILDING.md](../../../docs/BUILDING.md#release-grade-build):
