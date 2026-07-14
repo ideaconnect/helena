@@ -27,6 +27,11 @@ After the upgrade, both sides speak frames:
 
 - **Send** (`WriteFrame(w, f, true)`): client frames are always masked — a fresh
   random 4-byte key per frame, XORed over the payload, with the MASK bit set.
+  `Conn`'s `WriteMessage`/`writeControl` route through `writeFrameLocked`, which
+  arms a fresh `writeTimeout` (10 s) write deadline before each frame. Because
+  `WriteMessage` runs on the UI thread, a server that stalls its receive window
+  would otherwise block the write — and freeze the app — forever; the deadline
+  turns that into an error instead.
 - **Receive** (`ReadFrame(r)`): server→client frames are unmasked; the decoder
   reads the header, resolves the 7/16/64-bit length, reads (and, if flagged,
   unmasks) the payload. A declared length over 64 MiB is refused before

@@ -378,3 +378,51 @@ func TestReadMessageCapsReassembledSize(t *testing.T) {
 		t.Fatalf("ReadMessage err = %v, want the message-size cap error", err)
 	}
 }
+
+// TestWriteMessageTimesOutOnStalledPeer pins the write deadline: WriteMessage is
+// called from the UI thread, so a peer that never drains its receive window must
+// not block the write forever (which would freeze the app). net.Pipe is fully
+// synchronous — a write blocks until the other end reads — so leaving c2 unread
+// makes the write hang; the deadline must cut it off with an error.
+func TestWriteMessageTimesOutOnStalledPeer(t *testing.T) {
+	old := writeTimeout
+	writeTimeout = 50 * time.Millisecond
+	defer func() { writeTimeout = old }()
+
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close() // c2 is never read from — the write has nowhere to go
+
+	conn := &Conn{netConn: c1}
+	done := make(chan error, 1)
+	go func() { done <- conn.WriteMessage(OpText, []byte("hello")) }()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("expected a write-deadline error on a stalled peer, got nil")
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("WriteMessage blocked past the write deadline — the UI thread would freeze")
+	}
+}
+
+// TestWriteMessageSucceedsWhenPeerReads is the happy-path counterpart: with a
+// peer draining the socket, the deadline never trips and the frame goes out.
+func TestWriteMessageSucceedsWhenPeerReads(t *testing.T) {
+	old := writeTimeout
+	writeTimeout = 2 * time.Second
+	defer func() { writeTimeout = old }()
+
+	c1, c2 := net.Pipe()
+	defer c1.Close()
+	defer c2.Close()
+
+	// Drain c2 so the write completes.
+	go func() { _, _ = ReadFrame(bufio.NewReader(c2)) }()
+
+	conn := &Conn{netConn: c1}
+	if err := conn.WriteMessage(OpText, []byte("hi")); err != nil {
+		t.Fatalf("WriteMessage on a draining peer = %v, want nil", err)
+	}
+}

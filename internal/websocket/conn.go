@@ -142,12 +142,28 @@ func verifyUpgrade(br *bufio.Reader, key string) error {
 	return nil
 }
 
+// writeTimeout bounds how long a single frame write may block on the socket.
+// WriteMessage is called from the UI thread, so without a deadline a stalled
+// server (a full TCP receive window that it never drains) would block the write
+// — and freeze the whole app — indefinitely. A var so tests can shrink it.
+var writeTimeout = 10 * time.Second
+
+// writeFrameLocked writes one masked frame under writeTimeout so a stalled peer
+// can't block the caller forever. A fresh deadline is armed before every write,
+// so a stale deadline from a prior write never trips the next one. The caller
+// must hold wmu. Setting a write deadline does not affect the concurrent reader
+// (read and write deadlines are independent).
+func (c *Conn) writeFrameLocked(f Frame) error {
+	_ = c.netConn.SetWriteDeadline(time.Now().Add(writeTimeout))
+	return WriteFrame(c.netConn, f, true)
+}
+
 // WriteMessage sends a single-frame (FIN) message with the given opcode, masked
 // per the client requirement.
 func (c *Conn) WriteMessage(opcode byte, data []byte) error {
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	return WriteFrame(c.netConn, Frame{Fin: true, Opcode: opcode, Payload: data}, true)
+	return c.writeFrameLocked(Frame{Fin: true, Opcode: opcode, Payload: data})
 }
 
 // maxMessageBytes caps a reassembled message's total size. Individual frames
@@ -206,7 +222,7 @@ func (c *Conn) writeControl(opcode byte, payload []byte) error {
 	}
 	c.wmu.Lock()
 	defer c.wmu.Unlock()
-	return WriteFrame(c.netConn, Frame{Fin: true, Opcode: opcode, Payload: payload}, true)
+	return c.writeFrameLocked(Frame{Fin: true, Opcode: opcode, Payload: payload})
 }
 
 // Close sends a close frame (best-effort) and closes the underlying connection.
