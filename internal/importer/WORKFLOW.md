@@ -22,11 +22,11 @@ Postman events/scripts, response examples, and binary file bodies have no Helena
 
 ## Hoisting OpenAPI server URL to `{{base_url}}`
 
-`convertOAS3` ([openapi.go:107](openapi.go#L107)) inspects `doc.Servers`. It takes the first non-nil server whose `URL` is non-empty **after trailing slashes are trimmed** (`strings.TrimRight(url, "/")`) and hoists it into a single-environment, single-variable structure:
+`convertOAS3` ([openapi.go:107](openapi.go#L107)) inspects `doc.Servers`. It takes the first non-nil server whose `URL` is non-empty **after trailing slashes are trimmed** (`strings.TrimRight(url, "/")`) and hoists it into a single-environment, single-variable structure. The environment is **named after that server's `description`** (an OpenAPI server is a deployment target and its description is the human name — e.g. `"Api aplikacji developerskiej"`), falling back to `"Default"` only when the server has no description:
 
 ```text
 Collection.Environments = [Environment{
-    Name: "Default",
+    Name: server.Description (trimmed) or "Default",
     Variables: [Variable{Enabled: true, Key: "base_url", Value: strings.TrimRight(server.URL, "/")}],
 }]
 ```

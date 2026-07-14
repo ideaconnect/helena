@@ -616,6 +616,52 @@ func TestSynthesizeJSONBodyNoSchema(t *testing.T) {
 	}
 }
 
+// TestImportEnvironmentNamedAfterServerDescription pins that the hoisted
+// environment takes its name from the OpenAPI server `description` (a deployment
+// target's human name), not the generic "Default". Reported against
+// https://dev.r3polska.eu/doc/v1.json, whose server is described
+// "Api aplikacji developerskiej".
+func TestImportEnvironmentNamedAfterServerDescription(t *testing.T) {
+	const spec = `{
+	  "openapi": "3.0.0",
+	  "info": {"title": "Recomaty API v1", "version": "1.5.0"},
+	  "servers": [{"url": "https://dev.r3polska.eu/", "description": "Api aplikacji developerskiej"}],
+	  "paths": {}
+	}`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	if len(c.Environments) != 1 {
+		t.Fatalf("environments = %+v", c.Environments)
+	}
+	if got := c.Environments[0].Name; got != "Api aplikacji developerskiej" {
+		t.Errorf("env name = %q, want the server description", got)
+	}
+	// The trailing slash on the server URL is still trimmed (issue #181).
+	if got := c.Environments[0].Variables[0].Value; got != "https://dev.r3polska.eu" {
+		t.Errorf("base_url = %q, want trailing slash trimmed", got)
+	}
+}
+
+// TestImportEnvironmentFallsBackToDefaultName verifies that a server with no
+// description still yields the "Default" environment name.
+func TestImportEnvironmentFallsBackToDefaultName(t *testing.T) {
+	const spec = `{
+	  "openapi": "3.0.0",
+	  "info": {"title": "X"},
+	  "servers": [{"url": "https://api.example.com"}],
+	  "paths": {}
+	}`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	if len(c.Environments) != 1 || c.Environments[0].Name != "Default" {
+		t.Fatalf("environments = %+v, want one named Default", c.Environments)
+	}
+}
+
 // TestBodyTypeWildcardIsJSON verifies the "*/*" content type maps to JSON.
 func TestBodyTypeWildcardIsJSON(t *testing.T) {
 	if got := bodyTypeFromContentType("*/*"); got != model.BodyJSON {

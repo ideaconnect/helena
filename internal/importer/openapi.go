@@ -118,6 +118,11 @@ func convertOAS3(doc *openapi3.T) model.Collection {
 	}
 
 	baseURL := ""
+	// Name the hoisted environment after the server's description — an OpenAPI
+	// server is a deployment target (dev/staging/prod) and its `description` is
+	// the human name for it (e.g. "Api aplikacji developerskiej"). Fall back to
+	// "Default" only when the chosen server has no description.
+	envName := "Default"
 	for _, srv := range doc.Servers {
 		// A spec may carry `servers: [null]`; the loader stores a nil *Server, so
 		// guard the deref and take the first server that actually names a URL.
@@ -127,6 +132,9 @@ func convertOAS3(doc *openapi3.T) model.Collection {
 		if srv != nil {
 			if u := strings.TrimRight(srv.URL, "/"); u != "" {
 				baseURL = u
+				if d := strings.TrimSpace(srv.Description); d != "" {
+					envName = d
+				}
 				break
 			}
 		}
@@ -134,7 +142,7 @@ func convertOAS3(doc *openapi3.T) model.Collection {
 	if baseURL != "" {
 		c.Environments = append(c.Environments, model.Environment{
 			ID:   model.NewID(),
-			Name: "Default",
+			Name: envName,
 			Variables: []model.Variable{{
 				Enabled: true,
 				Key:     "base_url",
