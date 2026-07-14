@@ -325,9 +325,6 @@ pre code { background: none; padding: 0; }
 .author-figure .idct-badge { margin-top: 0; }
 .author-figure .idct-badge img { height: 36px; }
 .author-bio p { margin: 0; color: var(--muted); }
-@media (max-width: 640px) {
-  .author-bio { flex-direction: column; align-items: flex-start; gap: 18px; }
-}
 
 /* "Named after Helena" — the two photos "fly" on the right, mirroring the
    homepage hero: a faded, tilted back photo behind a larger floating front one,
@@ -345,14 +342,6 @@ pre code { background: none; padding: 0; }
 .tribute-box .cat-win-back { top: 0; right: 0; width: min(56%, 236px); z-index: 1; opacity: .9; transform: rotate(3deg); }
 .tribute-box .cat-win-front { top: 44px; left: 0; width: min(70%, 300px); z-index: 2; rotate: -2deg; --bob-y: -10px;
   animation: bob 7s ease-in-out infinite; }
-
-@media (max-width: 640px) {
-  .tribute-grid { grid-template-columns: 1fr; gap: 22px; }
-  .tribute-box { min-height: 0; display: flex; flex-direction: column; gap: 16px; }
-  .tribute-box .glow { display: none; }
-  .tribute-box .cat-win { position: relative; width: 100%; inset: auto;
-    transform: none; rotate: none; translate: none; animation: none; opacity: 1; }
-}
 
 /* ---- Scroll reveal (progressive enhancement; visible by default) ---- */
 .reveal { opacity: 1; }
@@ -378,7 +367,16 @@ pre code { background: none; padding: 0; }
   .page-hero-art img { transform: none; rotate: none; translate: none; animation: none; }
 }
 
+/* ---- Phone (<=640px): all narrow-screen overrides live here ---- */
 @media (max-width: 640px) {
+  /* About page: stack the author lockup and the tribute photos. */
+  .author-bio { flex-direction: column; align-items: flex-start; gap: 18px; }
+  .tribute-grid { grid-template-columns: 1fr; gap: 22px; }
+  .tribute-box { min-height: 0; display: flex; flex-direction: column; gap: 16px; }
+  .tribute-box .glow { display: none; }
+  .tribute-box .cat-win { position: relative; width: 100%; inset: auto;
+    transform: none; rotate: none; translate: none; animation: none; opacity: 1; }
+
   /* Stacked, centred nav: brand on top, button cluster below it, page links
      last — every row centred on its own line. */
   .nav .wrap { flex-wrap: wrap; height: auto; padding-top: 10px; padding-bottom: 10px; row-gap: 10px; }
