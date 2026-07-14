@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>HelenaSandboxHarness</string>
+  <key>CFBundleDisplayName</key><string>Helena Sandbox Harness</string>
+  <!-- The sandbox container is keyed by this bundle id. Distinct from the real
+       app (tech.idct.helena) so testing the harness never touches Helena's data. -->
+  <key>CFBundleIdentifier</key><string>tech.idct.helena.harness</string>
+  <key>CFBundleExecutable</key><string>harness</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.1</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>11.0</string>
+</dict>
+</plist>

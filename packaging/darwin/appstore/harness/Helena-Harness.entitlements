@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Mandatory for the Mac App Store; activates the container + powerbox. -->
+  <key>com.apple.security.app-sandbox</key><true/>
+  <!-- Helena is an HTTP client — outbound connections must be allowed. -->
+  <key>com.apple.security.network.client</key><true/>
+  <!-- Grants IO on folders the user picks in the native NSOpenPanel. -->
+  <key>com.apple.security.files.user-selected.read-write</key><true/>
+  <!-- THE key one: lets the app create AND resolve app-scope security-scoped
+       bookmarks and store them itself (our sidecar). Without it, resolve /
+       startAccessingSecurityScopedResource fails on relaunch. -->
+  <key>com.apple.security.files.bookmarks.app-scope</key><true/>
+</dict>
+</plist>
