@@ -159,10 +159,14 @@ picture { display: block; }
 }
 .hero-box .win-front {
   top: 18%; left: -2%; width: 96%; z-index: 2;
-  transform: rotate(-2deg);
-  animation: float 7s ease-in-out infinite;
+  rotate: -2deg; --bob-y: -12px;
+  animation: bob 7s ease-in-out infinite;
 }
-@keyframes float { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-12px); } }
+/* One shared "bob" for every floating element. Each keeps its own static tilt
+   via the independent `rotate` property, so the keyframe only moves `translate`
+   and doesn't have to re-declare each element's rotation (which is what forced
+   four near-identical keyframes before). Per-element distance via --bob-y. */
+@keyframes bob { 50% { translate: 0 var(--bob-y, -10px); } }
 
 /* ---- Hero divider: an elegant rule with the Helena mark, bridging the hero
    and the rest of the page ---- */
@@ -170,8 +174,7 @@ picture { display: block; }
 .hero-divider .line { flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--line) 25%, rgba(34, 197, 94, .35) 50%, var(--line) 75%, transparent); }
 .hero-divider .mark { width: 46px; height: 46px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 50%;
   border: 1px solid var(--line); background: var(--surface); box-shadow: 0 0 0 7px rgba(34, 197, 94, .06), var(--shadow); }
-.hero-divider .mark img { width: 28px; height: 28px; display: block; animation: float-soft 6s ease-in-out infinite; }
-@keyframes float-soft { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.hero-divider .mark img { width: 28px; height: 28px; display: block; --bob-y: -4px; animation: bob 6s ease-in-out infinite; }
 
 /* ---- Per-page hero: a two-column header with a framed screenshot on the
    right, so every page opens with a visual instead of an empty gap ---- */
@@ -185,8 +188,7 @@ picture { display: block; }
 .page-hero-art .glow { position: absolute; inset: -10% -6% -14% -6%; z-index: 0;
   background: radial-gradient(60% 60% at 60% 40%, rgba(34, 197, 94, .26), transparent 70%); filter: blur(10px); }
 .page-hero-art img { position: relative; z-index: 1; width: 100%; height: auto; display: block;
-  transform: rotate(-1.5deg); animation: page-float 7s ease-in-out infinite; }
-@keyframes page-float { 0%, 100% { transform: rotate(-1.5deg) translateY(0); } 50% { transform: rotate(-1.5deg) translateY(-9px); } }
+  rotate: -1.5deg; --bob-y: -9px; animation: bob 7s ease-in-out infinite; }
 
 /* ---- Section ---- */
 section { padding: 56px 0; }
@@ -316,7 +318,7 @@ pre code { background: none; padding: 0; }
    gentle bob. */
 .author-bio { display: flex; align-items: center; gap: 30px; margin: 6px 0 12px; }
 .author-figure { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start;
-  gap: 14px; animation: float-soft 6s ease-in-out infinite; }
+  gap: 14px; --bob-y: -4px; animation: bob 6s ease-in-out infinite; }
 .author-figure .avatar { width: 150px; height: 150px; }
 .author-figure .idct-badge { margin-top: 0; }
 .author-figure .idct-badge img { height: 36px; }
@@ -340,16 +342,15 @@ pre code { background: none; padding: 0; }
   overflow: hidden; border: 1px solid var(--line); box-shadow: var(--shadow); background: var(--ink); }
 .tribute-box .cat-win img { width: 100%; height: auto; display: block; }
 .tribute-box .cat-win-back { top: 0; right: 0; width: min(56%, 236px); z-index: 1; opacity: .9; transform: rotate(3deg); }
-.tribute-box .cat-win-front { top: 44px; left: 0; width: min(70%, 300px); z-index: 2; transform: rotate(-2deg);
-  animation: tribute-float 7s ease-in-out infinite; }
-@keyframes tribute-float { 0%, 100% { transform: rotate(-2deg) translateY(0); } 50% { transform: rotate(-2deg) translateY(-10px); } }
+.tribute-box .cat-win-front { top: 44px; left: 0; width: min(70%, 300px); z-index: 2; rotate: -2deg; --bob-y: -10px;
+  animation: bob 7s ease-in-out infinite; }
 
 @media (max-width: 640px) {
   .tribute-grid { grid-template-columns: 1fr; gap: 22px; }
   .tribute-box { min-height: 0; display: flex; flex-direction: column; gap: 16px; }
   .tribute-box::before { display: none; }
   .tribute-box .cat-win { position: relative; width: 100%; inset: auto;
-    transform: none; animation: none; opacity: 1; }
+    transform: none; rotate: none; translate: none; animation: none; opacity: 1; }
 }
 
 /* ---- Scroll reveal (progressive enhancement; visible by default) ---- */
@@ -365,7 +366,7 @@ pre code { background: none; padding: 0; }
      shrunken leftover of the animation. */
   .hero-box { min-height: 0; margin: 8px auto 0; max-width: 520px; }
   .hero-box::before { inset: -6% 0 -6% 0; }
-  .hero-box .win { position: relative; width: 100%; transform: none; animation: none; }
+  .hero-box .win { position: relative; width: 100%; transform: none; rotate: none; translate: none; animation: none; }
   .hero-box .win-back { display: none; }
   /* The fancy PNG already carries its own window frame + shadow, so just clear
      the default <figure> margin and let it fill the column. */
@@ -373,7 +374,7 @@ pre code { background: none; padding: 0; }
   .contact-grid { grid-template-columns: 1fr; gap: 22px; }
   .page-hero-grid { grid-template-columns: 1fr; gap: 22px; }
   .page-hero-art { max-width: 460px; }
-  .page-hero-art img { transform: none; animation: none; }
+  .page-hero-art img { transform: none; rotate: none; translate: none; animation: none; }
 }
 
 @media (max-width: 640px) {
