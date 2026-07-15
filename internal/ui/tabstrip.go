@@ -44,9 +44,14 @@ func newRequestTab(onSelect, onClose func()) *requestTab {
 }
 
 // setTab updates the method chip and name. A blank name renders as "Untitled".
-func (t *requestTab) setTab(method, name string) {
+// A dirty tab (unsaved edits) gets a trailing " *" on the name so the strip
+// signals which requests have pending changes (#139 dirty markers).
+func (t *requestTab) setTab(method, name string, dirty bool) {
 	if name == "" {
 		name = "Untitled"
+	}
+	if dirty {
+		name += " *"
 	}
 	t.method.Text = method
 	t.method.Color = methodColor(method)

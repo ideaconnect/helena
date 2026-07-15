@@ -72,6 +72,7 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 		m.currentRequest.Auth.Type = authTypeByLabel[label]
 		m.refreshAuthVisibility()
 		m.refreshAuthInheritLabel()
+		m.refreshActiveTabDirty()
 	})
 	m.authType.SetSelected("Inherit from parent")
 
@@ -282,6 +283,7 @@ func (m *MainUI) newAuthEntry(placeholder string, write func(string)) *shortcutE
 			return
 		}
 		write(s)
+		m.refreshActiveTabDirty()
 	}
 	return e
 }

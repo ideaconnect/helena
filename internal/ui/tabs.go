@@ -352,6 +352,9 @@ func (m *MainUI) rebuildTabBar() {
 		}
 	}
 
+	// Flush the debounced body editor once so the active tab's in-progress body
+	// edit is reflected in its dirty marker (isTabDirty compares marshaled state).
+	m.syncBodyFromEditor()
 	objs := make([]fyne.CanvasObject, 0, len(m.tabs)+1)
 	for i, t := range m.tabs {
 		rt := m.tabWidgets[t]
@@ -366,7 +369,7 @@ func (m *MainUI) rebuildTabBar() {
 			m.tabWidgets[t] = rt
 		}
 		method, name := m.tabLabel(t)
-		rt.setTab(method, name)
+		rt.setTab(method, name, m.isTabDirty(t))
 		rt.setActive(i == m.activeTabIdx)
 		objs = append(objs, rt)
 	}
@@ -485,6 +488,9 @@ func (m *MainUI) tabMenuItems() []*fyne.MenuItem {
 		if method != "" {
 			label = method + "  " + name
 		}
+		if m.isTabDirty(t) {
+			label += " *"
+		}
 		mi := fyne.NewMenuItem(label, func() { m.activateTab(i) })
 		mi.Checked = i == m.activeTabIdx
 		items = append(items, mi)
@@ -515,6 +521,30 @@ func (m *MainUI) refreshActiveTabLabel() {
 	if len(m.tabs) > 0 {
 		m.rebuildTabBar()
 	}
+}
+
+// refreshActiveTabDirty re-evaluates just the active tab's dirty marker and
+// updates its widget in place. It is the per-edit hook the request editors call
+// on every change (URL, body, headers, params, auth, …), so the asterisk
+// appears the moment content diverges from disk and clears when it matches
+// again (e.g. an undo back to the saved state). Only the active tab can change
+// dirtiness from an in-editor edit, so this avoids rebuilding the whole strip
+// per keystroke; a tab switch / save rebuilds every marker via rebuildTabBar.
+func (m *MainUI) refreshActiveTabDirty() {
+	if m.loading {
+		return
+	}
+	t := m.activeTab()
+	if t == nil {
+		return
+	}
+	rt := m.tabWidgets[t]
+	if rt == nil {
+		return
+	}
+	m.syncBodyFromEditor() // count an in-progress (debounced) body edit
+	method, name := m.tabLabel(t)
+	rt.setTab(method, name, m.isTabDirty(t))
 }
 
 // tabLabel returns the method + name to show on a tab, resolved from live

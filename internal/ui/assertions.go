@@ -77,6 +77,7 @@ func (m *MainUI) buildAssertionRow(idx int) fyne.CanvasObject {
 	enabled := widget.NewCheck("", func(b bool) {
 		if !m.loading && m.currentRequest != nil && idx < len(m.currentRequest.Assertions) {
 			m.currentRequest.Assertions[idx].Enabled = b
+			m.refreshActiveTabDirty()
 		}
 	})
 	enabled.SetChecked(row.Enabled)
@@ -87,12 +88,14 @@ func (m *MainUI) buildAssertionRow(idx int) fyne.CanvasObject {
 	source.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil && idx < len(m.currentRequest.Assertions) {
 			m.currentRequest.Assertions[idx].Source = s
+			m.refreshActiveTabDirty()
 		}
 	}
 
 	op := widget.NewSelect(assertion.Operators, func(s string) {
 		if !m.loading && m.currentRequest != nil && idx < len(m.currentRequest.Assertions) {
 			m.currentRequest.Assertions[idx].Op = s
+			m.refreshActiveTabDirty()
 		}
 	})
 	if row.Op != "" {
@@ -107,6 +110,7 @@ func (m *MainUI) buildAssertionRow(idx int) fyne.CanvasObject {
 	expected.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil && idx < len(m.currentRequest.Assertions) {
 			m.currentRequest.Assertions[idx].Expected = s
+			m.refreshActiveTabDirty()
 		}
 	}
 

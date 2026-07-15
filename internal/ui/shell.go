@@ -221,6 +221,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 			// The URL is the source of truth for which {name} path params exist,
 			// so re-derive the Path tab whenever it changes.
 			m.rebuildPathParamRows()
+			m.refreshActiveTabDirty()
 		}
 		m.updateURLPreview()
 	}
@@ -272,6 +273,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 			m.currentRequest.Headers = h
 			m.rebuildHeadersRows()
 		}
+		m.refreshActiveTabDirty()
 	})
 	m.BodyType.SetSelected(string(model.BodyNone))
 	// Request body: the same go-fyne-pretty-view widget as the response viewer,
@@ -287,6 +289,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.BodyContent.SetOnChanged(func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Body.Content = s
+			m.refreshActiveTabDirty()
 		}
 	})
 	validateBtn := widget.NewButton("Validate", m.validateBody)
@@ -307,6 +310,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.bodyGraphQLVars.SetOnChanged(func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Body.GraphQLVariables = s
+			m.refreshActiveTabDirty()
 		}
 	})
 	m.bodyGraphQLPanel = container.NewBorder(widget.NewLabel("Variables (JSON):"), nil, nil, nil, m.bodyGraphQLVars)
@@ -869,6 +873,7 @@ func (m *MainUI) saveRequest() {
 	if t := m.activeTab(); t != nil {
 		m.refreshCleanSnapshots(t.collection)
 	}
+	m.rebuildTabBar() // clear the dirty markers now that the collection is on disk
 	status := "Saved: " + m.currentRequest.Name
 	if halfFilledChain > 0 {
 		// Half-filled chain rows are dropped on save (the runner couldn't

@@ -14,15 +14,20 @@ import (
 func TestRequestTabLabelAndActive(t *testing.T) {
 	test.NewApp()
 	rt := newRequestTab(func() {}, func() {})
-	rt.setTab("POST", "Create User")
+	rt.setTab("POST", "Create User", false)
 	if rt.method.Text != "POST" || rt.method.Color != methodColor("POST") {
 		t.Errorf("method chip = %q %v, want POST tinted", rt.method.Text, rt.method.Color)
 	}
 	if rt.name.Text != "Create User" {
 		t.Errorf("name = %q, want Create User", rt.name.Text)
 	}
+	// A dirty tab gets a trailing asterisk on the name.
+	rt.setTab("POST", "Create User", true)
+	if rt.name.Text != "Create User *" {
+		t.Errorf("dirty name = %q, want 'Create User *'", rt.name.Text)
+	}
 	// A blank name renders as "Untitled" (a fresh scratch tab).
-	rt.setTab("GET", "")
+	rt.setTab("GET", "", false)
 	if rt.name.Text != "Untitled" {
 		t.Errorf("blank name = %q, want Untitled", rt.name.Text)
 	}

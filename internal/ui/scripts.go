@@ -37,6 +37,7 @@ func (m *MainUI) buildScriptsTab() fyne.CanvasObject {
 	m.preScriptEditor.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Scripts.PreRequest = s
+			m.refreshActiveTabDirty()
 		}
 	}
 
@@ -49,6 +50,7 @@ func (m *MainUI) buildScriptsTab() fyne.CanvasObject {
 	m.postScriptEditor.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Scripts.PostResponse = s
+			m.refreshActiveTabDirty()
 		}
 	}
 

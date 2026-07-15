@@ -73,6 +73,7 @@ func (m *MainUI) buildPathParamRow(name string) fyne.CanvasObject {
 		}
 		m.upsertPathParam(name, func(p *model.KeyValue) { p.Enabled = b })
 		m.updateURLPreview()
+		m.refreshActiveTabDirty()
 	}
 
 	nameLabel := widget.NewLabel(name)
@@ -91,6 +92,7 @@ func (m *MainUI) buildPathParamRow(name string) fyne.CanvasObject {
 		}
 		m.upsertPathParam(name, func(p *model.KeyValue) { p.Value = s })
 		m.updateURLPreview()
+		m.refreshActiveTabDirty()
 	}
 
 	return container.NewBorder(nil, nil, container.NewHBox(check, nameLabel), nil, valEntry)

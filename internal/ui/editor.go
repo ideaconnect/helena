@@ -308,6 +308,7 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onC
 		if onChange != nil {
 			onChange()
 		}
+		m.refreshActiveTabDirty() // KV edits (params / headers / form) mark the tab dirty
 	}
 	kv := &(*list)[idx]
 	// OnChanged assigned after SetChecked (like the entries below SetText) so a

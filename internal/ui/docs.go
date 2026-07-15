@@ -20,6 +20,7 @@ func (m *MainUI) buildDocsTab() *container.AppTabs {
 	m.docsEditor.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Docs = s
+			m.refreshActiveTabDirty()
 		}
 	}
 

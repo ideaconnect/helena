@@ -97,24 +97,34 @@ func (m *MainUI) refreshCleanSnapshots(dir string) {
 	}
 }
 
-// unsavedTabCount reports how many open tabs hold edits not yet on disk: scratch
-// tabs with content, and tree-backed tabs whose live request diverges from its
-// clean snapshot. It flushes the debounced body editor into the active request
-// first (as saveRequest does), so an in-progress body edit is counted.
+// isTabDirty reports whether one tab holds edits not yet on disk: a scratch tab
+// with content, or a tree-backed tab whose live request diverges from its clean
+// snapshot. A never-loaded tab (empty snapshot) is treated as clean. It does NOT
+// flush the debounced body editor — callers that need in-progress body edits
+// counted (unsavedTabCount, the tab-strip dirty markers) call syncBodyFromEditor
+// once beforehand rather than on every tab.
+func (m *MainUI) isTabDirty(t *openTab) bool {
+	if t == nil {
+		return false
+	}
+	if t.scratch {
+		return scratchHasContent(t.scratchReq)
+	}
+	if t.cleanSnapshot == "" {
+		return false // never loaded → never edited
+	}
+	cur, ok := m.liveRequestState(t)
+	return ok && cur != t.cleanSnapshot
+}
+
+// unsavedTabCount reports how many open tabs hold edits not yet on disk. It
+// flushes the debounced body editor into the active request first (as
+// saveRequest does), so an in-progress body edit is counted.
 func (m *MainUI) unsavedTabCount() int {
 	m.syncBodyFromEditor()
 	n := 0
 	for _, t := range m.tabs {
-		if t.scratch {
-			if scratchHasContent(t.scratchReq) {
-				n++
-			}
-			continue
-		}
-		if t.cleanSnapshot == "" {
-			continue // never loaded → never edited
-		}
-		if cur, ok := m.liveRequestState(t); ok && cur != t.cleanSnapshot {
+		if m.isTabDirty(t) {
 			n++
 		}
 	}

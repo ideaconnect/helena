@@ -89,6 +89,7 @@ func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
 	alias.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil && idx < len(m.currentRequest.Chain) {
 			m.currentRequest.Chain[idx].Alias = s
+			m.refreshActiveTabDirty()
 		}
 	}
 	ref := widget.NewSelectEntry(m.chainRefSuggestions())
@@ -106,6 +107,7 @@ func (m *MainUI) buildChainRow(idx int) fyne.CanvasObject {
 			} else {
 				m.currentRequest.Chain[idx].RequestID = ""
 			}
+			m.refreshActiveTabDirty()
 		}
 	}
 	del := widget.NewButton("×", func() {

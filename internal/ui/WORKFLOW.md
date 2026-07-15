@@ -466,6 +466,12 @@ into a collection.
    Cancel leaves the app running so the user can Save. A `quitting` flag drops a
    second close-click while the dialog is up.
 
+The tab strip surfaces the same dirtiness inline: `rebuildTabBar` stamps each
+tab's marker from `isTabDirty(t)`, and every request-editor write-back calls
+`refreshActiveTabDirty()` so the active tab gains a trailing ` *` the moment its
+content diverges from disk and loses it on Save (`saveRequest` rebuilds the strip
+after `refreshCleanSnapshots`) or an edit back to the saved value.
+
 The baseline is a **value comparison, never an edited-flag** (mirroring
 `saveRequest`'s `#101` URL baseline): `captureCleanSnapshot` records a tab's
 snapshot the first time `activateTab` loads it — *after* the URL fold, so an

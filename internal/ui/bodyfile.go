@@ -24,6 +24,7 @@ func (m *MainUI) buildBodyFilePanel() fyne.CanvasObject {
 	m.bodyFileContentType.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil {
 			m.currentRequest.Body.ContentType = s
+			m.refreshActiveTabDirty()
 		}
 	}
 
