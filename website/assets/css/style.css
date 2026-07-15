@@ -126,6 +126,10 @@ picture { display: block; }
 .btn-primary:hover { background: var(--green); text-decoration: none; box-shadow: 0 12px 30px rgba(34, 197, 94, .4); }
 .btn-ghost { border-color: var(--line); color: var(--text); background: var(--surface); }
 .btn-ghost:hover { border-color: var(--green); text-decoration: none; }
+/* GitHub CTA: a plain "GitHub" text button on desktop; the icon only shows when
+   it collapses to an icon-only button on phones (see the 640px query). */
+.btn-github { display: inline-flex; align-items: center; gap: 8px; }
+.btn-github svg { display: none; width: 18px; height: 18px; }
 
 /* ---- Hero ---- */
 .hero { padding: 76px 0 44px; overflow: hidden; }
@@ -387,6 +391,10 @@ pre code { background: none; padding: 0; }
   /* Collapse the Microsoft Store CTA to icon-only so the top row stays compact. */
   .nav-cta .store span { display: none; }
   .hero { padding: 44px 0 24px; }
+  /* Collapse the hero/404 GitHub CTA to icon-only so the action row fits. */
+  .actions .btn-github { padding: 12px; }
+  .actions .btn-github svg { display: block; }
+  .actions .btn-github span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {
