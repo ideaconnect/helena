@@ -28,7 +28,7 @@ const scriptConsoleMaxLines = 500
 // programmatic SetText calls in loadRequest don't echo back into the
 // model the way every other request widget is wired.
 func (m *MainUI) buildScriptsTab() fyne.CanvasObject {
-	m.preScriptEditor = widget.NewMultiLineEntry()
+	m.preScriptEditor = m.newShortcutMultiLineEntry()
 	m.preScriptEditor.Wrapping = fyne.TextWrapOff
 	m.preScriptEditor.TextStyle = fyne.TextStyle{Monospace: true}
 	m.preScriptEditor.SetPlaceHolder("// Runs before the request goes out.\n" +
@@ -40,7 +40,7 @@ func (m *MainUI) buildScriptsTab() fyne.CanvasObject {
 		}
 	}
 
-	m.postScriptEditor = widget.NewMultiLineEntry()
+	m.postScriptEditor = m.newShortcutMultiLineEntry()
 	m.postScriptEditor.Wrapping = fyne.TextWrapOff
 	m.postScriptEditor.TextStyle = fyne.TextStyle{Monospace: true}
 	m.postScriptEditor.SetPlaceHolder("// Runs after the response is read.\n" +
@@ -56,7 +56,7 @@ func (m *MainUI) buildScriptsTab() fyne.CanvasObject {
 	postTab := container.NewTabItem("Post-response", container.NewVScroll(m.postScriptEditor))
 	editors := container.NewAppTabs(preTab, postTab)
 
-	m.scriptConsole = widget.NewMultiLineEntry()
+	m.scriptConsole = m.newShortcutMultiLineEntry()
 	m.scriptConsole.Wrapping = fyne.TextWrapOff
 	m.scriptConsole.TextStyle = fyne.TextStyle{Monospace: true}
 	m.scriptConsole.SetPlaceHolder("Console output from the last Send appears here.")

@@ -90,7 +90,11 @@ toolbar button, sidebar button, or keyboard shortcut.
 - `ApplyTheme` (exported), `themeName`, `themeFromName`
   ([theme.go](theme.go)).
 - `registerShortcuts` / `showShortcuts` / `shortcutSpec`
-  ([shortcuts.go](shortcuts.go)).
+  ([shortcuts.go](shortcuts.go)); `shortcutEntry`
+  ([shortcutentry.go](shortcutentry.go)) and `PrettyView.SetHostShortcuts`
+  keep the same bindings firing while a text entry or the body/response
+  editor has focus, which a canvas-only registration can't do (see
+  WORKFLOW.md).
 - `buildDocsTab` / `refreshDocsPreview` — Markdown editor + preview subtabs
   ([docs.go](docs.go)).
 

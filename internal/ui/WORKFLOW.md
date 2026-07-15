@@ -615,10 +615,56 @@ called from `SetWindow`.
    (`showShortcuts`).
 4. `showShortcuts` builds the help dialog from the same `m.shortcuts` slice
    so the displayed bindings stay in sync with what was registered.
+5. `m.propagateShortcutsToEditors()` (also in shortcuts.go) pushes the same
+   table into every `*prettyview.PrettyView` the shell owns — see "Shortcuts
+   while an editor has focus" below.
 
 Because `registerShortcuts` short-circuits when `m.win == nil`, calling
 `NewMainUI` followed by `Root()` without `SetWindow` (the unit-test path)
 leaves `m.shortcuts == nil` and the canvas has no bindings.
+
+### Shortcuts while an editor has focus
+
+`Canvas.AddShortcut` bindings (above) are only ever checked by Fyne when the
+*focused* widget does **not** itself implement `fyne.Shortcutable` — checked
+in Fyne's glfw driver before falling back to the canvas. `widget.Entry` and
+`prettyview.PrettyView` both implement it (for their own Copy/SelectAll/Undo
+/Redo/Paste/Cut, and PrettyView's bundled Ctrl+F), so **every** app-wide
+shortcut registered only on the canvas goes silently dead the instant one of
+these widgets has focus — which, in an editor-heavy app, is most of the time
+(this was the root cause of "none of the keyboard shortcuts work").
+
+Two things close the gap, both consulting the exact same `m.shortcuts` table
+so they can never drift out of sync with what `registerShortcuts` wired:
+
+- **`shortcutEntry`** ([shortcutentry.go](shortcutentry.go)) wraps
+  `widget.Entry` and overrides `TypedShortcut` to check
+  `m.shortcutFor(cs *desktop.CustomShortcut)` first, falling back to
+  `Entry.TypedShortcut` for anything unmatched (so native Cut/Copy/Paste/Undo
+  /Redo/SelectAll are untouched). `m.newShortcutEntry()` /
+  `m.newShortcutMultiLineEntry()` are drop-in replacements for
+  `widget.NewEntry()` / `widget.NewMultiLineEntry()`, used at every
+  construction site whose field commonly holds focus during normal use: the
+  URL bar, the sidebar search box, every auth field (`newAuthEntry`, one
+  choke point for all ~20), the header/query KV-row entries (`buildKVRow`),
+  the docs/pre-script/post-script/console editors, the response Headers
+  view, and the BodyFile content-type field. Transient modal-dialog fields
+  (rename, cookie editor, env-var rows, settings numeric fields, import
+  dialog) are intentionally left as plain `widget.Entry` — a bulk-close /
+  bulk-action shortcut firing mid-edit in a small popup is a separate design
+  question, not the reported bug.
+- **`PrettyView.SetHostShortcuts`** (from `go-fyne-pretty-view`) is the same
+  idea for the three `*prettyview.PrettyView` fields (`BodyContent`,
+  `bodyGraphQLVars`, `pv`), which can't be wrapped the same way since
+  `TypedShortcut` lives in the sibling module. `propagateShortcutsToEditors`
+  calls `hostShortcutsMap()` (built once, keyed by
+  `(&desktop.CustomShortcut{...}).ShortcutName()`, matching
+  `SetHostShortcuts`'s documented key convention) and hands it to all three.
+
+`shortcutFor` and `hostShortcutsMap` both live in shortcuts.go, next to
+`registerShortcuts`, and iterate `m.shortcuts` directly — so a shortcut added
+to `registerShortcuts` is automatically reachable from a focused
+`shortcutEntry` or `PrettyView` with no extra wiring.
 
 ## Docs tab: Edit → Preview rendering
 

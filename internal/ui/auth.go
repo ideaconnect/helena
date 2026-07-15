@@ -274,8 +274,8 @@ func (m *MainUI) buildAuthTab() fyne.CanvasObject {
 // newAuthEntry returns a new widget.Entry whose write-back closure honors
 // m.loading (so loadRequest can populate without round-tripping back to
 // the model) and skips writes when there's no current request loaded.
-func (m *MainUI) newAuthEntry(placeholder string, write func(string)) *widget.Entry {
-	e := widget.NewEntry()
+func (m *MainUI) newAuthEntry(placeholder string, write func(string)) *shortcutEntry {
+	e := m.newShortcutEntry()
 	e.SetPlaceHolder(placeholder)
 	e.OnChanged = func(s string) {
 		if m.loading || m.currentRequest == nil {

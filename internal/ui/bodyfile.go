@@ -19,7 +19,7 @@ func (m *MainUI) buildBodyFilePanel() fyne.CanvasObject {
 	chooseBtn := widget.NewButtonWithIcon("Choose file…", themedIcon("folder-open"), m.chooseBodyFile)
 	clearBtn := widget.NewButton("Clear", m.clearBodyFile)
 
-	m.bodyFileContentType = widget.NewEntry()
+	m.bodyFileContentType = m.newShortcutEntry()
 	m.bodyFileContentType.SetPlaceHolder("application/octet-stream")
 	m.bodyFileContentType.OnChanged = func(s string) {
 		if !m.loading && m.currentRequest != nil {

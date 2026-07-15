@@ -12,7 +12,7 @@ import (
 // the user switches to it — cheap enough not to need debouncing, and avoids
 // the half-rendered intermediate states a live preview would show.
 func (m *MainUI) buildDocsTab() *container.AppTabs {
-	m.docsEditor = widget.NewMultiLineEntry()
+	m.docsEditor = m.newShortcutMultiLineEntry()
 	m.docsEditor.Wrapping = fyne.TextWrapOff
 	m.docsEditor.TextStyle = fyne.TextStyle{Monospace: true}
 	m.docsEditor.SetPlaceHolder("Markdown notes for this request — usage, edge cases, links, examples.\n" +

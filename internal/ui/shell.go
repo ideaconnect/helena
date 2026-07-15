@@ -34,7 +34,7 @@ type MainUI struct {
 	Workspace   *widget.Select
 	Environment *widget.Select
 	Method      *methodPicker
-	URL         *widget.Entry
+	URL         *shortcutEntry
 	urlPreview  *widget.Label
 	Save        *ttwidget.Button
 	Send        *widget.Button
@@ -51,7 +51,7 @@ type MainUI struct {
 	sbFolderVars *ttwidget.Button // folder-scoped variables (#81); gated to folder selection
 	// Drag-and-drop reordering of the collections tree (see treedrag.go).
 	treeRows      map[*treeRow]string // live row → bound node id, for drop hit-testing
-	treeSearch    *widget.Entry       // sidebar cross-collection search box (#67)
+	treeSearch    *shortcutEntry      // sidebar cross-collection search box (#67)
 	treeFilter    map[string]bool     // visible node IDs when a search is active; nil = show all
 	dragActive    bool
 	dragSrcID     string
@@ -71,39 +71,39 @@ type MainUI struct {
 	bodyFormPanel       *fyne.Container        // wrapper shown in place of BodyContent for form types
 	bodyFilePanel       *fyne.Container        // file-picker panel shown for BodyFile (#24)
 	bodyFilePathLabel   *widget.Label          // chosen file path (#24)
-	bodyFileContentType *widget.Entry          // BodyFile advertised Content-Type (#24)
+	bodyFileContentType *shortcutEntry         // BodyFile advertised Content-Type (#24)
 	bodyGraphQLVars     *prettyview.PrettyView // GraphQL variables JSON editor (#70)
 	bodyGraphQLPanel    *fyne.Container        // variables panel shown below the query for BodyGraphQL (#70)
-	docsEditor          *widget.Entry
+	docsEditor          *shortcutEntry
 	docsPreview         *widget.RichText
-	preScriptEditor     *widget.Entry
-	postScriptEditor    *widget.Entry
-	scriptConsole       *widget.Entry
+	preScriptEditor     *shortcutEntry
+	postScriptEditor    *shortcutEntry
+	scriptConsole       *shortcutEntry
 	chainRows           *fyne.Container
 	assertionRows       *fyne.Container // declarative assertion rows (#88)
 
 	authType                                                          *widget.Select
-	authBasicUsername, authBasicPassword                              *widget.Entry
-	authDigestUsername, authDigestPassword                            *widget.Entry
+	authBasicUsername, authBasicPassword                              *shortcutEntry
+	authDigestUsername, authDigestPassword                            *shortcutEntry
 	authDigestPanel                                                   *widget.Form
-	authNTLMUsername, authNTLMPassword                                *widget.Entry
-	authNTLMDomain, authNTLMWorkstation                               *widget.Entry
+	authNTLMUsername, authNTLMPassword                                *shortcutEntry
+	authNTLMDomain, authNTLMWorkstation                               *shortcutEntry
 	authNTLMPanel                                                     *widget.Form
-	authWSSEUsername, authWSSEPassword                                *widget.Entry
+	authWSSEUsername, authWSSEPassword                                *shortcutEntry
 	authWSSEPanel                                                     *widget.Form
-	authOAuth1ConsumerKey, authOAuth1ConsumerSecret                   *widget.Entry
-	authOAuth1Token, authOAuth1TokenSecret                            *widget.Entry
+	authOAuth1ConsumerKey, authOAuth1ConsumerSecret                   *shortcutEntry
+	authOAuth1Token, authOAuth1TokenSecret                            *shortcutEntry
 	authOAuth1Panel                                                   *widget.Form
-	authAWSV4AccessKey, authAWSV4SecretKey, authAWSV4Region           *widget.Entry
-	authAWSV4Service, authAWSV4SessionToken                           *widget.Entry
+	authAWSV4AccessKey, authAWSV4SecretKey, authAWSV4Region           *shortcutEntry
+	authAWSV4Service, authAWSV4SessionToken                           *shortcutEntry
 	authAWSV4Panel                                                    *widget.Form
-	authBearerToken                                                   *widget.Entry
-	authAPIKeyName, authAPIKeyValue                                   *widget.Entry
+	authBearerToken                                                   *shortcutEntry
+	authAPIKeyName, authAPIKeyValue                                   *shortcutEntry
 	authAPIKeyPlacement                                               *widget.Select
 	authOAuth2Grant                                                   *widget.Select
-	authOAuth2TokenURL, authOAuth2AuthURL                             *widget.Entry
-	authOAuth2ClientID, authOAuth2ClientSecret, authOAuth2Scope       *widget.Entry
-	authOAuth2RedirectURI, authOAuth2Audience                         *widget.Entry
+	authOAuth2TokenURL, authOAuth2AuthURL                             *shortcutEntry
+	authOAuth2ClientID, authOAuth2ClientSecret, authOAuth2Scope       *shortcutEntry
+	authOAuth2RedirectURI, authOAuth2Audience                         *shortcutEntry
 	authOAuth2UsePKCE                                                 *widget.Check
 	authOAuth2ClearTokens                                             *widget.Button
 	authInheritLabel                                                  *widget.Label
@@ -112,7 +112,7 @@ type MainUI struct {
 	authFormsStack                                                    *fyne.Container
 
 	pv          *prettyview.PrettyView // response body viewer (structured + raw + search)
-	headersText *widget.Entry
+	headersText *shortcutEntry
 	corsBanner  *canvas.Text
 	// errorBanner is a persistent, user-dismissible failure indicator above the
 	// response tabs (#51). Unlike the transient status line it stays until the
@@ -210,7 +210,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	})
 	m.Method.SetSelected(string(model.GET))
 
-	m.URL = widget.NewEntry()
+	m.URL = m.newShortcutEntry()
 	m.URL.SetPlaceHolder("https://{{base_url}}/path")
 	m.URL.OnChanged = func(s string) {
 		if !m.loading && !m.syncing && m.currentRequest != nil {
@@ -339,7 +339,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	saveRespBtn := tipButton("file-export", "Save response to file", m.saveResponseToFile)
 	respHeader := container.NewBorder(nil, nil, nil, saveRespBtn, pvToolbar)
 	respBody := container.NewBorder(respHeader, nil, nil, nil, m.pv)
-	m.headersText = widget.NewMultiLineEntry()
+	m.headersText = m.newShortcutMultiLineEntry()
 	m.headersText.Wrapping = fyne.TextWrapOff
 	m.headersText.SetPlaceHolder("Response headers appear here after you press Send.")
 	m.Response = container.NewAppTabs(
@@ -523,7 +523,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		dropLayer,
 		m.emptyState,
 	)
-	m.treeSearch = widget.NewEntry()
+	m.treeSearch = m.newShortcutEntry()
 	m.treeSearch.SetPlaceHolder("Search requests…")
 	m.treeSearch.OnChanged = m.applyTreeFilter
 	sidebarTop := container.NewVBox(container.NewPadded(actionToolbar), container.NewPadded(m.treeSearch))

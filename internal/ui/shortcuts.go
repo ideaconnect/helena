@@ -55,6 +55,54 @@ func (m *MainUI) registerShortcuts() {
 			m.showShortcuts()
 		}
 	})
+	m.propagateShortcutsToEditors()
+}
+
+// shortcutFor returns the registered action for cs, or nil if none of
+// m.shortcuts matches its key + modifier. Mirrors the same
+// fyne.KeyModifierShortcutDefault|extraMod combination used to register each
+// binding on the canvas in registerShortcuts, so lookups stay in exact sync
+// with what was actually registered.
+func (m *MainUI) shortcutFor(cs *desktop.CustomShortcut) func() {
+	for _, s := range m.shortcuts {
+		if s.keyName == cs.KeyName && fyne.KeyModifierShortcutDefault|s.extraMod == cs.Modifier {
+			return s.do
+		}
+	}
+	return nil
+}
+
+// hostShortcutsMap builds the map PrettyView.SetHostShortcuts expects: every
+// registered app shortcut, keyed by the same ShortcutName() a desktop.CustomShortcut
+// resolves to.
+func (m *MainUI) hostShortcutsMap() map[string]func() {
+	hs := make(map[string]func(), len(m.shortcuts))
+	for _, s := range m.shortcuts {
+		do := s.do
+		cs := &desktop.CustomShortcut{KeyName: s.keyName, Modifier: fyne.KeyModifierShortcutDefault | s.extraMod}
+		hs[cs.ShortcutName()] = do
+	}
+	return hs
+}
+
+// propagateShortcutsToEditors pushes the just-registered app shortcuts into
+// every PrettyView the shell owns. Fyne routes a shortcut to the focused
+// widget's own TypedShortcut instead of the canvas's Canvas.AddShortcut
+// handlers whenever the focused widget implements fyne.Shortcutable — which
+// PrettyView does — so without this, Ctrl+Enter/S/etc. go silently dead the
+// moment the body or response editor has focus. shortcutEntry (see
+// shortcutentry.go) closes the same gap for the plain widget.Entry fields.
+func (m *MainUI) propagateShortcutsToEditors() {
+	hs := m.hostShortcutsMap()
+	if m.BodyContent != nil {
+		m.BodyContent.SetHostShortcuts(hs)
+	}
+	if m.bodyGraphQLVars != nil {
+		m.bodyGraphQLVars.SetHostShortcuts(hs)
+	}
+	if m.pv != nil {
+		m.pv.SetHostShortcuts(hs)
+	}
 }
 
 // shortcutModifierName returns the platform-appropriate label for the default

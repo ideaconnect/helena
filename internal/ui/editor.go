@@ -294,8 +294,8 @@ func (m *MainUI) syncURLFieldFromParams() {
 type kvRow struct {
 	obj   fyne.CanvasObject
 	check *widget.Check
-	key   *widget.Entry
-	val   *widget.Entry
+	key   *shortcutEntry
+	val   *shortcutEntry
 }
 
 // buildKVRow renders one editable row of a KeyValue list. The row's widgets
@@ -320,7 +320,7 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onC
 		}
 		fire()
 	}
-	keyEntry := widget.NewEntry()
+	keyEntry := m.newShortcutEntry()
 	keyEntry.SetText(kv.Key)
 	keyEntry.OnChanged = func(s string) {
 		if idx < len(*list) {
@@ -328,7 +328,7 @@ func (m *MainUI) buildKVRow(list *[]model.KeyValue, idx int, refresh func(), onC
 		}
 		fire()
 	}
-	valEntry := widget.NewEntry()
+	valEntry := m.newShortcutEntry()
 	valEntry.SetText(kv.Value)
 	valEntry.OnChanged = func(s string) {
 		if idx < len(*list) {

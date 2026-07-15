@@ -49,7 +49,8 @@
 | [treerow.go](treerow.go) | `treeRow` — the per-row widget for the Collections tree (BaseWidget + SimpleRenderer): a brand-colored bold method chip (requests) + an ellipsis-truncating name (branches: just the label). It implements `fyne.Draggable` (drag source for reordering — see treedrag.go) and `desktop.Cursorable` (a grab/pointer cursor while a drag is in flight, via a `dragging func() bool` probe) but NOT Tappable, so the tree node still owns selection (full-width tap, distinct from a drag) and paints the full-width hover + selection backgrounds. Node actions live on the sidebar toolbar (shell.go). `setRequest` / `setBranch` update the widgets + captured node id. Layout is a small custom `treeRowLayout`: for a request it pulls the method chip LEFT into the disclosure-arrow column (by `iconSize + pad`, the gap the tree leaves between the arrow and the content origin) so the chip lines up vertically with same-depth folders' arrows, and flows the name after it; for a branch the chip is hidden and the name renders at the content origin (unchanged). The chip overhangs the content container's left edge — harmless, since the node's full-width background sits under it and the scroll clip is far to the left. |
 | [treedrag.go](treedrag.go) | Drag-and-drop reordering of the tree. `dragTreeNode` / `dropTreeNode` are the row callbacks; `computeDrop` resolves a `dropPlan` from the pointer position (`rowAt` hit-tests the registered rows by absolute geometry), `planNodeDrop` / `planCollectionDrop` decide into-container vs sibling-before/after vs collection reorder, `applyDrop` calls `Session.MoveNode` / `MoveCollection` then refreshes tree + tabs, and `showDropIndicator` draws the insert line / into-outline overlays. Plus node-id string helpers (`isCollectionID`, `collectionIndexOf`, `nodeKind`, `splitNode`). |
 | [tabstrip.go](tabstrip.go) | `requestTab` — the per-tab custom widget (BaseWidget + `Tapped` + `Draggable` + a custom `requestTabRenderer`): a natural-width colored method chip, the name, and a `circle-xmark` close button, all vertically centred (with left padding matching the close icon's right inset), over a rounded-top background. Active tabs fill with `ColorNameBackground` so they connect to the editor content and cover the under-strip separator line (Bruno-style); inactive tabs are transparent over the strip band. The band + line + leading/top spacing live in the strip `Stack` in [shell.go](shell.go) (`tabStripBg` + a bottom `widget.Separator`). |
-| [shortcuts.go](shortcuts.go) | `shortcutSpec`, `registerShortcuts`, `showShortcuts`, `shortcutModifierName`, and `shortcutRowLayout`. |
+| [shortcuts.go](shortcuts.go) | `shortcutSpec`, `registerShortcuts`, `showShortcuts`, `shortcutModifierName`, `shortcutRowLayout`, and the focused-widget dispatch helpers `shortcutFor` / `hostShortcutsMap` / `propagateShortcutsToEditors` (see [shortcutentry.go](shortcutentry.go) and WORKFLOW.md's "Shortcuts while an editor has focus"). |
+| [shortcutentry.go](shortcutentry.go) | `shortcutEntry` — a `widget.Entry` wrapper whose `TypedShortcut` checks `shortcutFor` before falling back to `Entry`'s own Cut/Copy/Paste/Undo/Redo/SelectAll, so app shortcuts still fire while the entry has focus. `m.newShortcutEntry()` / `m.newShortcutMultiLineEntry()` are drop-in replacements for `widget.NewEntry()` / `widget.NewMultiLineEntry()`. |
 | [shell_test.go](shell_test.go) | `NewMainUI` construction + headless layout smoke test. |
 | [query_test.go](query_test.go) | Query↔URL helpers (split/parse/build/encode round-trips, `{{var}}` preservation, disabled-row preservation) and the live two-way sync + load-time fold. |
 | [response_test.go](response_test.go) | Response viewer: `applyResponse` feeds the PrettyView (JSON auto-detects to structured, plain text / malformed / binary / error → raw, nil clears), Body tab selected, status set; `variantFor` theme mapping. |
@@ -85,14 +86,14 @@ without infinite write-back loops.
 | `Workspace` | `*widget.Select` | Toolbar workspace dropdown. |
 | `Environment` | `*widget.Select` | Toolbar environment dropdown (with `noEnv` first option). |
 | `Method` | `*methodPicker` | HTTP method picker on the address bar (custom widget — brand-colored bold text + pop-up chooser; see [method.go](method.go)). |
-| `URL` | `*widget.Entry` | URL entry; Enter triggers `send`. |
+| `URL` | `*shortcutEntry` | URL entry; Enter triggers `send`. |
 | `urlPreview` | `*widget.Label` | Italic label under the URL showing the resolved form (or unresolved-vars warning). Hidden when nothing to show. |
 | `Save` | `*ttwidget.Button` | Icon-only (`floppy-disk`) with a hover tooltip; disabled until a request is loaded. Export sits beside it as a local `file-export` `tipButton`. |
 | `Send` | `*widget.Button` | Icon-only (`location-arrow`) high-importance by default / text "Abort" while a Send is in flight (warning importance). Tap routes through `sendOrAbort` which dispatches based on `sendCancel`. |
 | `Tree` | `*widget.Tree` | Collections sidebar tree. Rows are clean display widgets; the tree node paints full-width hover/selection. |
 | `sbAddReq` / `sbAddFolder` / `sbRename` / `sbClone` / `sbDelete` | `*ttwidget.Button` | Sidebar node-action toolbar (icon-only buttons with hover tooltips — `fyne-tooltip`, built via the `tipButton` helper) operating on the selected node. `refreshSidebarActions` enables/disables them by selection (clone for a folder/request; rename/delete need any selection; add request/folder fall back to the active collection). The window content is wrapped in `fynetooltip.AddWindowToolTipLayer` in `cmd/helena/main.go` for the tooltips to render. |
 | `treeRows` | `map[*treeRow]string` | Live row → bound node id, rebuilt on each tree bind; used by `rowAt` to hit-test the drop target during a drag. |
-| `treeSearch` | `*widget.Entry` | Sidebar cross-collection search box (#67), above the tree. Its `OnChanged` calls `applyTreeFilter`. |
+| `treeSearch` | `*shortcutEntry` | Sidebar cross-collection search box (#67), above the tree. Its `OnChanged` calls `applyTreeFilter`. |
 | `treeFilter` | `map[string]bool` | Visible node IDs when a search is active (from `Tree.Search`); nil means show everything. The tree's `childUIDs` callback intersects `ChildIDs` with this set. |
 | `dragActive` / `dragSrcID` / `dragLastAbs` | `bool` / `string` / `fyne.Position` | In-flight tree drag state (the dragged node and last pointer position), consumed on `DragEnd`. |
 | `dropIndicator` / `dropInto` | `*canvas.Rectangle` | Drag overlays in a `WithoutLayout` layer over the tree: a thin primary line for insert-between, an outlined box for drop-into-container. Hidden at rest. |
@@ -110,12 +111,12 @@ without infinite write-back loops.
 | `bodyGraphQLVars` / `bodyGraphQLPanel` | `*prettyview.PrettyView` / `*fyne.Container` | The **graphql** variables editor (#70): a second JSON editor shown beneath the query (which reuses `BodyContent`) only for `BodyGraphQL`. Debounced like `BodyContent`, so `syncBodyFromEditor` also pulls its `Source()` into `Body.GraphQLVariables`. |
 | `BodyContent` | `*prettyview.PrettyView` | Editable **raw** request-body widget (json/xml/text) — the same [go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view) widget as `pv`, constructed `WithEditable()` + `WithLineNumbers()` so the user types/pastes with live syntax highlighting and a caret. Fed via `SetData(content, formatForBodyType(type))` in `loadRequest`; `Reparse`d when `BodyType` changes; reformatted in place by `formatBody`. Its `OnChanged` write-back is **debounced**, so `syncBodyFromEditor` pulls `Source()` synchronously at Save/Send/Validate/Format. **Hidden** (via `refreshBodyEditorVisibility`) for form-urlencoded/multipart, which use `bodyFormRows` instead. Since go-fyne-pretty-view v2.3 the editor is a `fyne.Tabbable`, so **Tab inserts a literal tab** at the caret rather than moving focus (no keyboard focus-escape; the read-only `pv` viewer is unaffected). Repainted on theme change via `SetTheme(variantFor(...))`. |
 | `bodyFormRows` / `bodyFormPanel` | `*fyne.Container` | Structured `Body.Form` KV editor (key/value/enabled rows reusing `buildKVRow`) shown in place of `BodyContent` for **form-urlencoded / multipart** bodies. `rebuildBodyFormRows` rebuilds from `currentRequest.Body.Form`; `addBodyFormField` appends a row; `refreshBodyEditorVisibility(type)` swaps among the text editor, form panel, and file panel (all live in a `container.Stack`). |
-| `bodyFilePanel` / `bodyFilePathLabel` / `bodyFileContentType` | `*fyne.Container` / `*widget.Label` / `*widget.Entry` | The **file** body editor (#24, see [bodyfile.go](bodyfile.go)): chosen-file path + Choose/Clear buttons + a Content-Type entry, shown for `BodyFile`. The entry writes `currentRequest.Body.ContentType` (guarded by `m.loading`); the picker sets `Body.FilePath`. |
-| `docsEditor` | `*widget.Entry` | Markdown source editor in the Docs tab. |
+| `bodyFilePanel` / `bodyFilePathLabel` / `bodyFileContentType` | `*fyne.Container` / `*widget.Label` / `*shortcutEntry` | The **file** body editor (#24, see [bodyfile.go](bodyfile.go)): chosen-file path + Choose/Clear buttons + a Content-Type entry, shown for `BodyFile`. The entry writes `currentRequest.Body.ContentType` (guarded by `m.loading`); the picker sets `Body.FilePath`. |
+| `docsEditor` | `*shortcutEntry` | Markdown source editor in the Docs tab. |
 | `docsPreview` | `*widget.RichText` | Rendered Markdown shown in the Docs > Preview subtab. |
-| `preScriptEditor` | `*widget.Entry` | Monospace editor for `request.Scripts.PreRequest` source. |
-| `postScriptEditor` | `*widget.Entry` | Monospace editor for `request.Scripts.PostResponse` source. |
-| `scriptConsole` | `*widget.Entry` | Read-only console panel below the script editors. Filled by `setScriptConsole` with the joined console lines from the last Send's chain steps + leaf pre+post results. Capped at `scriptConsoleMaxLines`. |
+| `preScriptEditor` | `*shortcutEntry` | Monospace editor for `request.Scripts.PreRequest` source. |
+| `postScriptEditor` | `*shortcutEntry` | Monospace editor for `request.Scripts.PostResponse` source. |
+| `scriptConsole` | `*shortcutEntry` | Read-only console panel below the script editors. Filled by `setScriptConsole` with the joined console lines from the last Send's chain steps + leaf pre+post results. Capped at `scriptConsoleMaxLines`. |
 | `chainRows` | `*fyne.Container` | VBox of (Alias, Request path) rows for the Chain tab. Rebuilt by `rebuildChainRows` after add/delete or loadRequest. |
 | `authType` | `*widget.Select` | Auth Type dropdown (None / Inherit / Basic / Bearer / API Key / OAuth 2.0). Drives `refreshAuthVisibility`. |
 | `authBasic*` / `authBearer*` / `authAPIKey*` / `authOAuth2*` | various entries / selects / check | Per-type form widgets. Each `OnChanged` calls the matching `ensure*` allocator if the sub-struct is nil. |
@@ -124,7 +125,7 @@ without infinite write-back loops.
 | `authFormsStack` | `*fyne.Container` (Stack) | Stack container holding all six panels — `refreshAuthVisibility` hides every panel then shows the active one. |
 | `authOAuth2ClearTokens` | `*widget.Button` | "Clear cached tokens" button on the OAuth2 panel — calls `Session.TokenCache().ClearNamespace(ActiveCollectionDir())` so a rotated client secret forces the next Send to refetch, scoped to the active collection (other collections' tokens survive). |
 | `pv` | `*prettyview.PrettyView` | The response **Body** viewer ([go-fyne-pretty-view](https://github.com/ideaconnect/go-fyne-pretty-view)): one virtualized widget rendering JSON/XML/HTML/raw with auto-detect, fold, syntax highlighting, search and soft-wrap. Fed via `pv.SetData` in `applyResponse`; subsumes the former Structured tree + Raw text viewer. Repainted on theme change via `pv.SetTheme(variantFor(...))`. |
-| `headersText` | `*widget.Entry` | Response headers view. |
+| `headersText` | `*shortcutEntry` | Response headers view. |
 | `corsBanner` | `*canvas.Text` | Orange banner above the response panel surfacing CORS warnings. |
 | `currentRequest` | `*model.Request` | Pointer to the request bound to the editor widgets — the active tab's request (a live tree pointer, or a scratch tab's owned value). Direct writes happen via `OnChanged` callbacks. |
 | `currentRequestID` | `string` | Tree **node ID** for `currentRequest` (`""` for a scratch tab). Re-derived on every tab activation / `reconcileTabs`; consumed as a path by `EffectiveAuth`, `refreshAuthInheritLabel`, and the delete guard, so it must stay a node ID, never a `Request.ID`. |
@@ -193,6 +194,24 @@ either swallowing the other.
 A two-column layout used by the shortcuts help dialog: a 110-px-minimum key
 column on the left and a flexible action label on the right. Simpler than a
 grid because only one column has a known minimum width.
+
+### `shortcutEntry` (shortcutentry.go)
+
+```go
+type shortcutEntry struct {
+    widget.Entry
+    m *MainUI
+}
+```
+
+A `widget.Entry` whose `TypedShortcut` checks `m.shortcutFor(cs)` before
+falling back to `Entry.TypedShortcut`. Exists because Fyne routes a detected
+shortcut to the *focused* widget's own `TypedShortcut` instead of the
+canvas's `Canvas.AddShortcut` handlers whenever the focused widget implements
+`fyne.Shortcutable` (which `widget.Entry` does, for its own Cut/Copy/Paste
+/Undo/Redo/SelectAll) — so a canvas-only registration goes dead while any
+entry has focus. See WORKFLOW.md's "Shortcuts while an editor has focus" for
+the full mechanism and which fields use it.
 
 ## Startup, in brief
 
