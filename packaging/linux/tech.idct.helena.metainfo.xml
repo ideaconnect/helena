@@ -37,6 +37,17 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.5.3" date="2026-07-15" type="stable">
+      <description>
+        <p>
+          Bug-fix release. Keyboard shortcuts (Send, Save, Open, Import, New
+          request/collection, and more) now work while a text field or editor
+          has focus instead of going silently dead, and a dependency bump
+          closes the same crypto/tls toolchain CVE fixed for Helena itself
+          in 0.5.2.
+        </p>
+      </description>
+    </release>
     <release version="0.5.2" date="2026-07-15" type="stable">
       <description>
         <p>

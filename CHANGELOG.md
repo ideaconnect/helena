@@ -19,6 +19,26 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-07-15
+
+### Fixed
+- **Keyboard shortcuts now work while a text field or editor has focus.** Every
+  app shortcut (Send, Save, Open, Import, New request/collection, Duplicate,
+  Undo delete, Edit environments, Settings) was registered only against the
+  window canvas; Fyne only dispatches a canvas-level shortcut when the
+  focused widget doesn't itself handle shortcuts — and the URL bar, every
+  auth field, the body/response editors, and the other text fields all do.
+  In practice a shortcut went silently dead the moment any of them had
+  focus, which is most of a normal session. Shortcuts now also reach the
+  app's action table from inside a focused entry or editor.
+
+### Security
+- **`go-fyne-pretty-view` bumped to v2.4.1-alpha**, closing the same
+  [GO-2026-5856](https://pkg.go.dev/vuln/GO-2026-5856) `crypto/tls` toolchain
+  vulnerability in that dependency's own pinned build toolchain (already
+  fixed for Helena's own toolchain in 0.5.2). The bump also carries the
+  `PrettyView.SetHostShortcuts` API the fix above depends on.
+
 ## [0.5.2] - 2026-07-15
 
 ### Added
