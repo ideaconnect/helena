@@ -37,6 +37,17 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.6.0" date="2026-07-15" type="stable">
+      <description>
+        <p>
+          Adds a Path tab that fills the {name} placeholders in a request URL's
+          path (for example {{base_url}}/users/{id}) from a table, with a live
+          resolved-URL preview, so you no longer hand-edit the raw URL. Open
+          Collection type:path parameters now fill the path instead of being
+          sent in the query string.
+        </p>
+      </description>
+    </release>
     <release version="0.5.3" date="2026-07-15" type="stable">
       <description>
         <p>

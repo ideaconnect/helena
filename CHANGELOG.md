@@ -19,6 +19,27 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-15
+
+### Added
+- **Path parameters.** A new **Path** tab fills the single-brace `{name}`
+  placeholders in a request URL's path (e.g. `{{base_url}}/users/{id}`). The
+  tab lists one row per placeholder, derived live from the URL, so you set a
+  value instead of hand-editing the raw URL; the resolved preview under the URL
+  shows the real target and flags any placeholder still unfilled. Path values
+  may themselves reference `{{variables}}` and ask-at-send `{{?prompts}}`, and
+  the OpenAPI importer pre-fills them from each `in: path` parameter's schema
+  default and description. (This is distinct from `{{name}}` variables — double
+  braces resolve from environments/collections, single braces are per-request
+  path values.)
+
+### Fixed
+- **Open Collection `type: path` parameters now fill the URL path instead of
+  the query string.** A path parameter authored by Bruno (or hand-written) was
+  loaded as an ordinary query param and appended to the query string on send;
+  it is now routed to the Path tab and substituted into its `{name}`
+  placeholder as intended.
+
 ## [0.5.3] - 2026-07-15
 
 ### Fixed
