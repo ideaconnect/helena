@@ -37,6 +37,15 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.7.0" date="2026-07-15" type="stable">
+      <description>
+        <p>
+          Request tabs now show a * marker while they hold unsaved edits, cleared
+          on Save. Ctrl/Cmd+Shift+Z redoes in text fields (alongside Ctrl+Y), and
+          the keyboard-shortcuts help now lists the undo/redo editing shortcuts.
+        </p>
+      </description>
+    </release>
     <release version="0.6.0" date="2026-07-15" type="stable">
       <description>
         <p>

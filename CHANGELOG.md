@@ -19,6 +19,17 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-15
+
+### Added
+- **Unsaved-edit markers on request tabs.** An open request tab shows a trailing
+  `*` while its content differs from what's on disk, and clears it on Save (or an
+  edit back to the saved value) — the same per-tab dirtiness the quit guard uses.
+- **Alternate redo chord.** Ctrl/Cmd+Shift+Z now redoes in any text field (in
+  addition to Ctrl+Y). Undo (Ctrl+Z) and redo already worked in the fields and
+  the body/response editor; the F1 keyboard-shortcuts dialog and the user guide
+  now document these editing shortcuts.
+
 ## [0.6.0] - 2026-07-15
 
 ### Added
