@@ -127,6 +127,15 @@ func (m *MainUI) showShortcuts() {
 		rows = append(rows, shortcutRow(combo, s.action))
 	}
 	rows = append(rows, shortcutRow("F1", "Show this list"))
+	// Text-editing shortcuts are handled by the focused field / editor itself
+	// (Fyne's driver + widget.Entry / the pretty-view editor), not the app table,
+	// so list them in their own group for discoverability.
+	rows = append(rows,
+		widget.NewSeparator(),
+		widget.NewLabelWithStyle("In a text field or the editor", fyne.TextAlignLeading, fyne.TextStyle{Italic: true}),
+		shortcutRow(mod+"+Z", "Undo"),
+		shortcutRow(mod+"+Y", "Redo (or "+mod+"+Shift+Z)"),
+	)
 	d := dialog.NewCustom("Keyboard shortcuts", "Close",
 		container.NewVBox(rows...), m.win)
 	d.Resize(fyne.NewSize(420, 360))

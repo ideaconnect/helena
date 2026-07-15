@@ -207,3 +207,7 @@ to attach.
 Press **F1** (or **?** → Keyboard shortcuts) for the full list. Common ones:
 **Mod+Enter** send · **Mod+S** save · **Mod+Z** undo last delete · **Mod+E**
 environments · **Mod+,** settings.
+
+While a text field (URL, params, headers, auth) or the body/response editor has
+focus, the standard editing shortcuts apply: **Mod+Z** undo · **Mod+Y** (or
+**Mod+Shift+Z**) redo · plus cut/copy/paste/select-all.

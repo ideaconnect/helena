@@ -40,12 +40,32 @@ func (m *MainUI) newShortcutMultiLineEntry() *shortcutEntry {
 // TypedShortcut checks the app-wide shortcut table first; anything it doesn't
 // recognize (Cut/Copy/Paste/Undo/Redo/SelectAll, or a shortcut fired before
 // SetWindow has registered m.shortcuts) falls through to Entry's own handling.
+//
+// Undo/Redo already reach Entry: Fyne's driver maps Ctrl+Z / Ctrl+Y to the
+// standard fyne.ShortcutUndo / fyne.ShortcutRedo (not a CustomShortcut), so
+// those bypass the app-table check below and land on Entry.TypedShortcut. The
+// one gap is the Ctrl/Cmd+Shift+Z redo chord (common on Linux/macOS), which the
+// driver reports as a CustomShortcut and Fyne otherwise ignores — map it to the
+// Entry's own redo so both redo chords work.
 func (e *shortcutEntry) TypedShortcut(s fyne.Shortcut) {
 	if cs, ok := s.(*desktop.CustomShortcut); ok {
+		if isRedoChord(cs) {
+			e.Entry.TypedShortcut(&fyne.ShortcutRedo{})
+			return
+		}
 		if do := e.m.shortcutFor(cs); do != nil {
 			do()
 			return
 		}
 	}
 	e.Entry.TypedShortcut(s)
+}
+
+// isRedoChord reports whether cs is Ctrl/Cmd+Shift+Z — the alternate redo chord
+// Fyne's driver leaves as a CustomShortcut (it only wires Ctrl+Y to
+// fyne.ShortcutRedo). The modifier is built the same way registerShortcuts /
+// shortcutFor build theirs, so it matches on every platform.
+func isRedoChord(cs *desktop.CustomShortcut) bool {
+	return cs.KeyName == fyne.KeyZ &&
+		cs.Modifier == fyne.KeyModifierShortcutDefault|fyne.KeyModifierShift
 }
