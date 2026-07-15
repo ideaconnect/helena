@@ -64,6 +64,7 @@ func TestAuthCloneKeepsNilSubStructsNil(t *testing.T) {
 func TestRequestCloneDetachesSlicesAndAuth(t *testing.T) {
 	orig := Request{
 		Params:     []KeyValue{{Key: "p", Value: "1"}},
+		PathParams: []KeyValue{{Key: "id", Value: "7"}},
 		Headers:    []KeyValue{{Key: "h", Value: "v"}},
 		Body:       Body{Form: []KeyValue{{Key: "f", Value: "x"}}},
 		Chain:      []ChainStep{{Alias: "a", Request: "Auth/Login"}},
@@ -75,15 +76,17 @@ func TestRequestCloneDetachesSlicesAndAuth(t *testing.T) {
 
 	// In-place edits don't bleed.
 	orig.Params[0].Value = "M"
+	orig.PathParams[0].Value = "M"
 	orig.Headers[0].Value = "M"
 	orig.Body.Form[0].Value = "M"
 	orig.Chain[0].Request = "M"
 	orig.Assertions[0].Expected = "M"
 	orig.Variables[0].Value = "M"
 	orig.Auth.Basic.Password = "M"
-	if c.Params[0].Value != "1" || c.Headers[0].Value != "v" || c.Body.Form[0].Value != "x" ||
-		c.Chain[0].Request != "Auth/Login" || c.Assertions[0].Expected != "200" ||
-		c.Variables[0].Value != "1" || c.Auth.Basic.Password != "secret" {
+	if c.Params[0].Value != "1" || c.PathParams[0].Value != "7" || c.Headers[0].Value != "v" ||
+		c.Body.Form[0].Value != "x" || c.Chain[0].Request != "Auth/Login" ||
+		c.Assertions[0].Expected != "200" || c.Variables[0].Value != "1" ||
+		c.Auth.Basic.Password != "secret" {
 		t.Errorf("Clone shares state with the original: %+v", c)
 	}
 

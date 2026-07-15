@@ -790,6 +790,7 @@ func findRequestInContainer(folders []model.Folder, requests []model.Request, pa
 // signature already.
 func cloneRequestForChain(r model.Request) model.Request {
 	r.Params = append([]model.KeyValue(nil), r.Params...)
+	r.PathParams = append([]model.KeyValue(nil), r.PathParams...)
 	r.Headers = append([]model.KeyValue(nil), r.Headers...)
 	r.Body.Form = append([]model.KeyValue(nil), r.Body.Form...)
 	r.Chain = append([]model.ChainStep(nil), r.Chain...)

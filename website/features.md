@@ -11,8 +11,11 @@ description: Helena's features - auth, scripting, real-time, chaining, the runne
 ## Request builder
 
 Method, URL, query params, headers, and a body that can be **JSON, XML, text,
-GraphQL, form-urlencoded, multipart, or a raw file**. JSON and XML get Validate
-and Format buttons, and Send doubles as Abort while a request is in flight. The
+GraphQL, form-urlencoded, multipart, or a raw file**. A **Path** tab fills the
+`{name}` placeholders in your URL's path (e.g. `/bag/{bagId}`) - no hand-editing
+the raw URL - and the resolved preview shows the real target. JSON and XML get
+Validate and Format buttons, and Send doubles as Abort while a request is in
+flight. The
 response viewer shows raw, pretty JSON, XML, and HTML (auto-detected), plus
 headers, with a status line like `200 OK · 1.2 KB · 87 ms`, a **Save response
 to file** button that writes the full untruncated bytes, and a CORS advisory

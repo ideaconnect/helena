@@ -8,7 +8,7 @@
 | [from.go](from.go) | `From` dispatcher and the one-byte `looksLikeXML` sniffer. |
 | [curl.go](curl.go) | `FromCurl` — parses a `curl` command line into a single `model.Request`; `tokenizeShell` (quote/escape/continuation-aware tokenizer), `splitFlag`, `bodyFromData` (Content-Type → body type, with JSON/form sniffing), `parseFormData`, `appendQuery`, `curlName`, and the `curlValueShorts`/`curlValueFlags` skip tables. |
 | [curl_test.go](curl_test.go) | `FromCurl` + `tokenizeShell` tests: method/URL/headers/data variants, multipart, basic auth, `-G`, quoting, line continuations, noise-flag skipping, and error paths. |
-| [openapi.go](openapi.go) | OpenAPI 3 / Swagger 2 parsing: `FromOpenAPI`, YAML→JSON normalization, OAS3-to-collection conversion. |
+| [openapi.go](openapi.go) | OpenAPI 3 / Swagger 2 parsing: `FromOpenAPI`, YAML→JSON normalization, OAS3-to-collection conversion. Parameters route by `in`: `query`→`Params`, `header`→`Headers`, `path`→`PathParams` (kept enabled; the `{name}` token stays in the URL so the Path tab fills it). |
 | [openapi_test.go](openapi_test.go) | OpenAPI tests with embedded `oas3Sample` / `swagger2Sample` fixtures (also reused by url_test.go and wsdl_test.go). |
 | [postman.go](postman.go) | `FromPostman` + the `looksLikePostman` sniffer; the `pm*` decode structs (incl. `pmRequest`/`pmURL` `UnmarshalJSON` accepting string-or-object `request`/URLs) and the body/auth mappers. |
 | [postman_test.go](postman_test.go) | Postman tests: folder/request tree, header disabled-flag, query params, raw/urlencoded/formdata/graphql bodies, bearer/basic/apikey/noauth, URL reconstruction, detection, and `From` routing. |

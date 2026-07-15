@@ -317,7 +317,7 @@ func TestGenerateScreenshots(t *testing.T) {
 		m, w, sess := shotUI(t, dir)
 		sess.SetEnvOverlay("PASSWORD", "demo-password")
 		openByID(t, m, sess, dir, "place-order")
-		m.Request.SelectIndex(6) // Chain
+		m.Request.SelectIndex(7) // Chain (Body,Auth,Headers,Query,Path,Vars,Scripts,Chain)
 		sendChainSync(t, m, sess)
 		m.Response.SelectIndex(0) // Body
 		capture(t, w, outDir, "shot-chain.png")

@@ -23,6 +23,27 @@ func TestToCurlSimpleGET(t *testing.T) {
 	}
 }
 
+// TestToCurlFillsPathParams verifies the exporter (which shares httpclient.Build
+// with the send path) substitutes {name} path parameters into the rendered URL,
+// so an exported curl targets the real path — not a literal {bagId} placeholder.
+func TestToCurlFillsPathParams(t *testing.T) {
+	got, err := ToCurl(
+		model.Request{
+			Method:     model.GET,
+			URL:        "{{base_url}}/bag/{bagId}",
+			PathParams: []model.KeyValue{{Enabled: true, Key: "bagId", Value: "42"}},
+		},
+		vars.New(map[string]string{"base_url": "https://api.example.com"}),
+		model.Settings{},
+	)
+	if err != nil {
+		t.Fatalf("ToCurl: %v", err)
+	}
+	if !strings.Contains(got, "https://api.example.com/bag/42") || strings.Contains(got, "bagId") {
+		t.Errorf("curl did not substitute the path param:\n%s", got)
+	}
+}
+
 // TestToCurlEmitsHostHeader verifies a custom Host header (which Go keeps on
 // req.Host, out of req.Header) is still rendered, preserving vhost fidelity.
 func TestToCurlEmitsHostHeader(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 
 	"github.com/idct/helena/internal/auth"
 	"github.com/idct/helena/internal/model"
+	"github.com/idct/helena/internal/pathparam"
 	"github.com/idct/helena/internal/sse"
 	"github.com/idct/helena/internal/vars"
 )
@@ -214,6 +215,24 @@ func Build(ctx context.Context, r model.Request, res *vars.Resolver, oauth2 auth
 	}
 
 	rawURL := resolve(r.URL)
+	// Fill single-brace {name} path parameters after {{variable}} resolution, so
+	// a value may itself reference {{vars}}/{{?prompts}} (reported via resolve).
+	// An unfilled or empty token is left literal — it reaches the wire as {name}
+	// and is flagged in the editor's preview, never collapsed to an empty segment.
+	if len(r.PathParams) > 0 {
+		rawURL = pathparam.Apply(rawURL, func(name string) (string, bool) {
+			for _, p := range r.PathParams {
+				if !p.Enabled || p.Key != name {
+					continue
+				}
+				if v := resolve(p.Value); v != "" {
+					return v, true
+				}
+				return "", false
+			}
+			return "", false
+		})
+	}
 	body, contentType, err := buildBody(r, resolve)
 	if err != nil {
 		return nil, nil, err

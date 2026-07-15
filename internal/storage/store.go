@@ -326,36 +326,26 @@ func mergeKVExtras(next, prev []ocKV) []ocKV {
 	return next
 }
 
-// mergeParamExtras is the ocParam analogue of mergeKVExtras. Kept
-// separate because ocKV and ocParam are distinct types (ocParam
-// carries the `type: query` discriminator) even though the merge
-// logic is identical.
+// mergeParamExtras is the ocParam analogue of mergeKVExtras: it pairs new and
+// prev param rows by name and copies the prior row's Extra catch-all into the
+// matching new row. The `type` discriminator is NOT restored here — the model
+// now carries it (query params live in Request.Params, path params in
+// Request.PathParams), so requestToFile already emits the correct `type: query`
+// / `type: path` and a prior value would only fight a legitimate reclassification
+// (e.g. a param the user moved from the path into the query string).
 func mergeParamExtras(next, prev []ocParam) []ocParam {
 	if len(prev) == 0 || len(next) == 0 {
 		return next
 	}
-	type prevParam struct {
-		extra map[string]yaml.Node
-		typ   string
-	}
-	byName := make(map[string]prevParam, len(prev))
+	byName := make(map[string]map[string]yaml.Node, len(prev))
 	for _, p := range prev {
-		byName[p.Name] = prevParam{extra: p.Extra, typ: p.Type}
+		if len(p.Extra) > 0 {
+			byName[p.Name] = p.Extra
+		}
 	}
 	for i := range next {
-		p, ok := byName[next[i].Name]
-		if !ok {
-			continue
-		}
-		if len(p.extra) > 0 {
-			next[i].Extra = p.extra
-		}
-		// The model has no per-param type, so the writer always emits
-		// "query". Restore a non-query discriminator (e.g. "path") the prior
-		// file carried, so a Bruno-authored path param isn't silently
-		// reclassified as a query param on the first Helena save.
-		if p.typ != "" && p.typ != "query" {
-			next[i].Type = p.typ
+		if e, ok := byName[next[i].Name]; ok {
+			next[i].Extra = e
 		}
 	}
 	return next

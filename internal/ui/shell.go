@@ -19,6 +19,7 @@ import (
 	prettyview "github.com/ideaconnect/go-fyne-pretty-view/v2"
 
 	"github.com/idct/helena/internal/model"
+	"github.com/idct/helena/internal/pathparam"
 	"github.com/idct/helena/internal/session"
 	"github.com/idct/helena/internal/vars"
 )
@@ -63,7 +64,9 @@ type MainUI struct {
 	Status        *widget.Label
 
 	paramsRows          *fyne.Container
-	paramRows           []*kvRow // widget handles for each Query row, for in-place updates (#53)
+	paramRows           []*kvRow        // widget handles for each Query row, for in-place updates (#53)
+	pathParamsRows      *fyne.Container // Path tab rows, derived live from the URL's {name} tokens
+	pathParamsHelp      *widget.Label   // shown on the Path tab when the URL has no {name} tokens
 	headersRows         *fyne.Container
 	BodyType            *widget.Select
 	BodyContent         *prettyview.PrettyView // editable raw body (json/xml/text); hidden for form types
@@ -215,6 +218,9 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.URL.OnChanged = func(s string) {
 		if !m.loading && !m.syncing && m.currentRequest != nil {
 			m.applyURLEdit(s)
+			// The URL is the source of truth for which {name} path params exist,
+			// so re-derive the Path tab whenever it changes.
+			m.rebuildPathParamRows()
 		}
 		m.updateURLPreview()
 	}
@@ -312,6 +318,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 		container.NewTabItem("Auth", m.buildAuthTab()),
 		container.NewTabItem("Headers", headersTab),
 		container.NewTabItem("Query", paramsTab),
+		container.NewTabItem("Path", m.buildPathParamsTab()),
 		container.NewTabItem("Vars", m.buildVarsTab()),
 		container.NewTabItem("Scripts", m.buildScriptsTab()),
 		container.NewTabItem("Chain", m.buildChainTab()),
@@ -733,6 +740,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 		m.paramsRows.RemoveAll()
 		m.paramRows = m.paramRows[:0]
 		m.paramsRows.Refresh()
+		m.rebuildPathParamRows()
 		m.headersRows.RemoveAll()
 		m.headersRows.Refresh()
 		if m.docsEditor != nil {
@@ -776,6 +784,7 @@ func (m *MainUI) loadRequest(req *model.Request, id string) {
 	}
 	m.URL.SetText(displayURL(req.URL, req.Params))
 	m.rebuildParamsRows()
+	m.rebuildPathParamRows()
 	m.rebuildHeadersRows()
 
 	bt := req.Body.Type
@@ -881,7 +890,8 @@ func (m *MainUI) updateURLPreview() {
 		m.urlPreview.Hide()
 		return
 	}
-	resolved, missing := m.sess.ResolverForNode(m.currentRequestID, m.currentRequest).Resolve(m.URL.Text)
+	res := m.sess.ResolverForNode(m.currentRequestID, m.currentRequest)
+	resolved, missing := res.Resolve(m.URL.Text)
 	// {{chain.<alias>...}} vars resolve at Send time (from chained-request
 	// results) and {{?Name}} prompt vars (#86) are collected at Send time, so
 	// don't flag either as unresolved in the live preview.
@@ -893,9 +903,36 @@ func (m *MainUI) updateURLPreview() {
 		}
 		return strings.HasPrefix(n, "chain.")
 	})
+	// Fill the {name} path params into the preview so it shows the real target,
+	// and collect any that are still unfilled so the user notices before sending.
+	// Only tokens in the URL's base path count as path params — mirroring
+	// rebuildPathParamRows and httpclient.Build, both of which scan the
+	// query-folded-out base. A {name} sitting in the query string is a query
+	// value, not a path param, so it must not be filled or flagged here.
+	var unfilled []string
+	if m.currentRequest != nil {
+		names := pathparam.Names(m.currentRequest.URL)
+		baseName := make(map[string]bool, len(names))
+		for _, n := range names {
+			baseName[n] = true
+		}
+		resolved = pathparam.Apply(resolved, func(name string) (string, bool) {
+			if !baseName[name] {
+				return "", false // a {token} in the query is not a path param
+			}
+			return m.filledPathParam(res, name)
+		})
+		for _, n := range names {
+			if _, ok := m.filledPathParam(res, n); !ok {
+				unfilled = append(unfilled, n)
+			}
+		}
+	}
 	switch {
 	case len(missing) > 0:
 		m.urlPreview.SetText("⚠ Unresolved: " + strings.Join(missing, ", "))
+	case len(unfilled) > 0:
+		m.urlPreview.SetText("? Path params to fill: " + strings.Join(unfilled, ", "))
 	case len(prompts) > 0:
 		m.urlPreview.SetText("? Will prompt at send: " + strings.Join(prompts, ", "))
 	case resolved == m.URL.Text:

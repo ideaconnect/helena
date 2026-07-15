@@ -114,7 +114,11 @@ no longer invoked directly from the tree handler):
      `req.Docs` into widgets.
    - Calls `rebuildParamsRows` and `rebuildHeadersRows` to drop the prior
      request's KV row widgets and create new ones bound to the new slice.
-   - Calls `refreshDocsPreview` and `updateURLPreview`.
+   - Calls `rebuildPathParamRows` to re-derive the **Path** tab from the URL's
+     `{name}` tokens (see `pathparams.go`); the URL field's `OnChanged` re-runs
+     it live as the user edits the URL.
+   - Calls `refreshDocsPreview` and `updateURLPreview` (the preview also fills
+     `{name}` path params and flags any left unfilled).
    - Snapshots the stored vs post-fold URL/Params into `m.urlBaseline`. The
      URL→Params fold (folding an inline query into the Params table) is a
      *display* convenience; `saveRequest` compares the current URL/Params to the

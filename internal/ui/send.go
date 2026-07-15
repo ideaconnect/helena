@@ -40,8 +40,8 @@ func withFolderVars(folder map[string]string, own []model.Variable) []model.Vari
 
 // requestTemplateStrings collects every {{...}}-bearing string in a request so
 // PromptVars can find the {{?Name}} markers a Send must ask the user about
-// (#86): URL, body content, and the values of enabled headers / params / form
-// fields, plus the common auth credential fields.
+// (#86): URL, body content, and the values of enabled headers / params / path
+// params / form fields, plus the common auth credential fields.
 func requestTemplateStrings(r model.Request) []string {
 	out := []string{r.URL, r.Body.Content}
 	for _, h := range r.Headers {
@@ -50,6 +50,11 @@ func requestTemplateStrings(r model.Request) []string {
 		}
 	}
 	for _, p := range r.Params {
+		if p.Enabled {
+			out = append(out, p.Value)
+		}
+	}
+	for _, p := range r.PathParams {
 		if p.Enabled {
 			out = append(out, p.Value)
 		}

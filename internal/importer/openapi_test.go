@@ -362,6 +362,46 @@ paths:
 	}
 }
 
+// TestPathParamLandsInPathParams verifies an OpenAPI parameter with in=path is
+// hoisted into PathParams (enabled), keeps the {name} token in the URL, and
+// does not double up as a query param.
+func TestPathParamLandsInPathParams(t *testing.T) {
+	const spec = `openapi: 3.0.0
+info:
+  title: X
+servers:
+  - url: https://api.example.com
+paths:
+  /bag/{bagId}:
+    get:
+      parameters:
+        - in: path
+          name: bagId
+          required: true
+          description: the bag id
+          schema:
+            type: string
+            default: abc
+`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI: %v", err)
+	}
+	r := c.Requests[0]
+	if !strings.Contains(r.URL, "/bag/{bagId}") {
+		t.Errorf("URL = %q, want the {bagId} token kept", r.URL)
+	}
+	if len(r.PathParams) != 1 || r.PathParams[0].Key != "bagId" || !r.PathParams[0].Enabled {
+		t.Errorf("PathParams = %+v, want enabled bagId", r.PathParams)
+	}
+	if r.PathParams[0].Value != "abc" || r.PathParams[0].Description != "the bag id" {
+		t.Errorf("PathParams[0] = %+v, want default abc + description", r.PathParams[0])
+	}
+	if len(r.Params) != 0 {
+		t.Errorf("params = %+v, want empty (path param shouldn't double-up)", r.Params)
+	}
+}
+
 // TestFromOpenAPIInvalidYAMLReturnsError verifies that a malformed
 // YAML input doesn't crash and returns a clear parse error.
 func TestFromOpenAPIInvalidYAMLReturnsError(t *testing.T) {

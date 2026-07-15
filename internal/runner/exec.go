@@ -88,6 +88,7 @@ func (e headlessExecutor) ExecuteOnce(ctx context.Context, r model.Request, chai
 // script) are short-circuited and the pre-script tests are returned.
 func (e headlessExecutor) executeOnce(ctx context.Context, r model.Request, chainMap map[string]chain.View, honorSkip bool) (chain.View, []scripting.TestResult, error) {
 	r.Params = append([]model.KeyValue(nil), r.Params...)
+	r.PathParams = append([]model.KeyValue(nil), r.PathParams...)
 	r.Headers = append([]model.KeyValue(nil), r.Headers...)
 	r.Body.Form = append([]model.KeyValue(nil), r.Body.Form...)
 

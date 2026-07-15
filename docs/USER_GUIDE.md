@@ -68,11 +68,18 @@ line updates.
 
 See the [Real-time guide](guide/realtime.md) for details.
 
-## Query, headers, body
+## Query, path, headers, body
 
 - **Query** and the URL field are two views of one thing — edit either and the
   other follows. Disabled query rows (unchecked) are kept even though the URL
   can't express them.
+- **Path** — fills the single-brace `{name}` placeholders in the URL's path
+  (e.g. `{{base_url}}/users/{id}`). The tab lists one row per placeholder,
+  derived live from the URL, so you set a value instead of hand-editing the raw
+  URL; the resolved preview under the URL shows the real target and flags any
+  placeholder still unfilled. (This is distinct from `{{name}}` variables —
+  double braces resolve from environments/collections, single braces are
+  per-request path values.)
 - **Headers** — enable/disable per row.
 - **Body** — None / raw (JSON, XML, text) with validate + format, GraphQL
   (query + variables, sent as a JSON envelope), a structured form editor for

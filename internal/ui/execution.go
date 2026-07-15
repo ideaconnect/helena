@@ -76,6 +76,7 @@ func (e chainExecutor) ExecuteOnce(ctx context.Context, r model.Request, chainMa
 	// Deep-copy slices to insulate the parent request's data from
 	// per-step writeback or chain-time mutations.
 	r.Params = append([]model.KeyValue(nil), r.Params...)
+	r.PathParams = append([]model.KeyValue(nil), r.PathParams...)
 	r.Headers = append([]model.KeyValue(nil), r.Headers...)
 	r.Body.Form = append([]model.KeyValue(nil), r.Body.Form...)
 

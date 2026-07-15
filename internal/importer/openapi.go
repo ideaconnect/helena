@@ -226,7 +226,13 @@ func buildRequest(method, path string, hasBaseVar bool, op *openapi3.Operation, 
 			r.Params = append(r.Params, kv)
 		case "header":
 			r.Headers = append(r.Headers, kv)
-			// path params: left embedded in the URL as {name}
+		case "path":
+			// The {name} placeholder stays embedded in the URL; the parameter is
+			// hoisted into PathParams so the editor's Path tab lists it and the
+			// send path fills it. Path params are always required, so keep them
+			// enabled regardless of the schema's `required` flag.
+			kv.Enabled = true
+			r.PathParams = append(r.PathParams, kv)
 		}
 	}
 

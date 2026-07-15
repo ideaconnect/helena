@@ -13,18 +13,19 @@ import (
 // header/param/form values, and auth fields — and skips disabled rows.
 func TestRequestTemplateStringsFindsPromptVars(t *testing.T) {
 	r := model.Request{
-		URL: "https://{{host}}/{{?Env}}",
+		URL: "https://{{host}}/{{?Env}}/{bagId}",
 		Headers: []model.KeyValue{
 			{Enabled: true, Key: "Authorization", Value: "Bearer {{?Token}}"},
 			{Enabled: false, Key: "X-Off", Value: "{{?Disabled}}"},
 		},
-		Params: []model.KeyValue{{Enabled: true, Key: "q", Value: "{{?Query}}"}},
-		Body:   model.Body{Type: model.BodyJSON, Content: `{"k":"{{?Body}}"}`},
-		Auth:   model.Auth{Type: model.AuthBasic, Basic: &model.BasicAuth{Username: "{{?User}}", Password: "static"}},
+		Params:     []model.KeyValue{{Enabled: true, Key: "q", Value: "{{?Query}}"}},
+		PathParams: []model.KeyValue{{Enabled: true, Key: "bagId", Value: "{{?Bag}}"}},
+		Body:       model.Body{Type: model.BodyJSON, Content: `{"k":"{{?Body}}"}`},
+		Auth:       model.Auth{Type: model.AuthBasic, Basic: &model.BasicAuth{Username: "{{?User}}", Password: "static"}},
 	}
 	got := vars.PromptVars(requestTemplateStrings(r)...)
 	sort.Strings(got)
-	want := []string{"?Body", "?Env", "?Query", "?Token", "?User"}
+	want := []string{"?Bag", "?Body", "?Env", "?Query", "?Token", "?User"}
 	if len(got) != len(want) {
 		t.Fatalf("prompt keys = %v, want %v", got, want)
 	}

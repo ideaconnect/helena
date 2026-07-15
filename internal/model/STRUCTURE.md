@@ -15,6 +15,7 @@
 ### `Request` — [model.go:95](model.go#L95)
 A single HTTP request as the user defined it.
 - `Params` — query-string `KeyValue`s; merged into the URL when sending.
+- `PathParams` — `KeyValue`s keyed by placeholder name that fill the single-brace `{name}` slots in `URL`'s path (e.g. `{{base_url}}/bag/{bagId}`). A separate scope from `Params`: substituted into the path by [internal/pathparam](../pathparam/) at send time, not appended to the query. Stored as OpenCollection `type: path` params.
 - `Headers` — request-header `KeyValue`s.
 - `Body` — see `Body`.
 - `Docs` — free-form markdown shown in the request's Docs tab.

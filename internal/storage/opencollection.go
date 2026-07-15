@@ -228,6 +228,17 @@ func requestToFile(r model.Request, seq int) ocRequestFile {
 	for _, p := range r.Params {
 		h.Params = append(h.Params, ocParam{Name: p.Key, Value: p.Value, Type: "query", Disabled: !p.Enabled})
 	}
+	// Path parameters share the `params:` list, distinguished by `type: path`;
+	// they fill {name} placeholders in the URL rather than the query string.
+	// They are emitted AFTER the query params: the model holds the two in
+	// separate slices, so this writer groups query-then-path deterministically.
+	// Helena's own files therefore re-save byte-identically (a fixed point). The
+	// one deviation: an externally-authored file that *interleaved* the two types
+	// is regrouped on its first Helena save — all names/values/types/Extra
+	// survive (invariant 1), only the relative order of path-vs-query rows shifts.
+	for _, p := range r.PathParams {
+		h.Params = append(h.Params, ocParam{Name: p.Key, Value: p.Value, Type: "path", Disabled: !p.Enabled})
+	}
 	if r.Body.Type != "" && r.Body.Type != model.BodyNone {
 		h.Body = &ocBody{Type: string(r.Body.Type), Data: r.Body.Content, FilePath: r.Body.FilePath, ContentType: r.Body.ContentType, GraphQLVars: r.Body.GraphQLVariables}
 	}
@@ -345,7 +356,14 @@ func fileToRequest(f ocRequestFile) model.Request {
 		r.Headers = append(r.Headers, model.KeyValue{Enabled: !h.Disabled, Key: h.Name, Value: h.Value})
 	}
 	for _, p := range f.HTTP.Params {
-		r.Params = append(r.Params, model.KeyValue{Enabled: !p.Disabled, Key: p.Name, Value: p.Value})
+		kv := model.KeyValue{Enabled: !p.Disabled, Key: p.Name, Value: p.Value}
+		// The `type: path` discriminator routes a param to PathParams (filled into
+		// the URL's {name} placeholders); everything else is a query param.
+		if p.Type == "path" {
+			r.PathParams = append(r.PathParams, kv)
+		} else {
+			r.Params = append(r.Params, kv)
+		}
 	}
 	if f.HTTP.Body != nil {
 		r.Body = model.Body{

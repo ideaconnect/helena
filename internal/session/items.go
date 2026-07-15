@@ -701,6 +701,7 @@ func parseLeaf(nodeID string) (parent, kind string, idx int, ok bool) {
 func cloneRequestKeepID(r model.Request) model.Request {
 	r.Headers = slices.Clone(r.Headers)
 	r.Params = slices.Clone(r.Params)
+	r.PathParams = slices.Clone(r.PathParams)
 	r.Body.Form = slices.Clone(r.Body.Form)
 	r.Chain = slices.Clone(r.Chain)
 	r.Variables = slices.Clone(r.Variables)
@@ -734,6 +735,9 @@ func deepCopyRequest(r model.Request) model.Request {
 	}
 	if r.Params != nil {
 		r.Params = slices.Clone(r.Params)
+	}
+	if r.PathParams != nil {
+		r.PathParams = slices.Clone(r.PathParams)
 	}
 	if r.Variables != nil {
 		r.Variables = slices.Clone(r.Variables)

@@ -29,6 +29,7 @@ Top-level orientation:
 | [internal/model/](internal/model/) | Domain types shared by every layer. |
 | [internal/storage/](internal/storage/) | Open Collection YAML load/save. |
 | [internal/vars/](internal/vars/) | `{{variable}}` resolver. |
+| [internal/pathparam/](internal/pathparam/) | Single-brace `{name}` path-parameter substitution (URL path placeholders); the counterpart to `vars`, always stepping over `{{...}}` spans. |
 | [internal/httpclient/](internal/httpclient/) | Request execution, CORS advisory. |
 | [internal/cookiejar/](internal/cookiejar/) | Observable, editable `http.CookieJar` (session-scoped, in-memory) for cookie persistence + the viewer/editor. |
 | [internal/auth/](internal/auth/) | Auth inheritance resolution + Apply on outgoing requests. |

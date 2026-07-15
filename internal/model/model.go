@@ -108,17 +108,23 @@ type Body struct {
 
 // Request is a single HTTP request definition.
 type Request struct {
-	ID      string      `json:"id"`
-	Name    string      `json:"name"`
-	Method  Method      `json:"method"`
-	URL     string      `json:"url"`
-	Params  []KeyValue  `json:"params,omitempty"`
-	Headers []KeyValue  `json:"headers,omitempty"`
-	Body    Body        `json:"body"`
-	Docs    string      `json:"docs,omitempty"`    // free-form markdown
-	Auth    Auth        `json:"auth,omitempty"`    // own auth or Inherit from parent
-	Scripts Scripts     `json:"scripts,omitempty"` // pre/post JS hooks
-	Chain   []ChainStep `json:"chain,omitempty"`   // before-hooks (linear list)
+	ID     string     `json:"id"`
+	Name   string     `json:"name"`
+	Method Method     `json:"method"`
+	URL    string     `json:"url"`
+	Params []KeyValue `json:"params,omitempty"`
+	// PathParams fill the single-brace {name} placeholders in URL's path (e.g.
+	// {{base_url}}/bag/{bagId}), keyed by the placeholder name. They are a
+	// separate scope from query Params: substituted into the path at send time
+	// rather than appended to the query string, and stored as OpenCollection
+	// `type: path` params. See internal/pathparam.
+	PathParams []KeyValue  `json:"pathParams,omitempty"`
+	Headers    []KeyValue  `json:"headers,omitempty"`
+	Body       Body        `json:"body"`
+	Docs       string      `json:"docs,omitempty"`    // free-form markdown
+	Auth       Auth        `json:"auth,omitempty"`    // own auth or Inherit from parent
+	Scripts    Scripts     `json:"scripts,omitempty"` // pre/post JS hooks
+	Chain      []ChainStep `json:"chain,omitempty"`   // before-hooks (linear list)
 	// Assertions are declarative (no-code) response checks (#88), evaluated
 	// after Send and reported alongside test()/expect() results.
 	Assertions []Assertion `json:"assertions,omitempty"`
@@ -129,14 +135,16 @@ type Request struct {
 }
 
 // Clone returns a deep copy of r with every reference-typed field detached from
-// the original's backing arrays: the slice fields (Params, Headers, Body.Form,
-// Chain, Assertions, Variables) and Auth's scheme sub-structs. KeyValue /
-// ChainStep / Assertion / Variable are flat value structs, so a slice copy fully
-// detaches them. This is the single home for Request deep-copying — the off-UI
-// send/stream snapshot, the history record, and the secret scrubber all route
-// through it so no caller can mutate another's request and no field list drifts.
+// the original's backing arrays: the slice fields (Params, PathParams, Headers,
+// Body.Form, Chain, Assertions, Variables) and Auth's scheme sub-structs.
+// KeyValue / ChainStep / Assertion / Variable are flat value structs, so a slice
+// copy fully detaches them. This is the single home for Request deep-copying —
+// the off-UI send/stream snapshot, the history record, and the secret scrubber
+// all route through it so no caller can mutate another's request and no field
+// list drifts.
 func (r Request) Clone() Request {
 	r.Params = append([]KeyValue(nil), r.Params...)
+	r.PathParams = append([]KeyValue(nil), r.PathParams...)
 	r.Headers = append([]KeyValue(nil), r.Headers...)
 	r.Body.Form = append([]KeyValue(nil), r.Body.Form...)
 	r.Chain = append([]ChainStep(nil), r.Chain...)
