@@ -76,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -227,7 +227,7 @@ jobs:
           - {pkg: ./internal/auth,       name: FuzzResolveValuesAPIKey}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -245,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -274,7 +274,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -298,7 +298,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -331,7 +331,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7 # source for the SBOM scan + nfpm config
 
-      - uses: actions/setup-go@v6 # to `go install nfpm`
+      - uses: actions/setup-go@v7 # to `go install nfpm`
         with:
           go-version-file: go.mod
           cache: true
