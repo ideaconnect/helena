@@ -87,16 +87,17 @@ icon + metainfo); they're not yet wired into CI.
 ## Store distribution & monetization
 
 Helena is and stays free to **build from source** (see
-[BUILDING.md](BUILDING.md)) and free to download from GitHub Releases. Store
-listings are an optional, paid-but-cheap convenience channel: a one-click
-install, auto-updates, and — for those who want to support the project — a
-minimal price. This section is the how-to for each store, and the honest state
-of monetization per platform.
+[BUILDING.md](BUILDING.md)) and free to download from GitHub Releases. The
+Microsoft Store listing is an optional, **free** convenience channel: a one-click
+install with automatic updates. Direct support goes through **GitHub Sponsors**
+and **Buy Me a Coffee**, not a store price. This section is the how-to for each
+store, and the honest state of distribution per platform.
 
 ### Windows — Microsoft Store (MSIX)
 
-The Microsoft Store is the recommended paid channel: as of 2026 it is the most
-favourable of the major app stores for a small indie tool.
+The Microsoft Store is the recommended Windows distribution channel: as of 2026
+it is the most favourable of the major app stores for a small indie tool, and
+Helena ships there as a **free** listing.
 
 **Why it's worth it (2026 terms):**
 
@@ -112,9 +113,10 @@ favourable of the major app stores for a small indie tool.
   which Helena deliberately does not build itself (no automatic/background update
   check — only an opt-in one; see
   [Updates](#updates-package-manager-manual-no-phone-home-decided-2026-06-16)).
-- **Revenue split favours you.** Using Microsoft's commerce you keep **85%**
-  (Microsoft takes 15% for non-game apps); use your own commerce engine and you
-  keep 100%. For a "minimal price" listing the 15% is negligible.
+- **Free to list.** Helena ships as a **free** app, so there's no price, no
+  commerce engine, and no revenue split to manage — Microsoft still signs, hosts,
+  and pushes updates for you at no cost. Support is handled off-store, via GitHub
+  Sponsors and Buy Me a Coffee.
 
 **Deployment path (step by step):**
 
@@ -141,8 +143,8 @@ favourable of the major app stores for a small indie tool.
    run until installed from the Store, so a self-signed copy is how you smoke-test
    the packaged app.
 6. **Create the submission** in Partner Center: upload the `.msixbundle`
-   **unsigned** (Microsoft signs it), set a **minimal price** and markets,
-   complete the age rating (IARC) questionnaire, add screenshots (reuse
+   **unsigned** (Microsoft signs it), set the price to **Free** and pick your
+   markets, complete the age rating (IARC) questionnaire, add screenshots (reuse
    `make screenshots` output) and a description, and point the privacy-policy
    field at <https://idct.tech/helena/privacy/>. Submit for certification.
 

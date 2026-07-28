@@ -397,7 +397,7 @@ Publish); CI then builds every platform and attaches the binaries, Linux
 packages, checksums, SBOM, and a provenance attestation. The free GitHub Release
 is the primary way to get Helena — building from source is always free too, and
 the [Microsoft Store](https://apps.microsoft.com/detail/9NWPKK6CTDR1) carries a
-minimal-price, one-click listing as an optional convenience channel.
+free, one-click listing as an optional convenience channel.
 
 ## License
 
