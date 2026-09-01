@@ -184,7 +184,9 @@ Requirements:
   full-patch `go` directive (`go 1.26.7`); `go` auto-selects that toolchain, and
   CI locks it with `GOTOOLCHAIN=local` so it never silently drifts.
 - A C compiler (Fyne uses cgo + OpenGL)
-- **Linux**: `sudo apt-get install -y libgl1-mesa-dev xorg-dev`
+- **Linux**: `sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev`
+  (Fyne 2.8 builds the Wayland backend by default alongside X11; pass `-tags x11`
+  to build X11-only and skip the last two)
 - **Windows**: TDM-GCC or MSYS2 mingw-w64 on `PATH`
 - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
 

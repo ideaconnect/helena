@@ -553,8 +553,13 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// fires). Copy is handled in-widget: PrettyView has Ctrl+C / right-click
 	// copy, and the Headers entry copies natively.
 	responsePanel := container.NewBorder(container.NewVBox(m.errorBanner, m.corsBanner), nil, nil, nil, m.Response)
-	// Request / response split with a thin-line divider.
-	editor := thinVSplit(m.Request, responsePanel, 0.5)
+	// Request / response split with a thin-line divider. One theme scope wraps
+	// BOTH tab bars (and the Docs/Scripts sub-tabs nested inside the request
+	// editor) so the Fyne-2.8 active-tab indicator keeps its 4pt green pill —
+	// see tabsTheme. Wrapping the split rather than each AppTabs keeps this to a
+	// single scope; the thinSplit divider hardcodes its own thickness, and no
+	// widget.NewSeparator lives inside these subtrees, so nothing else shifts.
+	editor := container.NewThemeOverride(thinVSplit(m.Request, responsePanel, 0.5), tabsTheme{})
 	// Editor column carries its own address bar so the sidebar runs
 	// full-height to the left of it (9.1).
 	editorColumn := container.NewBorder(editorTop, nil, nil, nil, editor)

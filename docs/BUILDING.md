@@ -28,22 +28,30 @@ only for the website. The app is one static binary.
 
 === "Linux"
 
-    Install a C toolchain and the OpenGL / X11 development headers.
+    Install a C toolchain and the OpenGL, X11 **and Wayland** development headers.
+    Since Fyne 2.8 an untagged Linux build compiles both display backends, so the
+    Wayland and xkbcommon headers are required; `-tags x11` builds X11-only
+    without them.
 
     ```sh
     # Debian / Ubuntu
-    sudo apt-get install -y build-essential libgl1-mesa-dev xorg-dev
+    sudo apt-get install -y build-essential libgl1-mesa-dev xorg-dev \
+      libwayland-dev libxkbcommon-dev
 
     # Fedora / RHEL
     sudo dnf install -y @development-tools mesa-libGL-devel libXcursor-devel \
-      libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel
+      libXrandr-devel libXinerama-devel libXi-devel libXxf86vm-devel \
+      wayland-devel libxkbcommon-devel
 
     # Arch
-    sudo pacman -S --needed base-devel mesa libxcursor libxrandr libxinerama libxi
+    sudo pacman -S --needed base-devel mesa libxcursor libxrandr libxinerama libxi \
+      wayland libxkbcommon
     ```
 
-    Wayland-only sessions still build the X11/GLFW backend; it runs fine under
-    XWayland. Install Go from your distro or from <https://go.dev/dl/>.
+    On a Wayland session Helena now runs natively on Wayland rather than through
+    XWayland (Fyne 2.8 picks the backend at runtime). Build with `-tags x11` if you
+    want the previous X11/XWayland behaviour. Install Go from your distro or from
+    <https://go.dev/dl/>.
 
 === "Windows"
 
@@ -170,6 +178,7 @@ same bar CI holds. See [TESTING.md](../TESTING.md) for the full test story.
 | ------- | --- |
 | `gcc: command not found` / `exec: "gcc"` | Install the C toolchain for your platform (above). cgo needs it. |
 | `fatal error: GL/gl.h: No such file` (Linux) | Install `libgl1-mesa-dev` and `xorg-dev` (or the Fedora/Arch equivalents). |
+| `fatal error: wayland-client-core.h: No such file` (Linux) | Install `libwayland-dev` and `libxkbcommon-dev`. Fyne 2.8 builds the Wayland backend by default; `-tags x11` skips it. |
 | `gcc_arm64.S: no such instruction` (Windows/ARM) | Your GCC is x86-64; install llvm-mingw's native aarch64 toolchain and set `CC`/`CXX` (see above). |
 | Colour emoji render as blank boxes | Expected in release builds (`-tags no_emoji`). Build without the tag for colour emoji. |
 | `build Go version lower than targeted` | Your `go` is older than `go.mod`'s `go` directive; install Go 1.26.7+. |

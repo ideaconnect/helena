@@ -52,7 +52,10 @@ func (m *MainUI) actionExport() {
 		mkTab("Go", "Go snippet", func() (string, error) { return exporter.ToGo(req, res, settings) }),
 	)
 
-	d := dialog.NewCustom("Export request", "Close", tabs, m.win)
+	// tabsTheme keeps the 4pt active-tab indicator here too (Fyne 2.8 sizes it
+	// from SizeNameSeparatorThickness, which the app theme pins to 1). This scope
+	// is transient — it lives only as long as the dialog.
+	d := dialog.NewCustom("Export request", "Close", container.NewThemeOverride(tabs, tabsTheme{}), m.win)
 	d.Resize(fyne.NewSize(680, 420))
 	d.Show()
 }

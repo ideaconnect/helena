@@ -76,7 +76,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -115,7 +115,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 
       - name: Check formatting
         if: runner.os == 'Linux'
@@ -227,14 +227,14 @@ jobs:
           - {pkg: ./internal/auth,       name: FuzzResolveValuesAPIKey}
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
       - name: Install Linux GUI deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Fuzz ${{ matrix.target.name }} for 20s
         run: go test ${{ matrix.target.pkg }} -fuzz='^${{ matrix.target.name }}$' -fuzztime=20s
 
@@ -245,7 +245,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -254,7 +254,7 @@ jobs:
       - name: Install Linux GUI deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       # Build golangci-lint from source with the pinned toolchain rather than
       # downloading a prebuilt release: the v1.64.8 release binary is built with
       # go1.24 and refuses to run against this repo's go1.26 target
@@ -274,14 +274,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
       - name: Install Linux GUI deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Install govulncheck
         run: go install golang.org/x/vuln/cmd/govulncheck@latest
       - name: Run govulncheck
@@ -298,14 +298,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v6
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
       - name: Install Linux GUI deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgl1-mesa-dev xorg-dev
+          sudo apt-get install -y libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: Run mutation suite
         run: make mutation 2>&1 | tee mutation.log
         continue-on-error: true
@@ -331,7 +331,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7 # source for the SBOM scan + nfpm config
 
-      - uses: actions/setup-go@v6 # to `go install nfpm`
+      - uses: actions/setup-go@v7 # to `go install nfpm`
         with:
           go-version-file: go.mod
           cache: true

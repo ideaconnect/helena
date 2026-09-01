@@ -25,11 +25,6 @@ label via [`.github/release.yml`](.github/release.yml).
   session UI state and restored on the next launch, instead of resetting to
   horizontal scroll every time Helena starts.
 
-### Changed
-- Bumped `go-fyne-pretty-view` to `v2.5.1-alpha` for its new
-  `SetOnWrapChanged` hook, which is what lets Helena observe (and persist) a
-  wrap toggle made through the viewer's own toolbar.
-
 ### Security
 - **Go toolchain pinned to 1.26.7**, closing six standard-library advisories
   `govulncheck` reports as reachable from Helena:
@@ -44,6 +39,40 @@ label via [`.github/release.yml`](.github/release.yml).
 - **`golang.org/x/text` bumped to v0.39.0**, closing
   [GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970), reachable through
   goja's Unicode normalization on the scripting path.
+
+### Changed
+- **Fyne 2.7.4 → 2.8.1.** Two things follow from it, neither of which changes
+  how Helena looks or which machines it ships to:
+  - **Linux builds now compile the Wayland backend as well as X11**, so
+    building from source needs `libwayland-dev` and `libxkbcommon-dev` on top
+    of the previous packages (`-tags x11` restores the old X11-only build).
+    A Wayland session now runs Helena natively instead of through XWayland.
+  - Fyne 2.8 drops Windows 7/8 and macOS 10.14 and older. Helena's own
+    packaging already required Windows 10 1809+ and macOS 11+, so the
+    supported set is unchanged in practice.
+- **Dependencies refreshed**, each validated by applying it and running the
+  full `-race` suite plus the BDD features: `kin-openapi` 0.140.0 → 0.149.0
+  (which also clears four unreachable advisories against the old version),
+  `godog` 0.15.1 → 0.16.0, `goja` to 2026-08-26, `x/text` 0.39.0 → 0.41.0,
+  `x/image` 0.43.0 → 0.45.0, and `go-fyne-pretty-view` to v2.6.0-alpha — whose
+  `SetOnWrapChanged` hook is what lets Helena observe (and persist) a wrap
+  toggle made through the viewer's own toolbar.
+- **CI actions moved to their current majors**: `actions/setup-go` v6 → v7
+  (six sites) and `actions/setup-python` v6 → v7. Both v7 releases are ESM
+  migrations — `setup-go`'s `action.yml` input surface is byte-identical to
+  v6.4.0, so the `go-version-file` + `GOTOOLCHAIN=local` toolchain pin is
+  untouched — and `setup-python` v7 only removes a `pip-install` input that no
+  workflow here passes.
+
+### Fixed
+- **The active-tab indicator kept its 4pt green pill under Fyne 2.8.** Fyne
+  changed `AppTabs` to size the selected-tab underline from
+  `SizeNameSeparatorThickness` instead of `SizeNamePadding`; Helena's theme
+  pins that to 1 for hairline separators, which would have silently collapsed
+  the accent pill to a 1pt line on every tab bar. A scoped `tabsTheme` restores
+  4 inside the tab subtrees only, so the toolbar, sidebar and status-bar rules
+  stay hairlines. Verified by pixel-diffing regenerated screenshots: the tab
+  strip is byte-identical to the pre-2.8 rendering.
 
 ## [0.7.0] - 2026-07-15
 

@@ -61,7 +61,7 @@ jobs:
         run: bundle exec jekyll build --baseurl "/helena" --destination "$GITHUB_WORKSPACE/_site"
 
       # --- Reference docs (MkDocs) → /docs/ ---
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
       - name: Build docs (MkDocs)

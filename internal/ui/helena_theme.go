@@ -178,6 +178,24 @@ func (toolbarTheme) Size(n fyne.ThemeSizeName) float32 {
 	return appTheme().Size(n)
 }
 
+// tabsTheme restores the 4pt active-tab indicator. Fyne 2.8 changed AppTabs to
+// size the selected-tab underline from SizeNameSeparatorThickness instead of
+// SizeNamePadding (container/apptabs.go: indicatorSize = NewSize(w,
+// dividerWidth)); helenaTheme pins SeparatorThickness to 1 for hairline
+// separators, which silently collapsed the green accent pill to a 1pt line.
+// Overriding the size only inside the tab subtrees keeps the hairline
+// everywhere else. Scoped rather than global because widget.NewSeparator is
+// used structurally in the toolbar, sidebar and status bar, where 4pt would be
+// a heavy rule instead of a hairline.
+type tabsTheme struct{ delegatingTheme }
+
+func (tabsTheme) Size(n fyne.ThemeSizeName) float32 {
+	if n == theme.SizeNameSeparatorThickness {
+		return 4 // the pre-2.8 indicator height (Fyne's SizeNamePadding default)
+	}
+	return appTheme().Size(n)
+}
+
 // The splits' thin divider and the root's flush hairline joins used to be
 // splitTheme / paneTheme / rootTheme scope overrides here; they are now the
 // scope-free thinSplit widget ([thinsplit.go](thinsplit.go)) and flushColumn

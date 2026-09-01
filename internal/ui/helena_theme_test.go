@@ -279,3 +279,30 @@ func TestThemedIconMemoizes(t *testing.T) {
 		t.Error("themedIcon should return the memoized instance on repeat lookups")
 	}
 }
+
+// TestTabsThemeRestoresIndicatorThickness pins the Fyne-2.8 regression fix:
+// AppTabs sizes its selected-tab indicator from SizeNameSeparatorThickness
+// (it used SizeNamePadding before 2.8), and the app theme pins that to 1 for
+// hairline separators — which silently collapsed the green accent pill under
+// the active tab to a 1pt line. tabsTheme restores 4 inside the tab subtrees
+// only; everything else, separators included, must still see the hairline.
+func TestTabsThemeRestoresIndicatorThickness(t *testing.T) {
+	if got := (tabsTheme{}).Size(theme.SizeNameSeparatorThickness); got != 4 {
+		t.Errorf("tabs separator thickness = %v; want 4 (the pre-2.8 indicator height)", got)
+	}
+	// The app theme itself must keep the hairline — the override is scoped, so
+	// a global bump here would thicken the toolbar/sidebar/status-bar rules.
+	if got := appTheme().Size(theme.SizeNameSeparatorThickness); got != 1 {
+		t.Errorf("app separator thickness = %v; want 1 (tabsTheme must stay scoped)", got)
+	}
+	// Everything else delegates, so the tab bars keep the app's fonts, colours
+	// and metrics.
+	for _, n := range []fyne.ThemeSizeName{theme.SizeNameText, theme.SizeNamePadding, theme.SizeNameInlineIcon} {
+		if got, want := (tabsTheme{}).Size(n), appTheme().Size(n); got != want {
+			t.Errorf("tabs %v = %v; want delegated %v", n, got, want)
+		}
+	}
+	if got := (tabsTheme{}).Color(theme.ColorNamePrimary, theme.VariantDark); got != appTheme().Color(theme.ColorNamePrimary, theme.VariantDark) {
+		t.Error("tabs theme should delegate colour to the app theme (the green accent)")
+	}
+}
