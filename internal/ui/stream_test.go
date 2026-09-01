@@ -87,6 +87,19 @@ func TestStreamShowsFullTranscript(t *testing.T) {
 	workerDone := make(chan struct{})
 	streamWorkerDone = func() { close(workerDone) }
 	t.Cleanup(func() { streamWorkerDone = origDone })
+	// Join on every exit path, not just the happy one: t.Fatal is a
+	// runtime.Goexit, so the timeout branch below would otherwise abandon a
+	// worker that is by definition still running, and under Fyne's test driver
+	// fyne.Do runs inline on that worker — its final widget writes would land
+	// in whatever test comes next. Cleanups run after the deferred srv.Close(),
+	// so by the time this waits the server is gone and the worker unblocks.
+	t.Cleanup(func() {
+		select {
+		case <-workerDone:
+		case <-time.After(10 * time.Second):
+			t.Error("stream worker did not finish")
+		}
+	})
 
 	m.URL.SetText(srv.URL)
 	m.streamSend()

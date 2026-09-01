@@ -18,7 +18,22 @@ func captureReclaim(t *testing.T) (calls *atomic.Int32, wait func() bool) {
 	var n atomic.Int32
 	fired := make(chan struct{}, 8)
 	freeOSMemory = func() { n.Add(1); fired <- struct{}{} }
-	t.Cleanup(func() { freeOSMemory = orig })
+	t.Cleanup(func() {
+		// The reclaim runs on its own goroutine (reclaimAfterLargeBody), and the
+		// only thing ordering its read of freeOSMemory against this restore is
+		// the fired-channel edge — which a caller does NOT get when wait()
+		// times out and t.Fatal's. Wait for the in-flight reclaim to clear its
+		// single-flight flag instead: it stores false in a defer, after the
+		// read, so observing false orders us behind it.
+		for deadline := time.Now().Add(2 * time.Second); memTrimRunning.Load(); {
+			if time.Now().After(deadline) {
+				t.Error("a reclaim goroutine was still in flight at cleanup")
+				break
+			}
+			time.Sleep(time.Millisecond)
+		}
+		freeOSMemory = orig
+	})
 	return &n, func() bool {
 		select {
 		case <-fired:
@@ -192,22 +207,50 @@ func TestStreamStartReclaimsPreviousBody(t *testing.T) {
 	workerDone := make(chan struct{})
 	streamWorkerDone = func() { close(workerDone) }
 	t.Cleanup(func() { streamWorkerDone = origDone })
+	// Joining in a cleanup, not just inline below, is what makes that promise
+	// hold on EVERY exit path: t.Fatal is a runtime.Goexit, so an inline join
+	// placed after an assertion is skipped by the very failure most likely to
+	// leave a worker running. Cleanups are LIFO, so this one runs before the
+	// seam restore above and before captureReclaim's freeOSMemory restore —
+	// both of which the worker can still be reading until it is joined.
+	t.Cleanup(func() {
+		select {
+		case <-workerDone:
+		case <-time.After(5 * time.Second):
+			t.Error("stream worker did not finish")
+		}
+	})
+
+	// Once the worker is running, this goroutine must touch NOTHING on m —
+	// not even to read m.streamCancel in order to stop it. Under Fyne's *test*
+	// driver, fyne.Do does not marshal: DoFromGoroutine calls the closure
+	// inline on the caller (fyne/test/driver.go), so the worker itself runs
+	// resetStreamButton and writes m.streamCancel, and any read from here is a
+	// genuine data race. (The production glfw driver does marshal onto the UI
+	// thread, so the app is unaffected — this hazard is the test driver's.)
+	//
+	// The worker therefore has to stop on its own. The discard port refuses
+	// immediately, and a 1 s timeout bounds the connect + response-header phase
+	// (Client.Stream exempts only the body read from the client deadline), so
+	// the goroutine is gone well inside the wait below.
+	st := m.sess.Settings()
+	st.TimeoutSeconds = 1
+	m.sess.SetSettings(st)
 
 	m.pv.SetData([]byte(bigBody()), prettyview.FormatRaw)
-	m.URL.SetText("http://127.0.0.1:9") // discard port: the worker fails fast
+	m.URL.SetText("http://127.0.0.1:9") // discard port: connect is refused at once
 	m.streamSend()
 	if !wait() {
 		t.Fatal("stream start did not reclaim the previous large body")
 	}
-	if got := calls.Load(); got != 1 {
-		t.Errorf("reclaims = %d, want 1", got)
-	}
-	if m.streamCancel != nil {
-		m.streamCancel()
-	}
+	// Join before counting, so "exactly once" covers the worker's whole life
+	// rather than just the window up to the first reclaim.
 	select {
 	case <-workerDone:
 	case <-time.After(5 * time.Second):
 		t.Fatal("stream worker did not finish")
+	}
+	if got := calls.Load(); got != 1 {
+		t.Errorf("reclaims = %d, want 1", got)
 	}
 }
