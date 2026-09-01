@@ -721,3 +721,64 @@ func TestFromOpenAPIJSONInput(t *testing.T) {
 		t.Errorf("name = %q", c.Name)
 	}
 }
+
+// TestFromOpenAPI32CustomMethods pins what an OpenAPI 3.2 spec's non-classic
+// operations import as. 3.2 added two ways to declare an operation the earlier
+// versions could not: the fixed `query` field (the standards-track QUERY
+// method) and `additionalOperations`, a map of arbitrary method names. Since
+// kin-openapi v0.149 PathItem.Operations() returns both, so the importer —
+// which iterates that map — now yields requests it silently dropped on
+// v0.140.
+//
+// Importing them is the deliberate choice: dropping an operation a spec
+// explicitly declares is silent data loss, and Helena can send any method
+// token. The two halves differ in how far that support goes. QUERY is a real
+// method (RFC 10008) with a dedicated 3.2 path-item field, so Helena lists it
+// in model.Methods and the picker offers it like any other. An
+// additionalOperations key is an arbitrary token — there is no bounded set to
+// support — so it imports and sends fine but stays outside model.Methods, and
+// a user who switches that request's method away cannot switch back.
+func TestFromOpenAPI32CustomMethods(t *testing.T) {
+	spec := `{
+	  "openapi": "3.2.0",
+	  "info": {"title": "3.2 API", "version": "1"},
+	  "paths": {
+	    "/search": {
+	      "get": {"operationId": "getSearch"},
+	      "query": {"operationId": "querySearch"},
+	      "additionalOperations": {
+	        "PURGE": {"operationId": "purgeSearch"}
+	      }
+	    }
+	  }
+	}`
+	c, err := FromOpenAPI([]byte(spec))
+	if err != nil {
+		t.Fatalf("FromOpenAPI on a 3.2 spec: %v", err)
+	}
+
+	got := map[model.Method]bool{}
+	for _, r := range c.Requests {
+		got[r.Method] = true
+		if r.URL == "" {
+			t.Errorf("%s request has no URL", r.Method)
+		}
+	}
+	for _, want := range []model.Method{model.GET, "QUERY", "PURGE"} {
+		if !got[want] {
+			t.Errorf("3.2 spec did not import a %s request (got %v)", want, got)
+		}
+	}
+	if len(c.Requests) != 3 {
+		t.Errorf("requests = %d, want 3 (get + query + the additionalOperations entry)", len(c.Requests))
+	}
+
+	// The asymmetry is the point: QUERY is a first-class method here, an
+	// arbitrary additionalOperations token is imported but not pickable.
+	if !model.QUERY.Valid() {
+		t.Error("QUERY should be in model.Methods (RFC 10008, and a fixed OAS 3.2 field)")
+	}
+	if model.Method("PURGE").Valid() {
+		t.Error("PURGE is not a registered method; it must not be in model.Methods")
+	}
+}

@@ -25,6 +25,14 @@ label via [`.github/release.yml`](.github/release.yml).
   session UI state and restored on the next launch, instead of resetting to
   horizontal scroll every time Helena starts.
 
+### Added
+- **`QUERY` is now a first-class method.** RFC 10008 (Proposed Standard, June
+  2026) standardized QUERY — a safe, idempotent, cacheable request that carries
+  its query in a body — and IANA registered it. It now sits in the method
+  dropdown between `DELETE` and `HEAD` with its own violet tint, and since
+  Helena never gated the body editor by method it can carry the body QUERY
+  exists for.
+
 ### Security
 - **Go toolchain pinned to 1.26.7**, closing six standard-library advisories
   `govulncheck` reports as reachable from Helena:
@@ -57,6 +65,13 @@ label via [`.github/release.yml`](.github/release.yml).
   `x/image` 0.43.0 → 0.45.0, and `go-fyne-pretty-view` to v2.6.0-alpha — whose
   `SetOnWrapChanged` hook is what lets Helena observe (and persist) a wrap
   toggle made through the viewer's own toolbar.
+- **OpenAPI 3.2 operations now import.** kin-openapi 0.149 surfaces 3.2's fixed
+  `query` field and its `additionalOperations` map of custom method names, so a
+  3.2 spec's operations become requests instead of being silently dropped.
+  `query` operations import as first-class `QUERY` requests (see above); an
+  `additionalOperations` key is an arbitrary token with no bounded set to
+  support, so those requests send and round-trip normally but their method is
+  not offered in the dropdown.
 - **CI actions moved to their current majors**: `actions/setup-go` v6 → v7
   (six sites) and `actions/setup-python` v6 → v7. Both v7 releases are ESM
   migrations — `setup-go`'s `action.yml` input surface is byte-identical to

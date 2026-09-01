@@ -23,6 +23,7 @@ import (
 //	PUT     #e7ae80
 //	DELETE  #c56956
 //	PATCH   #e0a97c
+//	QUERY   #b9a3e3
 //	OPTIONS #86ddc9
 //	HEAD    #9cdcf0
 //	TRACE   #c2c2c2
@@ -39,6 +40,11 @@ func methodColor(m string) color.Color {
 		return color.NRGBA{R: 0xc5, G: 0x69, B: 0x56, A: 0xff}
 	case model.PATCH:
 		return color.NRGBA{R: 0xe0, G: 0xa9, B: 0x7c, A: 0xff}
+	case model.QUERY:
+		// Violet: QUERY is safe and idempotent like GET, but a distinct enough
+		// operation (a search carrying a body) to deserve its own tint rather
+		// than sharing the green.
+		return color.NRGBA{R: 0xb9, G: 0xa3, B: 0xe3, A: 0xff}
 	case model.OPTIONS:
 		return color.NRGBA{R: 0x86, G: 0xdd, B: 0xc9, A: 0xff}
 	case model.HEAD:

@@ -11,11 +11,16 @@ type Method string
 
 // Supported HTTP methods.
 const (
-	GET     Method = "GET"
-	POST    Method = "POST"
-	PUT     Method = "PUT"
-	PATCH   Method = "PATCH"
-	DELETE  Method = "DELETE"
+	GET    Method = "GET"
+	POST   Method = "POST"
+	PUT    Method = "PUT"
+	PATCH  Method = "PATCH"
+	DELETE Method = "DELETE"
+	// QUERY is the safe, idempotent, cacheable "GET with a body" standardized
+	// by RFC 10008 (Proposed Standard, June 2026) and registered in IANA's HTTP
+	// Method Registry. OpenAPI 3.2 gives it a dedicated path-item field, so
+	// imported specs can carry QUERY operations.
+	QUERY   Method = "QUERY"
 	HEAD    Method = "HEAD"
 	OPTIONS Method = "OPTIONS"
 	TRACE   Method = "TRACE"
@@ -23,7 +28,7 @@ const (
 )
 
 // Methods lists the HTTP methods Helena supports, in display order.
-var Methods = []Method{GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS, TRACE, CONNECT}
+var Methods = []Method{GET, POST, PUT, PATCH, DELETE, QUERY, HEAD, OPTIONS, TRACE, CONNECT}
 
 // Valid reports whether m is a recognized HTTP method.
 func (m Method) Valid() bool {

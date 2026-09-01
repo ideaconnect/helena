@@ -14,6 +14,15 @@ func TestMethodValid(t *testing.T) {
 	if Method("FOO").Valid() {
 		t.Errorf("FOO should not be valid")
 	}
+	// QUERY is a standard method (RFC 10008) Helena supports; PURGE is a
+	// vendor convention that is not registered and must stay unsupported, so
+	// an OpenAPI 3.2 additionalOperations token never becomes a listed method.
+	if !QUERY.Valid() {
+		t.Errorf("QUERY should be valid")
+	}
+	if Method("PURGE").Valid() {
+		t.Errorf("PURGE should not be valid")
+	}
 }
 
 // TestBodyTypeContentType verifies that each BodyType maps to its expected Content-Type header value.

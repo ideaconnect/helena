@@ -9,7 +9,7 @@ OpenAPI servers, tags, parameters and request bodies are mapped to Helena's URL/
 ## Public API
 
 - `From(data []byte) (model.Collection, error)` — auto-detecting dispatcher; routes Postman collections to `FromPostman`, XML to `FromWSDL`, everything else to `FromOpenAPI`.
-- `FromOpenAPI(data []byte) (model.Collection, error)` — parses OpenAPI 3 or Swagger 2 (auto-detected by `openapi`/`swagger` key); accepts JSON or YAML bytes.
+- `FromOpenAPI(data []byte) (model.Collection, error)` — parses OpenAPI 3 or Swagger 2 (auto-detected by `openapi`/`swagger` key); accepts JSON or YAML bytes. Every operation a path item declares is imported, including OpenAPI 3.2's fixed `query` field and its `additionalOperations` map of custom method names — those yield requests whose method (`QUERY`, `PURGE`, …) is outside `model.Methods`, so it sends and round-trips normally but the method picker's dropdown does not list it.
 - `FromPostman(data []byte) (model.Collection, error)` — parses a Postman Collection v2.x JSON document. Folders, requests, headers (with the `disabled` flag), query params, request bodies (`raw` typed by `options.raw.language`, `urlencoded`, `formdata`, `graphql` stored as a JSON body), and the bearer/basic/apikey/noauth schemes are mapped; events/scripts, response examples and file bodies are dropped rather than failing the import. A URL given as an object with no `raw` is reconstructed from its host + path parts.
 - `FromWSDL(data []byte) (model.Collection, error)` — parses a WSDL 1.1 document into one POST per binding operation.
 - `FromURL(url string, settings model.Settings) (model.Collection, error)` — fetches a spec over HTTP(S), honoring `InsecureSkipVerify` and `TimeoutSeconds`, then forwards the body through `From`.

@@ -159,7 +159,10 @@ whole list. Snapshots are secret-scrubbed before they are recorded, so
 
 ## Import & export
 
-- **Import** an OpenAPI 3 / Swagger 2 / WSDL / Postman (v2.x) document (file
+- **Import** an OpenAPI 3 (including 3.2's `query` operations, which become
+  first-class `QUERY` requests, and custom `additionalOperations` methods,
+  which import and send but are not offered in the method
+  dropdown) / Swagger 2 / WSDL / Postman (v2.x) document (file
   or URL) into a new collection, or paste a **cURL command** to build a single
   request.
 - **Export** the current request as a ready-to-run **cURL** or **wget**

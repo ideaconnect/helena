@@ -29,7 +29,7 @@ A few small helpers live here too: `NewID` mints random hex IDs for tree nodes, 
 - `BodyType.ContentType()` — returns the implied `Content-Type` header value, or `""` when none applies.
 
 ### Constants
-- HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `HEAD`, `OPTIONS`.
+- HTTP methods: `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, `QUERY`, `HEAD`, `OPTIONS`, `TRACE`, `CONNECT`. `QUERY` is the safe, idempotent "GET with a body" from RFC 10008; OpenAPI 3.2 gives it a dedicated path-item field, so imported specs can carry it.
 - Body types: `BodyNone`, `BodyJSON`, `BodyXML`, `BodyText`, `BodyForm`, `BodyMultipart`.
 - Themes: `ThemeSystem`, `ThemeLight`, `ThemeDark`.
 - Auth types: `AuthNone`, `AuthInherit`, `AuthBasic`, `AuthBearer`, `AuthAPIKey`, `AuthOAuth2`.
