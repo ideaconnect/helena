@@ -30,6 +30,21 @@ label via [`.github/release.yml`](.github/release.yml).
   `SetOnWrapChanged` hook, which is what lets Helena observe (and persist) a
   wrap toggle made through the viewer's own toolbar.
 
+### Security
+- **Go toolchain pinned to 1.26.7**, closing six standard-library advisories
+  `govulncheck` reports as reachable from Helena:
+  [GO-2026-6218](https://pkg.go.dev/vuln/GO-2026-6218) (`net/url`),
+  [GO-2026-6090](https://pkg.go.dev/vuln/GO-2026-6090) (`crypto/tls`),
+  [GO-2026-6089](https://pkg.go.dev/vuln/GO-2026-6089) and
+  [GO-2026-5026](https://pkg.go.dev/vuln/GO-2026-5026) (`net/http`),
+  [GO-2026-6088](https://pkg.go.dev/vuln/GO-2026-6088) (`encoding/xml`
+  recursion depth — reached by the WSDL/OpenAPI importers) and
+  [GO-2026-5972](https://pkg.go.dev/vuln/GO-2026-5972) (`encoding/asn1`).
+  All are fixed in 1.26.6; 1.26.7 is the current patch.
+- **`golang.org/x/text` bumped to v0.39.0**, closing
+  [GO-2026-5970](https://pkg.go.dev/vuln/GO-2026-5970), reachable through
+  goja's Unicode normalization on the scripting path.
+
 ## [0.7.0] - 2026-07-15
 
 ### Added

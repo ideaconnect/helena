@@ -1,6 +1,6 @@
 module github.com/idct/helena
 
-go 1.26.5
+go 1.26.7
 
 require (
 	fyne.io/fyne/v2 v2.7.4
@@ -60,5 +60,5 @@ require (
 	golang.org/x/image v0.43.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )

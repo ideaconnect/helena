@@ -181,7 +181,7 @@ cross-arch notes, troubleshooting) is in [docs/BUILDING.md](docs/BUILDING.md).
 Requirements:
 
 - Go 1.26+ to build. The exact build toolchain is pinned in `go.mod` via a
-  full-patch `go` directive (`go 1.26.5`); `go` auto-selects that toolchain, and
+  full-patch `go` directive (`go 1.26.7`); `go` auto-selects that toolchain, and
   CI locks it with `GOTOOLCHAIN=local` so it never silently drifts.
 - A C compiler (Fyne uses cgo + OpenGL)
 - **Linux**: `sudo apt-get install -y libgl1-mesa-dev xorg-dev`
