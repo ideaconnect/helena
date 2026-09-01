@@ -75,7 +75,7 @@ build flags, cross-arch notes, troubleshooting) is in
 
 - **Go 1.26+** (the toolchain is pinned in `go.mod`).
 - A **C compiler** - Fyne uses cgo + OpenGL.
-- **Linux:** `sudo apt-get install -y build-essential libgl1-mesa-dev xorg-dev`
+- **Linux:** `sudo apt-get install -y build-essential libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev` (the Wayland headers are needed since Fyne 2.8 builds that backend by default; add `-tags x11` to build X11-only without them)
 - **Windows:** TDM-GCC or MSYS2 mingw-w64 on `PATH`
 - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
 

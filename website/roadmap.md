@@ -18,8 +18,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Core request &amp; response</h2><span class="badge shipped">Shipped</span></div>
-      <p>Method, URL, query, headers, and bodies - JSON, XML, text, GraphQL, form, multipart, file. Pretty/raw response views, Validate/Format, and the native CORS advisory.</p>
-      <div class="chips"><span class="chip">GraphQL mode</span><span class="chip">file bodies</span><span class="chip">CORS advisory</span></div>
+      <p>Method - including RFC 10008 <code>QUERY</code> - URL, query, headers, and bodies - JSON, XML, text, GraphQL, form, multipart, file. A virtualized response viewer with fold, highlighting, find, and a sticky soft-wrap toggle, plus Validate/Format and the native CORS advisory.</p>
+      <div class="chips"><span class="chip">GraphQL mode</span><span class="chip">file bodies</span><span class="chip">CORS advisory</span><span class="chip">QUERY method</span><span class="chip">sticky soft-wrap</span></div>
     </div>
   </li>
 
@@ -56,7 +56,7 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Import / export / codegen</h2><span class="badge shipped">Shipped</span></div>
-      <p>Import OpenAPI / Swagger / WSDL / Postman; export to cURL, wget, fetch, Python, or Go; paste-cURL to build a request.</p>
+      <p>Import OpenAPI (through 3.2, including <code>query</code> and custom-method operations) / Swagger / WSDL / Postman; export to cURL, wget, fetch, Python, or Go; paste-cURL to build a request.</p>
     </div>
   </li>
 

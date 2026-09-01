@@ -33,18 +33,24 @@ self-contained ~35 MB binary, no Electron, no telemetry.
 - **Real-time — SSE & WebSocket** — stream Server-Sent Events into the response
   view, or open a two-way WebSocket (`ws://` / `wss://`) session with a live
   transcript. Both are hand-rolled on the Go standard library.
-- **Request builder** — method, URL, query params, headers, body
-  (JSON / XML / text / GraphQL / form-urlencoded / multipart / file). Validate +
-  Format buttons for JSON and XML; Send doubles as Abort while a request is
-  in flight.
+- **Request builder** — method (including **`QUERY`**, the safe, idempotent
+  body-carrying method standardized by RFC 10008), URL, query params, headers,
+  body (JSON / XML / text / GraphQL / form-urlencoded / multipart / file).
+  Validate + Format buttons for JSON and XML; Send doubles as Abort while a
+  request is in flight.
 - **Response viewer** — raw, pretty JSON, XML, and HTML (auto-detected), plus
-  headers. Status line shows `200 OK · 1.2 KB · 87 ms`; **Save response to
+  headers. It is virtualized, so a multi-megabyte body stays responsive:
+  collapsible nodes, syntax highlighting, find-in-response, and a **soft-wrap
+  toggle that remembers whether you left it on**, across responses and across
+  restarts. Status line shows `200 OK · 1.2 KB · 87 ms`; **Save response to
   file** writes the full untruncated bytes.
 - **CORS advisory.** Helena always sends the request (it isn't a browser),
   but when your request carries an `Origin` header it flags responses a
   browser would have blocked.
 - **Import** OpenAPI 3, Swagger 2, WSDL, or Postman — from a local file or a
-  URL — or paste a cURL command to build a request.
+  URL — or paste a cURL command to build a request. OpenAPI 3.2 `query`
+  operations import as `QUERY` requests, and its custom `additionalOperations`
+  methods import too rather than being dropped.
 - **Export** any request to cURL, wget, JavaScript fetch, Python requests, or
   Go net/http, with Copy-to-clipboard.
 - **Request history** — every send is logged (Help → History) with Restore,

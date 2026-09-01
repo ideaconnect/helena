@@ -10,15 +10,20 @@ description: Helena's features - auth, scripting, real-time, chaining, the runne
 
 ## Request builder
 
-Method, URL, query params, headers, and a body that can be **JSON, XML, text,
-GraphQL, form-urlencoded, multipart, or a raw file**. A **Path** tab fills the
+Method - including **`QUERY`**, the safe, idempotent body-carrying method
+standardized by RFC 10008 - plus URL, query params, headers, and a body that can
+be **JSON, XML, text, GraphQL, form-urlencoded, multipart, or a raw file**. A **Path** tab fills the
 `{name}` placeholders in your URL's path (e.g. `/bag/{bagId}`) - no hand-editing
 the raw URL - and the resolved preview shows the real target. JSON and XML get
 Validate and Format buttons, and Send doubles as Abort while a request is in
 flight. The
 response viewer shows raw, pretty JSON, XML, and HTML (auto-detected), plus
-headers, with a status line like `200 OK · 1.2 KB · 87 ms`, a **Save response
-to file** button that writes the full untruncated bytes, and a CORS advisory
+headers. It is virtualized, so a multi-megabyte body stays responsive:
+collapsible nodes, syntax highlighting, find-in-response, and a **soft-wrap
+toggle that remembers whether you left it on**, across responses and across
+restarts. There is a status line like `200 OK · 1.2 KB · 87 ms`, a **Save
+response to file** button that writes the full untruncated bytes, and a CORS
+advisory
 when a browser *would* have blocked the response - checked when your request
 carries an `Origin` header (Helena, being native, sends the request anyway).
 
@@ -78,7 +83,9 @@ junit`** report for CI dashboards.
 
 ## Import &amp; export
 
-Import **OpenAPI 3 / Swagger 2 / WSDL / Postman** from a file or URL. Export any
+Import **OpenAPI 3 / Swagger 2 / WSDL / Postman** from a file or URL - OpenAPI
+3.2 `query` operations arrive as `QUERY` requests, and its custom
+`additionalOperations` methods import too rather than being dropped. Export any
 request to **cURL, wget, JavaScript fetch, Python requests, or Go net/http**, or
 paste a cURL command to build a request.
 
