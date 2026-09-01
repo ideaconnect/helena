@@ -48,7 +48,8 @@ type UIOpenTab struct {
 }
 
 // UIState holds restorable session state: which collection/environment/request
-// the user had open, the open editor tabs, and the last window size.
+// the user had open, the open editor tabs, the last window size, and the
+// response viewer's soft-wrap toggle.
 type UIState struct {
 	ActiveCollection string            `yaml:"activeCollection,omitempty"`
 	ActiveEnv        map[string]string `yaml:"activeEnv,omitempty"` // collection dir -> env name
@@ -57,6 +58,10 @@ type UIState struct {
 	ActiveTab        int               `yaml:"activeTab,omitempty"`
 	WindowWidth      int               `yaml:"windowWidth,omitempty"`
 	WindowHeight     int               `yaml:"windowHeight,omitempty"`
+	// ResponseWrap is the response viewer's soft-wrap toggle. Off is the
+	// default (and the zero value), so `omitempty` writes the key only once
+	// the user has turned wrapping on.
+	ResponseWrap bool `yaml:"responseWrap,omitempty"`
 }
 
 // Config is Helena's persisted application state.

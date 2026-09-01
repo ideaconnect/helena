@@ -340,8 +340,17 @@ func NewMainUI(sess *session.Session) *MainUI {
 	// the source, built on the UI goroutine): the HTTP cap allows bodies up
 	// to 100 MiB, which would freeze the UI for a ~600 MB parse. applyResponse
 	// flags the truncation on the status line; Save response has full bytes.
-	m.pv = prettyview.New(prettyview.WithMaxInputBytes(displayBodyCap))
+	// The soft-wrap toggle is sticky: it opens in the mode the user left it in
+	// (persisted in the session UI state) and every flip — including the ones
+	// made through the viewer's own toolbar toggle — writes the new mode back.
+	m.pv = prettyview.New(
+		prettyview.WithMaxInputBytes(displayBodyCap),
+		prettyview.WithWrap(wrapModeFor(sess.ResponseWrap())),
+	)
 	m.pv.SetTheme(variantFor(sess.Settings().Theme), prettyview.Theme{})
+	m.pv.SetOnWrapChanged(func(mode prettyview.WrapMode) {
+		sess.SetResponseWrap(mode == prettyview.WrapWord)
+	})
 	pvToolbar := prettyview.NewToolbar(m.pv, prettyview.ToolbarConfig{
 		ShowFormat: true, ShowExpandCollapse: true, ShowWrap: true, ShowSearch: true,
 	})

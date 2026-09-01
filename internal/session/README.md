@@ -110,6 +110,9 @@ when displaying or sending requests.
   collection dir + `Request.ID`) and the active index. `SetOpenTabs` clears the
   legacy `OpenRequest`.
 - `Session.SetWindowSize(w, h int)` / `Session.WindowSize() (int, int)`
+- `Session.SetResponseWrap(on bool)` / `Session.ResponseWrap() bool` — the
+  response viewer's soft-wrap toggle, persisted on every flip (a redundant set
+  writes nothing) so the viewer reopens in the mode the user left it in.
 
 ### OAuth2 tokens
 

@@ -106,15 +106,18 @@ runs under `go test -race`.
 3. Rebuilds `activeEnv` (`map[int]string`) by translating the persisted
    path-keyed `cfg.UI.ActiveEnv` into the current index space.
 
-The open request and window size live in the config and are restored
-lazily — the shell asks `Session.OpenRequest()` / `Session.WindowSize()`
-when it builds the UI:
+The open request, window size and response-viewer wrap mode live in the
+config and are restored lazily — the shell asks `Session.OpenRequest()` /
+`Session.WindowSize()` / `Session.ResponseWrap()` when it builds the UI:
 
 - `OpenRequest()` reads `cfg.UI.OpenRequest`, finds the matching collection
   directory in `dirs`, and rebuilds the full node ID as
   `<index> + "/" + <NodePath>`. If the directory is no longer loaded it
   returns `""`.
 - `WindowSize()` returns the persisted `(w, h)` pair, or `(0, 0)` when unset.
+- `ResponseWrap()` returns the persisted soft-wrap toggle (`false` — horizontal
+  scroll — when unset). The shell seeds the viewer with it and registers
+  `SetOnWrapChanged`, so every toggle round-trips through `SetResponseWrap`.
 
 ## Tree node ID format
 

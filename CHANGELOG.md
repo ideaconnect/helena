@@ -19,6 +19,17 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+### Added
+- **The response viewer remembers its soft-wrap toggle.** Turning word wrap on
+  (the viewer toolbar's wrap button) now sticks: the mode is stored in the
+  session UI state and restored on the next launch, instead of resetting to
+  horizontal scroll every time Helena starts.
+
+### Changed
+- Bumped `go-fyne-pretty-view` to `v2.5.1-alpha` for its new
+  `SetOnWrapChanged` hook, which is what lets Helena observe (and persist) a
+  wrap toggle made through the viewer's own toolbar.
+
 ## [0.7.0] - 2026-07-15
 
 ### Added

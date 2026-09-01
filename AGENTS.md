@@ -288,7 +288,7 @@ Before declaring a task done: `gofmt -l .` (must be empty), `go vet ./...`,
   ships ~46 MB after task 7.3 added goja; goja, kin-openapi, and gopher-yaml
   are the only large external deps. Justify any addition. The response Body
   viewer uses `github.com/ideaconnect/go-fyne-pretty-view` (pinned at
-  `v2.3.0-alpha`, same author/org); it adds no new heavy module — its only
+  `v2.5.1-alpha`, same author/org); it adds no new heavy module — its only
   non-Fyne need is `golang.org/x/net/html`, already in the tree — but it
   bumped `golang.org/x/{net,sys,text}` minor versions. It bundles the Iconoir
   icon set (MIT) for its toolbar; carry that notice if it links. Any version

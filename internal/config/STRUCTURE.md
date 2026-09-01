@@ -32,6 +32,7 @@ Restorable session state.
 - `OpenTabs` — the open editor tabs (`omitempty`, so a tab-less session keeps a clean file).
 - `ActiveTab` — index into `OpenTabs` of the focused tab (`omitempty`).
 - `WindowWidth` / `WindowHeight` — last window size; restored at startup so the app reopens at its previous size.
+- `ResponseWrap` — the response viewer's soft-wrap toggle (`omitempty`; off is the default, so the key appears only once a user turns wrapping on). Restored at startup so the viewer reopens in the mode it was left in.
 
 ### `UIOpenRequest` — [config.go:23](config.go#L23)
 Locates an open request without using slice indices.

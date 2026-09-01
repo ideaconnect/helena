@@ -50,7 +50,9 @@ config; the collection contents live in their own directory.
 
 Pick a request (or just type a method + URL), then **Send** (Mod+Enter). The
 response pane shows the body (auto-detected JSON/XML/HTML, with fold +
-highlight + search), headers, and a status line with size and timing. A
+highlight + search), headers, and a status line with size and timing. The
+viewer's **soft-wrap** toggle is remembered: turn it on and long lines keep
+wrapping in every later response, and in the next session. A
 long-running send can be **aborted** with the same button. Failures surface in
 a dismissible banner above the response, so they aren't lost when the status
 line updates.

@@ -1245,3 +1245,19 @@ func (s *Session) SetWindowSize(w, h int) {
 func (s *Session) WindowSize() (int, int) {
 	return s.cfg.UI.WindowWidth, s.cfg.UI.WindowHeight
 }
+
+// SetResponseWrap stores the response viewer's soft-wrap toggle so the next
+// launch opens in the mode the user left it in. Persists immediately (the
+// toggle is a one-click action that must survive a crash, not just a clean
+// quit).
+func (s *Session) SetResponseWrap(on bool) {
+	if s.cfg.UI.ResponseWrap == on {
+		return // no write for a redundant set
+	}
+	s.cfg.UI.ResponseWrap = on
+	_ = s.persist()
+}
+
+// ResponseWrap reports the persisted response-viewer soft-wrap toggle. False
+// (horizontal scroll) is the default for a config that never stored one.
+func (s *Session) ResponseWrap() bool { return s.cfg.UI.ResponseWrap }

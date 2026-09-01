@@ -11,7 +11,7 @@ import (
 )
 
 // TestUIStateRoundTrip verifies that UIState (active collection, env map, open
-// request, open tabs + active tab, window size) survives Save/Load.
+// request, open tabs + active tab, window size, response wrap) survives Save/Load.
 func TestUIStateRoundTrip(t *testing.T) {
 	want := Config{
 		Version:    CurrentSchemaVersion,
@@ -29,6 +29,7 @@ func TestUIStateRoundTrip(t *testing.T) {
 			ActiveTab:    1,
 			WindowWidth:  1200,
 			WindowHeight: 800,
+			ResponseWrap: true,
 		},
 	}
 	path := filepath.Join(t.TempDir(), "config.yml")
@@ -59,5 +60,40 @@ func TestUIStateOmitsEmptyTabs(t *testing.T) {
 	}
 	if strings.Contains(string(data), "openTabs") || strings.Contains(string(data), "activeTab") {
 		t.Errorf("empty config wrote tab keys:\n%s", data)
+	}
+}
+
+// TestUIStateOmitsDefaultResponseWrap verifies wrap-off (the default) writes no
+// responseWrap key, so the persisted toggle only appears once a user turns it on.
+func TestUIStateOmitsDefaultResponseWrap(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.yml")
+	if err := Save(path, Default()); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if strings.Contains(string(data), "responseWrap") {
+		t.Errorf("wrap-off config wrote a responseWrap key:\n%s", data)
+	}
+
+	// Turning it on must write the key (the omitempty must not swallow a real
+	// preference), and it must load back as true.
+	c := Default()
+	c.UI.ResponseWrap = true
+	if err := Save(path, c); err != nil {
+		t.Fatalf("Save (wrap on): %v", err)
+	}
+	data, _ = os.ReadFile(path)
+	if !strings.Contains(string(data), "responseWrap: true") {
+		t.Errorf("wrap-on config did not write responseWrap:\n%s", data)
+	}
+	got, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !got.UI.ResponseWrap {
+		t.Error("ResponseWrap did not survive Save/Load")
 	}
 }

@@ -25,7 +25,11 @@ nil-`win` guard, the off-UI-goroutine send), it is called out explicitly.
    and then `restoreTabs` — which reopens the persisted `OpenTabs` (resolving
    each by collection dir + `Request.ID`) and activates the previously active
    one, or falls back to the legacy single `OpenRequest` when no tab set is
-   stored. See "Editor tabs" below.
+   stored. See "Editor tabs" below. The response viewer is constructed with
+   the remembered soft-wrap mode (`prettyview.WithWrap(wrapModeFor(
+   sess.ResponseWrap()))`) and registers `SetOnWrapChanged`, so a toolbar wrap
+   flip persists through `Session.SetResponseWrap` the moment it happens —
+   unlike the window size, which is only written at shutdown.
 8. `mainUI.SetWindow(w)` — ([shell.go:216](shell.go#L216)) records `m.win` and
    calls `registerShortcuts`. **Before this call `m.win` is nil and dialog
    actions short-circuit.** Keyboard shortcuts are not yet active either.

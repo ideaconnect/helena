@@ -1,7 +1,9 @@
 package session
 
 import (
+	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -71,5 +73,102 @@ func TestOpenRequestStableAcrossCollectionReordering(t *testing.T) {
 	s2, _ := New(cfgPath)
 	if got := s2.OpenRequest(); got != "0/r0" {
 		t.Errorf("OpenRequest after reorder = %q, want 0/r0", got)
+	}
+}
+
+// TestResponseWrapPersistsAndRestores verifies the response viewer's soft-wrap
+// toggle round-trips through a fresh Session both ways, so the viewer reopens in
+// the mode the user left it in.
+func TestResponseWrapPersistsAndRestores(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+
+	s, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if s.ResponseWrap() {
+		t.Error("ResponseWrap defaults to on; want off (horizontal scroll)")
+	}
+	s.SetResponseWrap(true)
+
+	s2, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New (reopen): %v", err)
+	}
+	if !s2.ResponseWrap() {
+		t.Fatal("ResponseWrap(true) did not survive a reopen")
+	}
+
+	// Turning it back off must persist too — an unset key would otherwise leave
+	// the stale `true` on disk and the viewer would reopen wrapped.
+	s2.SetResponseWrap(false)
+	s3, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New (reopen 2): %v", err)
+	}
+	if s3.ResponseWrap() {
+		t.Error("ResponseWrap(false) did not survive a reopen")
+	}
+}
+
+// TestSetResponseWrapRedundantSetDoesNotRewrite verifies setting the current
+// value is a no-op: the toggle fires on every viewer flip, and re-persisting the
+// whole config for a non-change is waste.
+func TestSetResponseWrapRedundantSetDoesNotRewrite(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	s, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	s.SetResponseWrap(true)
+
+	info, err := os.Stat(cfgPath)
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	// Make the on-disk file distinguishable from a rewrite without relying on
+	// mtime resolution: corrupt it, then check a redundant set leaves it alone.
+	if err := os.WriteFile(cfgPath, []byte("sentinel"), info.Mode()); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	s.SetResponseWrap(true) // redundant
+	data, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatalf("ReadFile: %v", err)
+	}
+	if string(data) != "sentinel" {
+		t.Errorf("redundant SetResponseWrap rewrote the config:\n%s", data)
+	}
+}
+
+// TestSetResponseWrapSurvivesAnUnwritableConfig pins that a failed persist does
+// not lose the in-memory toggle or crash the app: the wrap flip is a UI action
+// on the render path, so a config that cannot be written (read-only profile
+// directory) must degrade to "not remembered", never to a panic or a viewer
+// whose mode disagrees with the widget the user just clicked.
+func TestSetResponseWrapSurvivesAnUnwritableConfig(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("read-only directory bits are not enforced on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("a read-only directory does not block root's writes")
+	}
+	dir := filepath.Join(t.TempDir(), "ro")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfgPath := filepath.Join(dir, "config.yml")
+	s, err := New(cfgPath)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+
+	s.SetResponseWrap(true) // the persist fails; the session must not
+	if !s.ResponseWrap() {
+		t.Error("a failed persist dropped the in-memory wrap state")
 	}
 }

@@ -28,6 +28,16 @@ func formatForBodyType(bt model.BodyType) prettyview.Format {
 	}
 }
 
+// wrapModeFor maps the persisted response-viewer soft-wrap toggle to the
+// prettyview mode: on soft-wraps long lines to the viewport, off lets them
+// overflow into a horizontal scroll.
+func wrapModeFor(on bool) prettyview.WrapMode {
+	if on {
+		return prettyview.WrapWord
+	}
+	return prettyview.WrapNone
+}
+
 // syncBodyFromEditor copies the editor's live edit-buffer bytes into the current
 // request. The widget's OnChanged is debounced, so any consumer that needs the
 // authoritative body *now* (Save, Send, Validate, Format) must pull synchronously

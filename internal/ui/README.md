@@ -104,7 +104,7 @@ toolbar button, sidebar button, or keyboard shortcut.
   `driver/desktop`, `storage`, `test`) — widget toolkit.
 - `github.com/ideaconnect/go-fyne-pretty-view/v2` — the response Body viewer and the editable request-body widget
   (virtualized JSON/XML/HTML/raw with fold, syntax highlighting, search,
-  soft-wrap). Pinned at `v2.3.0-alpha`; same author / org as Helena.
+  soft-wrap). Pinned at `v2.5.1-alpha`; same author / org as Helena.
 - `github.com/idct/helena/internal/session` — workspace/collection/env state
   and persistence.
 - `github.com/idct/helena/internal/model` — request/response types, Theme,

@@ -20,6 +20,7 @@
 3. For each known collection, `ActiveEnv[collectionDir]` selects the named environment (falling back to "no env" if absent).
 4. If `OpenRequest` is non-nil and its `Collection`/`NodePath` resolve to an existing request, the request opens in the editor.
 5. `WindowWidth`/`WindowHeight`, when non-zero, are applied to the main window.
+6. `ResponseWrap` seeds the response viewer's soft-wrap mode at construction; every later flip of the viewer's wrap toggle writes it back.
 
 ## Clamping a corrupted `Active` index
 1. A hand-edited or stale config sets `Active: 9` while `Workspaces` has length 1.
