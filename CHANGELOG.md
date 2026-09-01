@@ -26,8 +26,6 @@ label via [`.github/release.yml`](.github/release.yml).
   (the viewer toolbar's wrap button) now sticks: the mode is stored in the
   session UI state and restored on the next launch, instead of resetting to
   horizontal scroll every time Helena starts.
-
-### Added
 - **`QUERY` is now a first-class method.** RFC 10008 (Proposed Standard, June
   2026) standardized QUERY — a safe, idempotent, cacheable request that carries
   its query in a body — and IANA registered it. It now sits in the method
