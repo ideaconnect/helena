@@ -7,7 +7,7 @@ require (
 	github.com/cucumber/godog v0.15.1
 	github.com/dop251/goja v0.0.0-20260629171413-2a84ae0cf10d
 	github.com/dweymouth/fyne-tooltip v0.4.0
-	github.com/getkin/kin-openapi v0.140.0
+	github.com/getkin/kin-openapi v0.149.0
 	github.com/ideaconnect/go-fyne-pretty-view/v2 v2.5.1-alpha
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -51,7 +51,7 @@ require (
 	github.com/oasdiff/yaml3 v0.0.14 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rymdport/portal v0.4.2 // indirect
-	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/spf13/pflag v1.0.7 // indirect
 	github.com/srwiley/oksvg v0.0.0-20221011165216-be6e8873101c // indirect
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
