@@ -19,6 +19,8 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-02
+
 ### Added
 - **The response viewer remembers its soft-wrap toggle.** Turning word wrap on
   (the viewer toolbar's wrap button) now sticks: the mode is stored in the

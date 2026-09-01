@@ -37,6 +37,21 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.8.0" date="2026-09-02" type="stable">
+      <description>
+        <p>
+          The response viewer now remembers whether you left soft-wrap on, across
+          responses and across restarts. QUERY (RFC 10008) is a first-class
+          method in the picker, and OpenAPI 3.2 specs import their query and
+          custom additionalOperations operations instead of dropping them.
+        </p>
+        <p>
+          Under the hood: Fyne 2.8, so Linux sessions run natively on Wayland
+          rather than through XWayland, plus a Go 1.26.7 toolchain and dependency
+          refresh closing seven security advisories.
+        </p>
+      </description>
+    </release>
     <release version="0.7.0" date="2026-07-15" type="stable">
       <description>
         <p>
