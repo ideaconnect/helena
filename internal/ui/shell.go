@@ -842,6 +842,16 @@ func (m *MainUI) saveRequest() {
 		m.saveScratchTabAs(t)
 		return
 	}
+	// Selecting a folder / collection row in the sidebar makes that collection
+	// active without switching tabs, so the session's active collection can
+	// differ from the one the editor's request lives in. Save targets the
+	// request's own collection — re-synced here the way activateTab does —
+	// otherwise SaveActiveCollection would write the other collection while
+	// the status line and the rebaselined snapshot claim this request was saved.
+	if ci := m.sess.Tree().CollectionIndex(m.currentRequestID); ci >= 0 && ci != m.sess.ActiveCollection() {
+		m.sess.SetActiveCollection(ci)
+		m.refreshEnvironments()
+	}
 	// Drop incomplete (empty-key) rows on save so we don't write noise to YAML.
 	m.currentRequest.Headers = pruneEmptyKV(m.currentRequest.Headers)
 	m.currentRequest.Body.Form = pruneEmptyKV(m.currentRequest.Body.Form)

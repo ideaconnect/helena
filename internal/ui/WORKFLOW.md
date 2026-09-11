@@ -243,6 +243,19 @@ that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
   overflow button right of the strip opens a menu of every open tab
   (`tabMenuItems`, the active one checked) for jumping to one scrolled out of
   view.
+- **Right-click menu.** `requestTab.TappedSecondary` → `showTabContextMenu`
+  ([tabmenu.go](tabmenu.go)) pops **Save · Close · Close Others · Close to the
+  Right** at the pointer. Save routes through `saveTab`: `saveRequest` only
+  knows the bound editor (debounced body flush, row pruning, the URL-fold
+  baseline keyed by the current node), so a non-active tab is `activateTab`'d
+  first and the strip visibly switches to it. The two bulk closes pick their
+  victims (`tabsOtherThan` / `tabsRightOf`) and go through `requestCloseTabs`,
+  which — like the single close — confirms once when any victim is a scratch
+  tab with content, then `closeTabs` removes the whole set in one pass: the
+  right-clicked tab is the *anchor*, never closed, and it becomes active when
+  the active tab was among the victims, so the editor rebinds once instead of
+  neighbour-hopping through `closeTab`. Victims closed meanwhile (while the
+  confirm was up) are skipped; a stale anchor makes the whole call a no-op.
 - **Per-tab response.** Each tab caches a `tabResponse` (raw body, header dump,
   status line, CORS text, console, error flag). `send` captures the initiating
   tab; the worker builds the `tabResponse` off-thread and the `fyne.Do` block
@@ -253,7 +266,7 @@ that node ID (or `""` for a scratch tab) because `EffectiveAuth`,
   switch. Only one Send runs at a time (`sendCancel`), so there are no
   concurrent per-tab sends. Wherever a large (≥ 8 MiB) body's model or cache is
   replaced or dropped — `applyResponse`/`clearResponsePanel`, `deliverResponse`
-  to an inactive tab, `closeTab`/`closeAllTabs`/`reconcileTabs`, stream start —
+  to an inactive tab, `closeTab`/`closeTabs`/`closeAllTabs`/`reconcileTabs`, stream start —
   `reclaimAfterLargeBody` ([memtrim.go](memtrim.go)) returns the freed heap to
   the OS on a single-flighted background goroutine, so RSS doesn't ratchet
   across a session of big responses.

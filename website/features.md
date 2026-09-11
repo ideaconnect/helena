@@ -108,5 +108,7 @@ size, invalid-SSL and follow-redirects toggles, a cookie jar with a viewer,
 so no credential is written to disk), drag-and-drop to reorder collections,
 folders, and requests in the sidebar, a status bar showing your current version
 with an **opt-in "Check for updates"** (a one-shot GitHub check only when you
-click it - never automatic, in keeping with the no-phone-home guarantee), and
+click it - never automatic, in keeping with the no-phone-home guarantee),
+request **tabs** you can drag to reorder and right-click for Save / Close /
+Close Others / Close to the Right, and
 keyboard shortcuts (Mod+Enter to send, Mod+S to save, …).

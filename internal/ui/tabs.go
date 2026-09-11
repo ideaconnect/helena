@@ -366,6 +366,7 @@ func (m *MainUI) rebuildTabBar() {
 			)
 			rt.onDrag = func(e *fyne.DragEvent) { m.dragTab(t, e) }
 			rt.onDragEnd = m.dragEnd
+			rt.onMenu = func(e *fyne.PointEvent) { m.showTabContextMenu(t, e) }
 			m.tabWidgets[t] = rt
 		}
 		method, name := m.tabLabel(t)

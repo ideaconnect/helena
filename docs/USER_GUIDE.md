@@ -46,6 +46,13 @@ drag a collection to reorder collections. Everything is stored as plain YAML on
 disk in the OpenCollection layout — Helena only records the folder paths in its
 config; the collection contents live in their own directory.
 
+Requests open in **tabs** above the editor. Drag a tab to reorder it, use
+the `⋮` button to jump to one that has scrolled out of view, and
+**right-click** a tab (Ctrl+click on macOS) for **Save**, **Close**, **Close
+Others**, and **Close to the Right**. Closing a tab never discards edits to a saved request (they stay
+in the collection until you save or quit); a scratch tab with content asks
+first.
+
 ## Sending a request
 
 Pick a request (or just type a method + URL), then **Send** (Mod+Enter). The

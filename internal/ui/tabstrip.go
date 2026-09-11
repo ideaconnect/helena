@@ -22,6 +22,7 @@ type requestTab struct {
 	name      *canvas.Text
 	closeBtn  *widget.Button
 	onSelect  func()
+	onMenu    func(*fyne.PointEvent) // secondary tap (right-click; Ctrl+click on macOS)
 	onDrag    func(*fyne.DragEvent)
 	onDragEnd func()
 }
@@ -77,6 +78,16 @@ func (t *requestTab) setActive(active bool) {
 func (t *requestTab) Tapped(_ *fyne.PointEvent) {
 	if t.onSelect != nil {
 		t.onSelect()
+	}
+}
+
+// TappedSecondary opens the tab's context menu at the pointer (save / close /
+// close others / close to the right). Fyne's desktop driver fires it on a
+// secondary-button release (Ctrl+click on macOS). As with Tapped, a right-click
+// landing on the close button is taken by the button and never reaches here.
+func (t *requestTab) TappedSecondary(e *fyne.PointEvent) {
+	if t.onMenu != nil {
+		t.onMenu(e)
 	}
 }
 

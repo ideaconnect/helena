@@ -19,6 +19,22 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+### Added
+- **Right-click menu on request tabs.** Right-click (Ctrl+click on macOS) a
+  tab for **Save**, **Close**, **Close Others**, and **Close to the Right**.
+  Save on a background tab switches to it first; the bulk closes ask once
+  before discarding a scratch tab that has content, and close saved requests
+  silently (their edits stay in the collection, as with the tab's close
+  button).
+
+### Fixed
+- **Save wrote the wrong collection after a sidebar click.** With two
+  collections open, selecting a folder or collection row of the *other*
+  collection and then saving (Mod+S, or the new tab menu) wrote that
+  collection instead of the one the edited request belongs to — the status
+  line still said "Saved" and the tab's unsaved marker cleared, so the edit
+  could be lost on quit. Save now targets the editor's own collection.
+
 ## [0.8.0] - 2026-09-02
 
 ### Added
