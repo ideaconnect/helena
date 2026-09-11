@@ -20,6 +20,15 @@ label via [`.github/release.yml`](.github/release.yml).
 ## [Unreleased]
 
 ### Added
+- **Folder and collection auth.** Auth inheritance finally has something to
+  inherit from inside the app: the sidebar's **Folder settings** (folder-tree
+  icon, with a folder selected) and **Collection settings** (sliders icon)
+  dialogs gained an **Auth** tab with the same schemes and fields as a
+  request's Auth tab. Requests default to *Inherit from parent*, so setting a
+  Bearer token on a folder covers every request inside it; the folder
+  dialog's Inherit panel previews what the folder itself would inherit, and
+  the collection root offers no *Inherit* (it has no parent). Secrets are
+  externalized like request auth.
 - **Right-click menu on request tabs.** Right-click (Ctrl+click on macOS) a
   tab for **Save**, **Close**, **Close Others**, and **Close to the Right**.
   Save on a background tab switches to it first; the bulk closes ask once
@@ -27,7 +36,17 @@ label via [`.github/release.yml`](.github/release.yml).
   silently (their edits stay in the collection, as with the tab's close
   button).
 
+### Changed
+- The sidebar's **Folder variables** and **Collection variables** buttons are
+  now **Folder settings** and **Collection settings**: the same icons and
+  gating, opening a tabbed **Variables** | **Auth** dialog that saves both
+  tabs in one write.
+
 ### Fixed
+- The Auth tab's *Inherit from parent* preview echoed the request's own saved
+  scheme (e.g. "effective auth: Bearer Token") when switching an
+  authenticated request to Inherit; it now shows what the request would
+  actually inherit from its folder / collection.
 - **Save wrote the wrong collection after a sidebar click.** With two
   collections open, selecting a folder or collection row of the *other*
   collection and then saving (Mod+S, or the new tab menu) wrote that

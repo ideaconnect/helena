@@ -48,6 +48,10 @@ authorization-code + PKCE, with token caching) · **OAuth 1.0a** (HMAC-SHA1) ·
 **WSSE** · **AWS Signature v4** · **HTTP Digest** (challenge/response) ·
 **NTLM** (the multi-round Windows handshake).
 
+Set auth once on a **folder** or the **collection root** (the sidebar's
+settings dialogs) and requests inherit it by default; any request can still
+override with its own scheme or *None*.
+
 [Full authentication guide →]({{ site.repo }}/blob/main/docs/guide/auth.md)
 
 ## Scripting, tests &amp; assertions

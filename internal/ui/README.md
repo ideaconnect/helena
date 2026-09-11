@@ -71,6 +71,11 @@ toolbar button, sidebar button, or keyboard shortcut.
   ([workspaces.go](workspaces.go)).
 - `editEnvironments` — key/value list editor for the active environment
   ([envedit.go](envedit.go)).
+- `editFolderSettings` / `editCollectionSettings` — tabbed **Variables** |
+  **Auth** dialogs for the selected folder / the active collection root,
+  saved together in one write; the Auth tab is the same `authEditor` the
+  request editor uses ([containersettings.go](containersettings.go),
+  [authedit.go](authedit.go)).
 - `editSettings` — theme / TLS / CORS / redirects / timeout dialog
   ([shell.go](shell.go)).
 - `refreshEnvironments` / `refreshWorkspaceDropdown` — reseed toolbar selects

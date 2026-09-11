@@ -44,12 +44,12 @@ type MainUI struct {
 	// Sidebar toolbar: node-action icon buttons operating on the selected tree
 	// node. rename / delete enable with any selection; clone with a folder or
 	// request; add request / folder fall back to the active collection.
-	sbAddReq     *ttwidget.Button
-	sbAddFolder  *ttwidget.Button
-	sbRename     *ttwidget.Button
-	sbClone      *ttwidget.Button
-	sbDelete     *ttwidget.Button
-	sbFolderVars *ttwidget.Button // folder-scoped variables (#81); gated to folder selection
+	sbAddReq         *ttwidget.Button
+	sbAddFolder      *ttwidget.Button
+	sbRename         *ttwidget.Button
+	sbClone          *ttwidget.Button
+	sbDelete         *ttwidget.Button
+	sbFolderSettings *ttwidget.Button // folder settings (variables #81 + auth); gated to folder selection
 	// Drag-and-drop reordering of the collections tree (see treedrag.go).
 	treeRows      map[*treeRow]string // live row → bound node id, for drop hit-testing
 	treeSearch    *shortcutEntry      // sidebar cross-collection search box (#67)
@@ -85,34 +85,7 @@ type MainUI struct {
 	chainRows           *fyne.Container
 	assertionRows       *fyne.Container // declarative assertion rows (#88)
 
-	authType                                                          *widget.Select
-	authBasicUsername, authBasicPassword                              *shortcutEntry
-	authDigestUsername, authDigestPassword                            *shortcutEntry
-	authDigestPanel                                                   *widget.Form
-	authNTLMUsername, authNTLMPassword                                *shortcutEntry
-	authNTLMDomain, authNTLMWorkstation                               *shortcutEntry
-	authNTLMPanel                                                     *widget.Form
-	authWSSEUsername, authWSSEPassword                                *shortcutEntry
-	authWSSEPanel                                                     *widget.Form
-	authOAuth1ConsumerKey, authOAuth1ConsumerSecret                   *shortcutEntry
-	authOAuth1Token, authOAuth1TokenSecret                            *shortcutEntry
-	authOAuth1Panel                                                   *widget.Form
-	authAWSV4AccessKey, authAWSV4SecretKey, authAWSV4Region           *shortcutEntry
-	authAWSV4Service, authAWSV4SessionToken                           *shortcutEntry
-	authAWSV4Panel                                                    *widget.Form
-	authBearerToken                                                   *shortcutEntry
-	authAPIKeyName, authAPIKeyValue                                   *shortcutEntry
-	authAPIKeyPlacement                                               *widget.Select
-	authOAuth2Grant                                                   *widget.Select
-	authOAuth2TokenURL, authOAuth2AuthURL                             *shortcutEntry
-	authOAuth2ClientID, authOAuth2ClientSecret, authOAuth2Scope       *shortcutEntry
-	authOAuth2RedirectURI, authOAuth2Audience                         *shortcutEntry
-	authOAuth2UsePKCE                                                 *widget.Check
-	authOAuth2ClearTokens                                             *widget.Button
-	authInheritLabel                                                  *widget.Label
-	authNonePanel, authInheritPanel                                   *fyne.Container
-	authBasicPanel, authBearerPanel, authAPIKeyPanel, authOAuth2Panel *widget.Form
-	authFormsStack                                                    *fyne.Container
+	authEd *authEditor // the Auth tab (shared authEditor bound to currentRequest; see authedit.go)
 
 	pv          *prettyview.PrettyView // response body viewer (structured + raw + search)
 	headersText *shortcutEntry
@@ -472,7 +445,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	newColBtn := tipButton("square-plus", "New collection", m.actionNewCollection)
 	openBtn := tipButton("folder-open", "Open collection", m.openCollection)
 	importBtn := tipButton("download", "Import", m.actionImport)
-	colVarsBtn := tipButton("sliders", "Collection variables", m.editCollectionVariables)
+	colSettingsBtn := tipButton("sliders", "Collection settings", m.editCollectionSettings)
 	runColBtn := tipButton("play", "Run collection (or selected folder)", m.actionRunCollection)
 
 	// Node-action buttons operating on the selected tree node. Enable state is
@@ -482,7 +455,7 @@ func NewMainUI(sess *session.Session) *MainUI {
 	m.sbAddFolder = tipButton("folder-plus", "New folder", m.actionNewFolder)
 	m.sbRename = tipButton("pen-to-square", "Rename", m.actionRename)
 	m.sbClone = tipButton("copy", "Duplicate", m.actionDuplicate)
-	m.sbFolderVars = tipButton("folder-tree", "Folder variables", m.editFolderVariables)
+	m.sbFolderSettings = tipButton("folder-tree", "Folder settings", m.editFolderSettings)
 	m.sbDelete = tipButton("trash-can", "Delete", m.actionDelete)
 	m.refreshSidebarActions()
 
@@ -502,8 +475,8 @@ func NewMainUI(sess *session.Session) *MainUI {
 	fileIndicator := container.New(layout.NewCustomPaddedLayout(pad, pad, pad, pad), fileIcon)
 	gap := canvas.NewRectangle(color.Transparent)
 	gap.SetMinSize(fyne.NewSize(theme.Padding()*3, 1))
-	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn, colVarsBtn, runColBtn)
-	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename, m.sbFolderVars)
+	leftGroup := container.NewHBox(m.sbDelete, gap, cubeIndicator, newColBtn, openBtn, importBtn, colSettingsBtn, runColBtn)
+	rightGroup := container.NewHBox(fileIndicator, m.sbAddReq, m.sbClone, m.sbAddFolder, m.sbRename, m.sbFolderSettings)
 	actionToolbar := container.NewThemeOverride(
 		container.NewBorder(nil, nil, leftGroup, rightGroup),
 		toolbarTheme{})
@@ -722,7 +695,7 @@ func (m *MainUI) refreshSidebarActions() {
 	// Clone duplicates a request or a folder (a node id contains "/"); whole
 	// collections aren't duplicable, so a collection selection leaves it off.
 	enableButton(m.sbClone, strings.Contains(sel, "/"))
-	enableButton(m.sbFolderVars, m.isFolderSelected())
+	enableButton(m.sbFolderSettings, m.isFolderSelected())
 }
 
 // loadRequest populates every editor widget from req, with the loading flag set

@@ -12,10 +12,10 @@ func TestAuthTabLoadsOAuth1(t *testing.T) {
 	m := newAuthUI(t)
 	req := &model.Request{Auth: model.Auth{Type: model.AuthOAuth1, OAuth1: &model.OAuth1Auth{ConsumerKey: "ck", Token: "tok"}}}
 	m.loadRequest(req, "0/r0")
-	if got := m.authType.Selected; got != "OAuth 1.0a" {
+	if got := m.authEd.typeSel.Selected; got != "OAuth 1.0a" {
 		t.Errorf("authType.Selected = %q, want OAuth 1.0a", got)
 	}
-	if got := m.authOAuth1ConsumerKey.Text; got != "ck" {
+	if got := m.authEd.oauth1ConsumerKey.Text; got != "ck" {
 		t.Errorf("consumer key = %q, want ck", got)
 	}
 }
@@ -27,10 +27,10 @@ func TestAuthTabOAuth1WriteBack(t *testing.T) {
 	req := &model.Request{Auth: model.Auth{Type: model.AuthOAuth1}}
 	m.loadRequest(req, "0/r0")
 
-	m.authOAuth1ConsumerKey.OnChanged("ck")
-	m.authOAuth1ConsumerSecret.OnChanged("cs")
-	m.authOAuth1Token.OnChanged("tk")
-	m.authOAuth1TokenSecret.OnChanged("ts")
+	m.authEd.oauth1ConsumerKey.OnChanged("ck")
+	m.authEd.oauth1ConsumerSecret.OnChanged("cs")
+	m.authEd.oauth1Token.OnChanged("tk")
+	m.authEd.oauth1TokenSecret.OnChanged("ts")
 
 	o := req.Auth.OAuth1
 	if o == nil || o.ConsumerKey != "ck" || o.ConsumerSecret != "cs" || o.Token != "tk" || o.TokenSecret != "ts" {

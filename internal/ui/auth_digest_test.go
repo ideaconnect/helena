@@ -12,10 +12,10 @@ func TestAuthTabLoadsDigest(t *testing.T) {
 	m := newAuthUI(t)
 	req := &model.Request{Auth: model.Auth{Type: model.AuthDigest, Digest: &model.DigestAuth{Username: "mufasa"}}}
 	m.loadRequest(req, "0/r0")
-	if got := m.authType.Selected; got != "Digest Auth" {
+	if got := m.authEd.typeSel.Selected; got != "Digest Auth" {
 		t.Errorf("authType.Selected = %q, want Digest Auth", got)
 	}
-	if got := m.authDigestUsername.Text; got != "mufasa" {
+	if got := m.authEd.digestUsername.Text; got != "mufasa" {
 		t.Errorf("username = %q, want mufasa", got)
 	}
 }
@@ -27,8 +27,8 @@ func TestAuthTabDigestWriteBack(t *testing.T) {
 	req := &model.Request{Auth: model.Auth{Type: model.AuthDigest}}
 	m.loadRequest(req, "0/r0")
 
-	m.authDigestUsername.OnChanged("u")
-	m.authDigestPassword.OnChanged("p")
+	m.authEd.digestUsername.OnChanged("u")
+	m.authEd.digestPassword.OnChanged("p")
 
 	d := req.Auth.Digest
 	if d == nil || d.Username != "u" || d.Password != "p" {

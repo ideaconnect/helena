@@ -154,11 +154,18 @@ func (m *MainUI) editEnvironments() {
 	})
 }
 
-// showVariablesEditor opens the shared key/value variables editor used by both
-// the environment editor and the collection-variables editor (#80). It works on
-// a copy of initial — masking Secret values until the reveal toggle — and calls
-// onSave with the pruned result (blank-key rows dropped) when the user saves.
-func (m *MainUI) showVariablesEditor(title, guardLabel string, initial []model.Variable, onSave func([]model.Variable)) {
+// variablesEditor is the shared key/value variables list — one row per
+// variable with enable / secret / remove controls and an add button — without
+// a dialog around it, so it can be embedded (the folder / collection settings
+// tabs) as well as shown on its own by showVariablesEditor.
+type variablesEditor struct {
+	content fyne.CanvasObject
+	// result returns the edited rows with empty keys pruned.
+	result func() []model.Variable
+}
+
+// newVariablesEditor builds the list over a working copy of initial.
+func (m *MainUI) newVariablesEditor(initial []model.Variable) *variablesEditor {
 	// Working copy holds the real values; the list masks secrets in the display.
 	vars := append([]model.Variable(nil), initial...)
 	hasSecret := false
@@ -197,13 +204,22 @@ func (m *MainUI) showVariablesEditor(title, guardLabel string, initial []model.V
 		})
 		top = container.NewBorder(nil, nil, revealCheck, addBtn, nil)
 	}
-	content := container.NewBorder(top, nil, nil, nil, container.NewVScroll(rows))
+	return &variablesEditor{
+		content: container.NewBorder(top, nil, nil, nil, container.NewVScroll(rows)),
+		result:  func() []model.Variable { return pruneEmptyVars(vars) },
+	}
+}
 
-	d := dialog.NewCustomConfirm(title, "Save", "Cancel", content, func(ok bool) {
+// showVariablesEditor opens the shared key/value variables editor used by the
+// environment, global, and request variables dialogs (title and guard label
+// differ per caller). Save hands the pruned rows to onSave under m.guard.
+func (m *MainUI) showVariablesEditor(title, guardLabel string, initial []model.Variable, onSave func([]model.Variable)) {
+	ve := m.newVariablesEditor(initial)
+	d := dialog.NewCustomConfirm(title, "Save", "Cancel", ve.content, func(ok bool) {
 		if !ok {
 			return
 		}
-		m.guard(guardLabel, func() { onSave(pruneEmptyVars(vars)) })
+		m.guard(guardLabel, func() { onSave(ve.result()) })
 	}, m.win)
 	d.Resize(fyne.NewSize(560, 440))
 	d.Show()

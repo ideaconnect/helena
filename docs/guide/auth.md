@@ -23,6 +23,27 @@ manual escape hatches keep working.
 *None* sends no credentials. *Inherit from parent* walks up the
 folder → collection chain and applies the nearest configured auth.
 
+## Auth on a folder or the collection
+
+Set auth once, high up, and let requests inherit it:
+
+- **Folder** — select the folder in the sidebar and click the **Folder
+  settings** button (the folder-tree icon). The dialog's **Auth** tab has the
+  same *Type* dropdown and fields as a request's Auth tab. Its *Inherit from
+  parent* panel shows what the folder itself would inherit from the enclosing
+  folders or the collection.
+- **Collection** — click the **Collection settings** button (the sliders
+  icon). Its **Auth** tab configures the collection root. There is no
+  *Inherit* option here: the root has no parent, so an unset root means
+  *None*.
+
+Both dialogs pair the **Variables** and **Auth** tabs and save them together.
+New requests default to *Inherit from parent*, so everything under a folder
+picks up the folder's auth with no further clicks; a request that needs
+something different sets its own *Type* (or *None* to send no credentials at
+all). Folder and collection auth live in `folder.yml` / `opencollection.yml`,
+with secrets externalized exactly like request auth.
+
 ## Basic Auth
 
 Username + password, sent as `Authorization: Basic base64(user:pass)`.

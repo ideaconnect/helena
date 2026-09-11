@@ -12,13 +12,13 @@ func TestAuthTabLoadsNTLM(t *testing.T) {
 	m := newAuthUI(t)
 	req := &model.Request{Auth: model.Auth{Type: model.AuthNTLM, NTLM: &model.NTLMAuth{Username: "alice", Domain: "CORP"}}}
 	m.loadRequest(req, "0/r0")
-	if got := m.authType.Selected; got != "NTLM" {
+	if got := m.authEd.typeSel.Selected; got != "NTLM" {
 		t.Errorf("authType.Selected = %q, want NTLM", got)
 	}
-	if got := m.authNTLMUsername.Text; got != "alice" {
+	if got := m.authEd.ntlmUsername.Text; got != "alice" {
 		t.Errorf("username = %q, want alice", got)
 	}
-	if got := m.authNTLMDomain.Text; got != "CORP" {
+	if got := m.authEd.ntlmDomain.Text; got != "CORP" {
 		t.Errorf("domain = %q, want CORP", got)
 	}
 }
@@ -30,10 +30,10 @@ func TestAuthTabNTLMWriteBack(t *testing.T) {
 	req := &model.Request{Auth: model.Auth{Type: model.AuthNTLM}}
 	m.loadRequest(req, "0/r0")
 
-	m.authNTLMUsername.OnChanged("u")
-	m.authNTLMPassword.OnChanged("p")
-	m.authNTLMDomain.OnChanged("d")
-	m.authNTLMWorkstation.OnChanged("ws")
+	m.authEd.ntlmUsername.OnChanged("u")
+	m.authEd.ntlmPassword.OnChanged("p")
+	m.authEd.ntlmDomain.OnChanged("d")
+	m.authEd.ntlmWorkstation.OnChanged("ws")
 
 	n := req.Auth.NTLM
 	if n == nil || n.Username != "u" || n.Password != "p" || n.Domain != "d" || n.Workstation != "ws" {

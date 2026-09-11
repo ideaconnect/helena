@@ -714,32 +714,42 @@ cheap enough not to matter.
 
 ## Auth tab: type-driven form swap
 
-`buildAuthTab` at [auth.go:53](auth.go#L53) builds a fixed set of widgets
-once and toggles visibility based on the selected Type. The tab lives
-between Params and Headers in `m.Request`.
+The Auth tab is an `authEditor` ([authedit.go](authedit.go)) — the same
+component the folder / collection settings dialogs embed — bound by
+`buildAuthTab` ([auth.go](auth.go)) to the current request. It builds a
+fixed set of widgets once and toggles visibility based on the selected
+Type. The tab lives between Body and Headers in `m.Request`.
 
-1. The Type dropdown (`m.authType`) lists six labels — None, Inherit from
-   parent, Basic Auth, Bearer Token, API Key, OAuth 2.0 — mapped to
-   `model.AuthType` via `authTypeByLabel`.
-2. Six form panels (`authNonePanel`, `authInheritPanel`,
-   `authBasicPanel`, `authBearerPanel`, `authAPIKeyPanel`,
-   `authOAuth2Panel`) are stacked inside `authFormsStack` (a Fyne
-   stack container). `refreshAuthVisibility` hides every panel and then
-   shows only the one matching the active Type.
-3. Each editable widget on every panel has an `OnChanged` that calls one
-   of the `ensure*` helpers (e.g. `ensureBasic()`) to lazily allocate the
-   matching sub-struct on the current request and then writes the field.
-   All callbacks honour the `m.loading` guard.
-4. The Inherit panel surfaces what would actually be applied by walking
-   the ancestor chain via `m.sess.EffectiveAuth(m.currentRequestID)` and
-   formatting the resolved Type in `m.authInheritLabel`.
-   `refreshAuthInheritLabel` runs both after the user changes the
-   dropdown and at the end of `loadAuthTab`.
+1. The Type dropdown (`authEd.typeSel`) lists `authTypeLabels` — None,
+   Inherit from parent, Basic Auth, Digest Auth, NTLM, Bearer Token, API
+   Key, OAuth 1.0a, OAuth 2.0, WS-Security, AWS Signature v4 — mapped to
+   `model.AuthType` via `authTypeByLabel`. (`allowInherit: false` drops
+   the Inherit entry; the collection-root settings dialog uses that.)
+2. One panel per scheme (plus None and Inherit) is stacked inside
+   `authEd.stack`. `refreshVisibility` hides every panel and then shows
+   only the one matching the active Type.
+3. Every widget callback funnels through `authEditor.write`. The write is
+   dropped while `e.loading` (a `load` in progress) or `opts.busy()` (the
+   request tab passes `m.loading` — invariant 3) is set, or when
+   `opts.target()` returns nil (no request loaded). Otherwise it calls the
+   package-level `ensure*` allocator (e.g. `ensureBasic(a)`) to lazily
+   allocate the matching sub-struct on the target Auth, writes the field,
+   and fires `opts.onChange` (`refreshActiveTabDirty` for the request
+   tab). Construction itself runs under `e.loading`, because the
+   dropdowns' initial `SetSelected` calls fire their callbacks.
+4. The Inherit panel surfaces what the node would inherit via
+   `opts.inheritText`. The request tab's `requestInheritText` formats
+   `m.sess.InheritedAuth(m.currentRequestID)` through `inheritPreview`.
+   `InheritedAuth` walks the ancestors only — `EffectiveAuth` would echo
+   the request's own *saved* scheme back while the user is switching the
+   dropdown to Inherit. `refreshAuthInheritLabel` re-runs it after a
+   load and after a folder / collection settings save.
 5. `loadAuthTab(req)` is called from `loadRequest` under the `m.loading`
-   flag. It pushes the request's Auth fields into the matching widgets,
-   sets the Type dropdown, clears all the unused sub-form widgets so
-   stale data from a previous request never appears, and refreshes
-   visibility + the Inherit label.
+   flag and delegates to `authEd.load(req.Auth)` (a nil request loads a
+   blank Inherit form). `load` sets the Type dropdown, pushes the
+   matching sub-struct's fields into the widgets, clears every other
+   sub-form so stale data from a previous request never appears, and
+   refreshes visibility + the Inherit label.
 
 Switching Type does NOT clear the other sub-structs in memory — the user
 can flip between Basic and Bearer without losing partial fills. They
@@ -748,7 +758,40 @@ sub-struct matching the active Type. The next load will see a clean
 file and rebuild the form accordingly.
 
 The OAuth 2.0 panel includes a **Clear cached tokens** button. It calls
-`m.sess.TokenCache().ClearNamespace(m.sess.ActiveCollectionDir())` and sets
-a status message — scoped to the active collection so other collections'
-cached tokens survive. Use it when rotating a client secret or recovering
-from a stale token without restarting the app; the next Send re-fetches.
+`m.sess.TokenCache().ClearNamespace(opts.tokenNamespace())` — the active
+collection's directory for the request tab, the owning collection's for a
+settings dialog — and sets a status message, so other collections' cached
+tokens survive. Use it when rotating a client secret or recovering from a
+stale token without restarting the app; the next Send re-fetches.
+
+## Folder / collection settings: variables + auth in one dialog
+
+The sidebar's `folder-tree` button (**Folder settings**, gated to a
+folder selection by `refreshSidebarActions`) and `sliders` button
+(**Collection settings**, the active collection) open a
+`containerSettings` dialog ([containersettings.go](containersettings.go)):
+an `AppTabs` with a **Variables** tab (`newVariablesEditor`, the same
+key/value list the environment / global / request dialogs show) and an
+**Auth** tab (an `authEditor` bound to a working copy of the container's
+Auth). This is how auth gets onto a folder or the collection root so that
+requests — which default to Inherit (AGENTS invariant 10) — have
+something to inherit.
+
+1. `folderSettings(nodeID)` reads `Session.FolderVariables` +
+   `Session.FolderAuth` (the folder's OWN auth; Inherit when unset) and
+   builds the dialog with `allowInherit: true`. Its Inherit panel previews
+   `Session.InheritedAuth(nodeID)` — what the folder receives from the
+   enclosing folders / collection root. `collectionSettings(ci)` reads the
+   root's `Variables` / `Auth` and builds with `allowInherit: false` (a
+   root has no parent; a zero Auth loads as None).
+2. Both editors work on copies (`variablesEditor` on a slice copy,
+   `authEditor` on `cs.authWork = a.Clone()`), so Cancel discards.
+   `showContainerSettings` wraps the tabs in a Save / Cancel
+   `dialog.NewCustomConfirm`; Save runs `cs.save` under `m.guard`, which
+   hands the pruned variables and the edited Auth to `onSave` in one call.
+3. `onSave` persists both with ONE write — `Session.UpdateFolder(nodeID,
+   mutate)` / `Session.UpdateCollection(ci, mutate)` — then refreshes the
+   URL preview (folder / collection variables feed it) and calls
+   `refreshAuthInheritLabel` so an open request whose auth is Inherit
+   shows the new ancestor immediately. Auth secrets are externalized by
+   the storage layer exactly as request auth is (#42).

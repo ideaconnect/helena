@@ -339,6 +339,16 @@ func (s *Session) EffectiveAuth(nodeID string) model.Auth {
 	return auth.Resolve(own, t.AncestorAuths(nodeID))
 }
 
+// InheritedAuth returns the auth the node at nodeID would receive from its
+// ancestors if its own Auth were Inherit: the folder → collection chain only,
+// ignoring anything set on the node itself. Falls back to AuthNone when no
+// ancestor configures auth (or nodeID is unknown). This is what the Auth
+// editors' "Inheriting — effective auth: …" preview shows; EffectiveAuth is
+// the Send-time value, which also honours the request's own auth.
+func (s *Session) InheritedAuth(nodeID string) model.Auth {
+	return auth.Resolve(model.Auth{Type: model.AuthInherit}, s.Tree().AncestorAuths(nodeID))
+}
+
 // ActiveCollection returns the index of the active collection, or -1.
 func (s *Session) ActiveCollection() int { return s.activeCol }
 
@@ -579,12 +589,44 @@ func (s *Session) FolderVariables(nodeID string) ([]model.Variable, bool) {
 // SetFolderVariables replaces the folder's variables and persists its
 // collection. The folder pointer is live in s.cols (Tree shares the slice).
 func (s *Session) SetFolderVariables(nodeID string, variables []model.Variable) error {
+	return s.UpdateFolder(nodeID, func(f *model.Folder) { f.Variables = variables })
+}
+
+// FolderAuth returns the Auth set directly on the folder at nodeID (Inherit
+// when the folder has none of its own), or false when nodeID does not address
+// a folder. This is the folder's OWN value, not the resolved one — see
+// InheritedAuth for what its descendants would receive.
+func (s *Session) FolderAuth(nodeID string) (model.Auth, bool) {
+	f, ok := s.Tree().containerFolder(nodeID)
+	if !ok {
+		return model.Auth{}, false
+	}
+	return f.Auth, true
+}
+
+// UpdateFolder applies mutate to the folder at nodeID and persists its
+// collection — one disk write however many fields change, which is what the
+// sidebar's folder-settings dialog needs when it saves variables and auth
+// together. Returns an error (and calls nothing) when nodeID is not a folder.
+func (s *Session) UpdateFolder(nodeID string, mutate func(*model.Folder)) error {
 	f, ok := s.Tree().containerFolder(nodeID)
 	if !ok {
 		return fmt.Errorf("not a folder: %q", nodeID)
 	}
-	f.Variables = variables
+	mutate(f)
 	return s.saveCollection(nodeCollectionIndex(nodeID))
+}
+
+// UpdateCollection applies mutate to the collection at index ci (its
+// root-level fields: variables, auth, …) and persists it. The counterpart of
+// UpdateFolder for the collection root. Returns an error (and calls nothing)
+// when ci is out of range.
+func (s *Session) UpdateCollection(ci int, mutate func(*model.Collection)) error {
+	if ci < 0 || ci >= len(s.cols) {
+		return fmt.Errorf("no collection at index %d", ci)
+	}
+	mutate(&s.cols[ci])
+	return s.saveCollection(ci)
 }
 
 // SetEnvOverlay records a script-set environment variable for the lifetime

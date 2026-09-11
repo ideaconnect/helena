@@ -208,6 +208,20 @@ UI Send calls `EffectiveAuth(m.currentRequestID)` on a copy of the
 request right before handing it to `httpclient.Do`, so the engine sees
 the flattened auth and never has to know the tree.
 
+`InheritedAuth(nodeID)` is the same walk minus step 2: it resolves an
+Inherit placeholder against `AncestorAuths(nodeID)` only, so it reports
+what the node *would* inherit regardless of what it currently has. The
+Auth editors' Inherit preview uses it (a request being switched from
+Bearer to Inherit must show the folder's / root's scheme, not its own
+saved Bearer), and it works for folder node IDs too — the folder settings
+dialog previews what a folder gets from the levels above it.
+
+Folder and collection-root auth are written through `UpdateFolder` /
+`UpdateCollection` (see the folder-settings flow in
+[internal/ui/WORKFLOW.md](../ui/WORKFLOW.md)); nothing in the resolution
+walk changes — the next `EffectiveAuth` / `InheritedAuth` simply sees the
+new container value.
+
 ## Plain-text environment encoding
 
 `ParseEnvVars` / `FormatEnvVars` ([env.go](env.go)) convert between

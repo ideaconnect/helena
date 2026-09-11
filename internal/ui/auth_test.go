@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2/test"
@@ -28,17 +29,17 @@ func newAuthUI(t *testing.T) *MainUI {
 // header name, not a secret).
 func TestAuthSecretFieldsMasked(t *testing.T) {
 	m := newAuthUI(t)
-	if !m.authBearerToken.Password {
+	if !m.authEd.bearerToken.Password {
 		t.Error("Bearer token field is not masked")
 	}
-	if !m.authAPIKeyValue.Password {
+	if !m.authEd.apiKeyValue.Password {
 		t.Error("API-key value field is not masked")
 	}
-	if m.authAPIKeyName.Password {
+	if m.authEd.apiKeyName.Password {
 		t.Error("API-key name field should not be masked (it is a header/query name)")
 	}
 	// Sanity: the pre-existing masked fields stayed masked.
-	if !m.authBasicPassword.Password || !m.authOAuth2ClientSecret.Password {
+	if !m.authEd.basicPassword.Password || !m.authEd.oauth2ClientSecret.Password {
 		t.Error("a previously-masked credential field is no longer masked")
 	}
 }
@@ -50,10 +51,10 @@ func TestAuthTabLoadsBearer(t *testing.T) {
 	m := newAuthUI(t)
 	req := &model.Request{Auth: model.Auth{Type: model.AuthBearer, Bearer: &model.BearerAuth{Token: "xyz"}}}
 	m.loadRequest(req, "0/r0")
-	if got := m.authType.Selected; got != "Bearer Token" {
+	if got := m.authEd.typeSel.Selected; got != "Bearer Token" {
 		t.Errorf("authType.Selected = %q, want Bearer Token", got)
 	}
-	if got := m.authBearerToken.Text; got != "xyz" {
+	if got := m.authEd.bearerToken.Text; got != "xyz" {
 		t.Errorf("token = %q, want xyz", got)
 	}
 }
@@ -66,8 +67,8 @@ func TestAuthTabBasicWriteBack(t *testing.T) {
 	req := &model.Request{Auth: model.Auth{Type: model.AuthBasic}}
 	m.loadRequest(req, "0/r0")
 
-	m.authBasicUsername.OnChanged("alice")
-	m.authBasicPassword.OnChanged("hunter2")
+	m.authEd.basicUsername.OnChanged("alice")
+	m.authEd.basicPassword.OnChanged("hunter2")
 
 	if req.Auth.Basic == nil {
 		t.Fatal("Basic sub-struct should have been allocated")
@@ -84,9 +85,9 @@ func TestAuthTabAPIKeyPlacement(t *testing.T) {
 	req := &model.Request{Auth: model.Auth{Type: model.AuthAPIKey}}
 	m.loadRequest(req, "0/r0")
 
-	m.authAPIKeyName.OnChanged("X-Key")
-	m.authAPIKeyValue.OnChanged("v")
-	m.authAPIKeyPlacement.OnChanged("Query")
+	m.authEd.apiKeyName.OnChanged("X-Key")
+	m.authEd.apiKeyValue.OnChanged("v")
+	m.authEd.apiKeyPlacement.OnChanged("Query")
 	if k := req.Auth.APIKey; k == nil || k.Name != "X-Key" || k.Value != "v" || k.Placement != model.APIKeyQuery {
 		t.Errorf("APIKey = %+v", k)
 	}
@@ -99,7 +100,7 @@ func TestAuthTabTypeChangeUpdatesRequestType(t *testing.T) {
 	m := newAuthUI(t)
 	req := &model.Request{Auth: model.Auth{Type: model.AuthInherit}}
 	m.loadRequest(req, "0/r0")
-	m.authType.OnChanged("Basic Auth")
+	m.authEd.typeSel.OnChanged("Basic Auth")
 	if req.Auth.Type != model.AuthBasic {
 		t.Errorf("Auth.Type = %q, want basic", req.Auth.Type)
 	}
@@ -119,5 +120,34 @@ func TestAuthTabLoadingFlagSuppressesWriteBack(t *testing.T) {
 	// been allocated again or zeroed by the load.
 	if req.Auth.APIKey == nil || req.Auth.APIKey.Name != "K" || req.Auth.APIKey.Value != "V" || req.Auth.APIKey.Placement != model.APIKeyQuery {
 		t.Errorf("APIKey perturbed by load: %+v", req.Auth.APIKey)
+	}
+}
+
+// TestAuthTabInheritPreviewUsesAncestors verifies the Inherit panel previews
+// what the request would inherit (Session.InheritedAuth), not the request's
+// own saved auth — switching a Bearer request to Inherit must show the
+// collection root's scheme, not echo "Bearer" back.
+func TestAuthTabInheritPreviewUsesAncestors(t *testing.T) {
+	m, _, _ := newSettingsUI(t)
+	// Give the folder request its own Basic auth, saved.
+	req, _ := m.sess.Tree().Request("0/f0/r0")
+	req.Auth = model.Auth{Type: model.AuthBasic, Basic: &model.BasicAuth{Username: "u"}}
+	m.openOrActivate("0/f0/r0")
+	if m.authEd.typeSel.Selected != "Basic Auth" {
+		t.Fatalf("loaded type = %q, want Basic Auth", m.authEd.typeSel.Selected)
+	}
+	m.authEd.typeSel.SetSelected("Inherit from parent")
+	if got := m.authEd.inheritLabel.Text; !strings.Contains(got, "Bearer Token") {
+		t.Errorf("inherit preview = %q, want the collection root's Bearer", got)
+	}
+}
+
+// TestAuthTabNoRequestInheritPreview verifies the scratch / no-request case
+// keeps its explanatory line.
+func TestAuthTabNoRequestInheritPreview(t *testing.T) {
+	m := newAuthUI(t)
+	m.loadAuthTab(nil)
+	if got := m.authEd.inheritLabel.Text; !strings.Contains(got, "no request selected") {
+		t.Errorf("inherit preview with no request = %q", got)
 	}
 }

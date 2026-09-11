@@ -102,8 +102,12 @@ NTLM, Bearer, API key (header or query), OAuth 1.0a, OAuth 2.0
 (client-credentials and authorization-code, with PKCE), WS-Security (WSSE),
 or AWS Signature v4. Every scheme's secret fields — passwords, tokens,
 client/consumer secrets, the AWS secret key — are masked in the editor.
-`Inherit` walks up the folder → collection chain. See the
-[Authentication guide](guide/auth.md) for per-scheme details.
+`Inherit` walks up the folder → collection chain. Set a folder's auth from
+the sidebar's **Folder settings** button (folder-tree icon, with the folder
+selected) and the collection root's from **Collection settings** (sliders
+icon); each dialog pairs a **Variables** tab with an **Auth** tab and saves
+both together. See the [Authentication guide](guide/auth.md) for per-scheme
+details.
 
 ## Environments & variables
 

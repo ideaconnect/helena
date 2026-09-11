@@ -12,10 +12,10 @@ func TestAuthTabLoadsWSSE(t *testing.T) {
 	m := newAuthUI(t)
 	req := &model.Request{Auth: model.Auth{Type: model.AuthWSSE, WSSE: &model.WSSEAuth{Username: "bob", Password: "p"}}}
 	m.loadRequest(req, "0/r0")
-	if got := m.authType.Selected; got != "WS-Security" {
+	if got := m.authEd.typeSel.Selected; got != "WS-Security" {
 		t.Errorf("authType.Selected = %q, want WS-Security", got)
 	}
-	if got := m.authWSSEUsername.Text; got != "bob" {
+	if got := m.authEd.wsseUsername.Text; got != "bob" {
 		t.Errorf("username = %q, want bob", got)
 	}
 }
@@ -27,8 +27,8 @@ func TestAuthTabWSSEWriteBack(t *testing.T) {
 	req := &model.Request{Auth: model.Auth{Type: model.AuthWSSE}}
 	m.loadRequest(req, "0/r0")
 
-	m.authWSSEUsername.OnChanged("alice")
-	m.authWSSEPassword.OnChanged("s3cret")
+	m.authEd.wsseUsername.OnChanged("alice")
+	m.authEd.wssePassword.OnChanged("s3cret")
 
 	if req.Auth.WSSE == nil || req.Auth.WSSE.Username != "alice" || req.Auth.WSSE.Password != "s3cret" {
 		t.Errorf("WSSE = %+v, want alice/s3cret", req.Auth.WSSE)

@@ -49,6 +49,10 @@ when displaying or sending requests.
 - `Session.EffectiveAuth(nodeID string) model.Auth` — flatten Inherit for the
   request at `nodeID` by walking the folder → collection chain via
   [internal/auth](../auth/).
+- `Session.InheritedAuth(nodeID string) model.Auth` — the auth the node at
+  `nodeID` would receive from its ancestors alone (ignoring its own value);
+  `AuthNone` when nothing above configures auth. Drives the Auth editors'
+  "Inheriting — effective auth: …" preview.
 - `Session.LocateRequest(dir, requestID string) (string, *model.Request, bool)`
   — find a request by its persistent `Request.ID` within the collection at
   `dir`, returning its current node ID + a live pointer. Scoped to the owning
@@ -92,7 +96,8 @@ when displaying or sending requests.
 - `Session.Resolver() *vars.Resolver` — ordered scopes (global < .env < collection variables < active environment < script overlay) plus the dynamic-variable fallback (`{{$guid}}` etc.). `SnapshotGlobalVars` / `SnapshotActiveDotEnvVars` / `SnapshotActiveCollectionVars` / `SnapshotActiveEnvVars` capture the lower scopes for the Send worker.
 - `Session.ResolverForNode(nodeID string, r *model.Request) *vars.Resolver` — `Resolver` plus the folder-scoped variables (#81) on `nodeID`'s ancestors and the request's own variables (#82), giving the full static chain: global < .env < collection < environment < **folder** < request < script overlay. Empty `nodeID` adds no folder scope; nil request adds no request scope. Used by the URL preview and exporter.
 - `Session.ResolverForRequest(r *model.Request) *vars.Resolver` — `ResolverForNode("", r)`: request scope but no folder scope. A nil request behaves like `Resolver`.
-- `Session.SnapshotAncestorVars(nodeID string) map[string]string` — the merged folder variables (#81) on `nodeID`'s ancestors (inner folders win) for the Send worker. `FolderVariables(nodeID)` / `SetFolderVariables(nodeID, …)` read / persist a folder's variables (used by the sidebar folder-variables editor).
+- `Session.SnapshotAncestorVars(nodeID string) map[string]string` — the merged folder variables (#81) on `nodeID`'s ancestors (inner folders win) for the Send worker. `FolderVariables(nodeID)` / `SetFolderVariables(nodeID, …)` read / persist a folder's variables; `FolderAuth(nodeID)` reads a folder's OWN auth (Inherit when unset).
+- `Session.UpdateFolder(nodeID string, mutate func(*model.Folder)) error` / `Session.UpdateCollection(ci int, mutate func(*model.Collection)) error` — apply an in-place mutation to a folder / a collection root and persist with one write. The sidebar's folder / collection settings dialogs save variables + auth together through these; `SetFolderVariables` is `UpdateFolder` with a one-field mutation. Both reject a non-folder node ID / out-of-range index without calling `mutate`.
 - `Session.GlobalVariables() []model.Variable` / `SetGlobalVariables([]model.Variable) error` — read / persist the app-wide global variables (#83), the lowest static scope shared across every collection; stored in the config. `SnapshotGlobalVars()` copies the enabled set for the Send worker.
 - `Session.SnapshotActiveDotEnvVars() map[string]string` — a copy of the active collection's `.env` variables (#84), parsed from `<collection>/.env` and cached (the cache is dropped on reload).
 - `ParseEnvVars(text string) []model.Variable` — `"key = value"` line text
