@@ -37,6 +37,21 @@
     <binary>helena</binary>
   </provides>
   <releases>
+    <release version="0.9.1" date="2026-09-12" type="stable">
+      <description>
+        <p>
+          The response viewer's soft-wrap toggle is readable while it is on:
+          its glyph is now drawn in the theme's on-accent colour instead of
+          light grey on the green fill, and the viewer toolbar's glyphs follow
+          a runtime light/dark switch. The search glyph no longer rasterizes as
+          a half-filled disc.
+        </p>
+        <p>
+          Under the hood: Go 1.26.8 and a dependency refresh (go-fyne-pretty-view
+          2.7.0, goja, golang.org/x libraries).
+        </p>
+      </description>
+    </release>
     <release version="0.9.0" date="2026-09-12" type="stable">
       <description>
         <p>

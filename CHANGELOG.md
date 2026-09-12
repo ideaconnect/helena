@@ -19,6 +19,8 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-09-12
+
 ### Fixed
 - **The response viewer's wrap toggle is readable while it is on.** With
   wrapping on, the toolbar's wrap button sits on the green primary fill, and
