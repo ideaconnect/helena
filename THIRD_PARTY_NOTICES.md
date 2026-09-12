@@ -48,7 +48,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ## Font Awesome Free
 
 Icon set used across Helena's own UI (`assets/icons/*.svg` — sidebar toolbar,
-editor tabs, the Send button). Icons are licensed under CC BY 4.0; only the SVG
+editor tabs, the Send button) and embedded in go-fyne-pretty-view's
+response-viewer toolbar (its own copies of the glyphs). Icons are licensed under CC BY 4.0; only the SVG
 icons are bundled (not the fonts or code). The icons are unmodified except for
 adding `fill="currentColor"` so they adopt the application theme colour. Full
 text: <https://fontawesome.com/license/free> and
@@ -59,38 +60,6 @@ text: <https://fontawesome.com/license/free> and
 Font Awesome Free by Fonticons, Inc. — https://fontawesome.com
 Copyright 2024 Fonticons, Inc.
 Icons licensed under Creative Commons Attribution 4.0 International (CC BY 4.0).
-```
-
----
-
-## Iconoir
-
-Icon set embedded in go-fyne-pretty-view's response-viewer toolbar (a Helena
-dependency that ships its own iconoir SVGs). Helena's own UI no longer uses
-iconoir directly. <https://iconoir.com>
-
-```
-MIT License
-
-Copyright (c) 2021 Luca Burgio
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
 ```
 
 ---

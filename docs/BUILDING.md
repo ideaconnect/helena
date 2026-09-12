@@ -16,7 +16,7 @@ mandatory (Fyne draws through OpenGL):
 
 | Requirement | Why | Notes |
 | ----------- | --- | ----- |
-| **Go 1.26+** | the language toolchain | The exact version is pinned in [`go.mod`](../go.mod)'s full-patch `go` directive (`go 1.26.7`); `setup-go` and a local `go` both honour it. |
+| **Go 1.26+** | the language toolchain | The exact version is pinned in [`go.mod`](../go.mod)'s full-patch `go` directive (`go 1.26.8`); `setup-go` and a local `go` both honour it. |
 | **A C compiler** | Fyne uses **cgo + OpenGL** | GCC or Clang. Without it the build fails at the first cgo file. |
 | **Git** | to clone the source | Any recent version. |
 | ~2 GB free disk | Go module + build cache | The stripped binary is ~35 MB; the build tree is larger. |
@@ -181,7 +181,7 @@ same bar CI holds. See [TESTING.md](../TESTING.md) for the full test story.
 | `fatal error: wayland-client-core.h: No such file` (Linux) | Install `libwayland-dev` and `libxkbcommon-dev`. Fyne 2.8 builds the Wayland backend by default; `-tags x11` skips it. |
 | `gcc_arm64.S: no such instruction` (Windows/ARM) | Your GCC is x86-64; install llvm-mingw's native aarch64 toolchain and set `CC`/`CXX` (see above). |
 | Colour emoji render as blank boxes | Expected in release builds (`-tags no_emoji`). Build without the tag for colour emoji. |
-| `build Go version lower than targeted` | Your `go` is older than `go.mod`'s `go` directive; install Go 1.26.7+. |
+| `build Go version lower than targeted` | Your `go` is older than `go.mod`'s `go` directive; install Go 1.26.8+. |
 | Binary reports version `dev` | That's a plain `go build`; pass the `-ldflags` above to stamp a version. |
 
 ## Where to go next

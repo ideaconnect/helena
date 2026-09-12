@@ -19,6 +19,32 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+### Fixed
+- **The response viewer's wrap toggle is readable while it is on.** With
+  wrapping on, the toolbar's wrap button sits on the green primary fill, and
+  its glyph was drawn in the theme's light-grey foreground — light on light in
+  the dark theme. `go-fyne-pretty-view` v2.7.0 (its first release without the
+  `-alpha` suffix) draws its toolbar glyphs as themed resources, so Fyne now
+  paints the active toggle in Helena's *foreground-on-primary* (near-black on
+  the dark theme, white on light) and the glyphs follow a runtime light/dark
+  switch. Helena leaves the library's new `IconColor` / `ActiveIconColor`
+  overrides unset on purpose: "follow the theme" is what tracks the switch.
+
+### Security
+- Go toolchain 1.26.7 → 1.26.8 (bug fixes to cgo, the compiler, the runtime,
+  `debug/elf` and `os`; no security content). `govulncheck` is clean.
+
+### Changed
+- Dependency refresh: `goja` to its 2026-09-11 snapshot, `golang.org/x/net`
+  0.58.0 → 0.59.0, `x/text` 0.41.0 → 0.42.0, `x/sys` 0.47.0 → 0.48.0,
+  `x/image` 0.45.0 → 0.46.0, plus indirect bumps (`bild`, `regexp2/v2`,
+  `go-text/typesetting`, `goldmark`, `go-runewidth`, `glfw`, `gherkin`,
+  `messages`, `pprof`). Fyne 2.8.1, `fyne-tooltip` 0.4.0, `kin-openapi`
+  0.149.0 and `godog` 0.16.0 are already current, and every GitHub Actions
+  pin already tracks its latest major. `THIRD_PARTY_NOTICES.md` drops the
+  stale Iconoir entry: the viewer's toolbar has shipped Font Awesome Free
+  glyphs (already credited) since v0.2.0-alpha.
+
 ## [0.9.0] - 2026-09-12
 
 ### Added

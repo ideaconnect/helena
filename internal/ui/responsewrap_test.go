@@ -2,10 +2,13 @@ package ui
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 	ttwidget "github.com/dweymouth/fyne-tooltip/widget"
 	prettyview "github.com/ideaconnect/go-fyne-pretty-view/v2"
@@ -27,12 +30,15 @@ func newWrapUI(t *testing.T, cfgPath string) (*MainUI, *session.Session) {
 
 // findWrapToggle returns the response viewer toolbar's soft-wrap button — the
 // control a user actually clicks — located by its Font Awesome icon resource.
+// Since go-fyne-pretty-view v2.7.0 the glyph is a theme.ThemedResource, whose
+// Name() prefixes the colour role ("foreground_fa-wrap-text.svg"), so match on
+// the suffix.
 func findWrapToggle(t *testing.T, root fyne.CanvasObject) fyne.Tappable {
 	t.Helper()
 	var found fyne.Tappable
 	walkObjects(root, func(o fyne.CanvasObject) {
 		b, ok := o.(*ttwidget.Button)
-		if !ok || b.Icon == nil || b.Icon.Name() != "fa-wrap-text.svg" {
+		if !ok || b.Icon == nil || !strings.HasSuffix(b.Icon.Name(), "fa-wrap-text.svg") {
 			return
 		}
 		if found != nil {
@@ -83,6 +89,68 @@ func TestResponseWrapRestoredFromSession(t *testing.T) {
 	}
 	if btn.Importance != widget.HighImportance {
 		t.Errorf("restored wrap toggle importance = %v, want HighImportance (highlighted)", btn.Importance)
+	}
+}
+
+// TestResponseWrapToggleGlyphContrastsWithFill pins the reason Helena moved to
+// go-fyne-pretty-view v2.7.0: while wrapping is on the toggle sits on the green
+// primary fill, and its glyph must be drawn in Helena's ForegroundOnPrimary
+// (near-black on dark, white on light) — not the light-grey Foreground the old
+// static bake used, which was unreadable on the fill. The toolbar leaves
+// ToolbarConfig.IconColor / ActiveIconColor nil on purpose: a themed glyph is
+// recoloured by widget.Button on a HighImportance button and follows the
+// runtime light/dark switch, which an explicit bake would not.
+func TestResponseWrapToggleGlyphContrastsWithFill(t *testing.T) {
+	cfgPath := filepath.Join(t.TempDir(), "config.yml")
+	m, _ := newWrapUI(t, cfgPath)
+	win := test.NewWindow(m.Root())
+	defer win.Close()
+	win.Resize(fyne.NewSize(1100, 720))
+
+	btn, ok := findWrapToggle(t, m.Root()).(*ttwidget.Button)
+	if !ok {
+		t.Fatal("wrap toggle is not a *ttwidget.Button")
+	}
+	if _, themed := btn.Icon.(fyne.ThemedResource); !themed {
+		t.Fatalf("wrap toggle icon %q is not a fyne.ThemedResource; Fyne only recolours themed icons on a highlighted button", btn.Icon.Name())
+	}
+
+	// The rendered glyph is the canvas.Image inside the button's renderer.
+	glyphRole := func() fyne.ThemeColorName {
+		t.Helper()
+		var role fyne.ThemeColorName
+		for _, o := range test.WidgetRenderer(btn).Objects() {
+			walkObjects(o, func(o fyne.CanvasObject) {
+				img, ok := o.(*canvas.Image)
+				if !ok || img.Resource == nil || !strings.HasSuffix(img.Resource.Name(), "fa-wrap-text.svg") {
+					return
+				}
+				if tr, ok := img.Resource.(fyne.ThemedResource); ok {
+					role = tr.ThemeColorName()
+				}
+			})
+		}
+		if role == "" {
+			t.Fatal("no themed wrap glyph in the button renderer")
+		}
+		return role
+	}
+
+	if got := glyphRole(); got != theme.ColorNameForeground {
+		t.Errorf("wrap-off glyph colour role = %q, want %q", got, theme.ColorNameForeground)
+	}
+	test.Tap(btn)
+	if got := glyphRole(); got != theme.ColorNameForegroundOnPrimary {
+		t.Errorf("wrap-on glyph colour role = %q, want %q", got, theme.ColorNameForegroundOnPrimary)
+	}
+	// And Helena's theme gives that role a real contrast colour in both
+	// variants, so "follow the theme" is not a no-op.
+	for _, v := range []fyne.ThemeVariant{theme.VariantDark, theme.VariantLight} {
+		fg, _ := helenaColor(theme.ColorNameForeground, v)
+		onPrimary, _ := helenaColor(theme.ColorNameForegroundOnPrimary, v)
+		if fg == onPrimary {
+			t.Errorf("variant %v: ForegroundOnPrimary equals Foreground, so the on-fill glyph would not contrast", v)
+		}
 	}
 }
 

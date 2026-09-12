@@ -288,10 +288,11 @@ Before declaring a task done: `gofmt -l .` (must be empty), `go vet ./...`,
   ships ~46 MB after task 7.3 added goja; goja, kin-openapi, and gopher-yaml
   are the only large external deps. Justify any addition. The response Body
   viewer uses `github.com/ideaconnect/go-fyne-pretty-view` (pinned at
-  `v2.6.0-alpha`, same author/org); it adds no new heavy module — its only
+  `v2.7.0`, same author/org); it adds no new heavy module — its only
   non-Fyne need is `golang.org/x/net/html`, already in the tree — but it
-  bumped `golang.org/x/{net,sys,text}` minor versions. It bundles the Iconoir
-  icon set (MIT) for its toolbar; carry that notice if it links. Any version
+  bumped `golang.org/x/{net,sys,text}` minor versions. It bundles Font Awesome
+  Free glyphs (CC BY 4.0) for its toolbar, covered by the Font Awesome entry in
+  `THIRD_PARTY_NOTICES.md`; keep that entry if it links. Any version
   bump of it is a deliberate, tested change.
 - **Bypassing the storage Save pattern** (see invariant 1).
 - **Touching widgets from non-UI goroutines** without `fyne.Do` (see
