@@ -33,8 +33,8 @@ description: Helena's roadmap - shipped tracks, in-progress work, and what's pla
   <li class="tl-item done"><span class="tl-dot"></span>
     <div class="tl-card">
       <div class="tl-head"><h2>Authentication - nine schemes</h2><span class="badge shipped">Shipped</span></div>
-      <p>Basic, Bearer, API Key, OAuth 2.0 (+ PKCE), OAuth 1.0a, WSSE, AWS SigV4, Digest, and NTLM - with secrets externalized out of the committed YAML.</p>
-      <div class="chips"><span class="chip">OAuth 2.0 + PKCE</span><span class="chip">AWS SigV4</span><span class="chip">Digest</span><span class="chip">NTLM</span></div>
+      <p>Basic, Bearer, API Key, OAuth 2.0 (+ PKCE), OAuth 1.0a, WSSE, AWS SigV4, Digest, and NTLM - set on a request, or once on a folder or the collection root and inherited by everything inside - with secrets externalized out of the committed YAML.</p>
+      <div class="chips"><span class="chip">OAuth 2.0 + PKCE</span><span class="chip">AWS SigV4</span><span class="chip">Digest</span><span class="chip">NTLM</span><span class="chip">folder / collection auth</span></div>
     </div>
   </li>
 
