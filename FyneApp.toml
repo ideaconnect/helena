@@ -4,6 +4,6 @@
 [Details]
   Name = "Helena"
   ID = "tech.idct.helena"
-  Version = "0.8.0"
-  Build = 6
+  Version = "0.9.0"
+  Build = 7
   Icon = "assets/app_icon.png"

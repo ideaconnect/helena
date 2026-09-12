@@ -19,6 +19,8 @@ label via [`.github/release.yml`](.github/release.yml).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-12
+
 ### Added
 - **Folder and collection auth.** Auth inheritance finally has something to
   inherit from inside the app: the sidebar's **Folder settings** (folder-tree
