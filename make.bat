@@ -112,6 +112,8 @@ if exist dist rmdir /S /Q dist
 if exist %COVERAGE_PROFILE% del /Q %COVERAGE_PROFILE%
 if exist %COVERAGE_HTML% del /Q %COVERAGE_HTML%
 if exist website\_site rmdir /S /Q website\_site
+if exist website\_dist rmdir /S /Q website\_dist
+if exist website\.wrangler rmdir /S /Q website\.wrangler
 if exist website\.jekyll-cache rmdir /S /Q website\.jekyll-cache
 goto :end
 

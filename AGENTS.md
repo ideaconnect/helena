@@ -48,7 +48,7 @@ Top-level orientation:
 | [examples/](examples/) | Bundled sample collection + smoke test; `sample.go` embeds it (`//go:embed httpbin`) and `WriteSample` materializes it for the in-app Load-sample action. |
 | [assets/](assets/) | `go:embed`-ed app icon. |
 | [FyneApp.toml](FyneApp.toml) | App metadata (Name/ID/Version/Icon) for Fyne's native packaging tools. `ID` must match `cmd/helena`'s `appID` (test-guarded). |
-| [.github/workflows/](.github/workflows/) | Native Linux + Windows + macOS CI (build/test/lint/vuln; release on GitHub Release publish). |
+| [.github/workflows/](.github/workflows/) | Native Linux + Windows + macOS CI (build/test/lint/vuln; release on GitHub Release publish). `website.yml` builds the site + docs and deploys them to the Cloudflare Worker at idct.tech/helena. |
 
 The plan of record is in
 [Asana](https://app.asana.com/1/1214897106264347/project/1215180905395792).

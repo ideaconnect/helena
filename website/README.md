@@ -2,10 +2,11 @@
 
 A self-contained **Jekyll** site for the Helena project - landing page,
 features, a graphical roadmap, examples, and an about page. It lives in this
-subfolder so it can be deployed to GitHub Pages independently of the code.
+subfolder so it can be deployed independently of the code, as a Cloudflare
+Worker serving static assets.
 
 It uses **custom layouts + CSS only** - no gem theme, no plugins - so it builds
-on GitHub Pages' stock Jekyll without extra configuration.
+on stock Jekyll without extra configuration.
 
 ```
 website/
@@ -18,6 +19,7 @@ website/
 ├── examples.md          # workflows + screenshots
 ├── about.md             # about the author
 ├── contact.md           # contact form (Web3Forms)
+├── wrangler.jsonc       # Cloudflare Worker config (routes, assets, 404 handling)
 ├── tools/frame-shot.sh  # dress a screenshot as a window (hero-box art)
 ├── tools/og-card.sh     # compose the 1200x630 social / OpenGraph card
 └── assets/
@@ -52,33 +54,52 @@ generated files stay yours and `make clean` removes them. On Windows use
 > Jekyll directly - `cd website && bundle install && bundle exec jekyll serve
 > --livereload`.
 
-(`baseurl` in `_config.yml` is `"/helena"` because the site deploys as a GitHub
-Pages **project page** under the org's apex domain, at `https://idct.tech/helena/`.
-Local `make website` serves it at `http://localhost:4000/helena/`.)
+(`baseurl` in `_config.yml` is `"/helena"` because the site is served under
+that path of the org's apex domain, at `https://idct.tech/helena/`. Local `make
+website` serves it at `http://localhost:4000/helena/`.)
 
-## Deploy to GitHub Pages
+## Deploy to Cloudflare Workers
 
-Deployment is handled by [`.github/workflows/pages.yml`](../.github/workflows/pages.yml).
-Because a repo has a **single** GitHub Pages site, that one workflow builds and
-publishes *both* public sites into one deployment, served under the org's apex
-domain at **idct.tech/helena**:
+Deployment is handled by [`.github/workflows/website.yml`](../.github/workflows/website.yml),
+which builds *both* public sites into one tree and deploys it as a
+static-assets-only Cloudflare Worker (`helena-website`, configured in
+[`wrangler.jsonc`](wrangler.jsonc)), served at **idct.tech/helena**:
 
 - `/helena/` — this Jekyll marketing site (built with `baseurl: "/helena"`)
 - `/helena/docs/` — the MkDocs reference docs (`docs/` + `mkdocs.yml`)
 
-It builds on every PR (validation) and deploys on push to `main`. The custom
-domain comes from [`CNAME`](CNAME) (copied to the site root by Jekyll).
+It builds on every PR (validation) and deploys on push to `main`.
 
-**One-time setup:**
+The `idct.tech` zone is proxied by Cloudflare. The Worker's routes claim
+`idct.tech/helena` and `idct.tech/helena/*`; the rest of the domain keeps
+reaching its own origin. A route Worker matches the **full request path**
+against its assets, so the build nests under `_dist/helena/` (Jekyll) and
+`_dist/helena/docs/` (MkDocs). `html_handling: auto-trailing-slash` serves the
+pretty URLs and redirects `/helena/features` to `/helena/features/`;
+`not_found_handling: 404-page` answers unknown paths with the nearest
+`404.html` (Jekyll's for the site, MkDocs' own under `/docs/`) and a 404
+status. `workers_dev` and preview URLs are off, so the site has one canonical
+host.
 
-1. **Settings → Pages → Source: GitHub Actions.**
-2. Add a DNS record at the `idct.tech` zone: `helena` **CNAME** →
-   `ideaconnect.github.io.` (subdomain), then confirm the custom domain and
-   enable *Enforce HTTPS* under **Settings → Pages**.
+**Repo secrets** (Settings → Secrets and variables → Actions):
 
-Until DNS resolves, the deploy still succeeds — the site just isn't reachable at
-the domain yet. To preview the built output locally, run `make website-build`
-(Jekyll only) from the repo root; the docs half is a standard `mkdocs build`.
+- `CLOUDFLARE_ACCOUNT_ID` — the account that owns the `idct.tech` zone.
+- `CLOUDFLARE_AUTHENTICATION_TOKEN` — an API token with **Account › Workers
+  Scripts: Edit** and **Zone › Workers Routes: Edit** on `idct.tech`.
+
+To preview the exact deploy tree through the Worker runtime locally (Docker +
+Node 22+), from the repo root:
+
+```bash
+docker run --rm -u $(id -u):$(id -g) -e HOME=/tmp -e BUNDLE_PATH=/site/.bundle \
+  -v "$PWD/website:/site" -w /site ruby:3.3 \
+  sh -c "bundle install && bundle exec jekyll build --baseurl /helena --destination _dist/helena"
+docker run --rm -u $(id -u):$(id -g) -v "$PWD:/docs" squidfunk/mkdocs-material \
+  build --site-dir website/_dist/helena/docs
+cd website && npx wrangler dev    # → http://localhost:8787/helena/
+```
+
+`make clean` removes `_dist/` and wrangler's `.wrangler/` state.
 
 ## Screenshots
 

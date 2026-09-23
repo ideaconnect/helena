@@ -1,8 +1,7 @@
 # Jekyll configuration for the Helena project website (#64).
-# Self-contained: custom layouts + CSS, no gem theme, no plugins - so it builds
-# on GitHub Pages' stock Jekyll. Lives in website/ so it can be deployed later
-# (e.g. a GitHub Action that builds this folder, or by moving it to the Pages
-# source). See website/README.md for deployment.
+# Self-contained: custom layouts + CSS, no gem theme, no plugins. Built and
+# deployed to a Cloudflare Worker by .github/workflows/website.yml; see
+# website/README.md for deployment.
 
 title: Helena
 tagline: A native, lightweight API client
@@ -16,12 +15,10 @@ author: Bartosz Pachołek
 copyright: "IDCT · Bartosz Pachołek"
 author_url: "https://idct.tech"
 
-# Deployed as a GitHub Pages PROJECT page under the ideaconnect org's apex custom
-# domain, so the site lives at https://idct.tech/helena/ — url is the apex and
-# baseurl is the project path. The apex domain is owned by the org's
-# ideaconnect.github.io page repo; this project repo carries NO CNAME (a project
-# CNAME would try to claim the domain at its root and conflict). Internal links
-# use relative_url/absolute_url, so baseurl must stay in sync with the deploy.
+# Served at https://idct.tech/helena/ by a Cloudflare Worker routed on the
+# /helena path (wrangler.jsonc), so url is the apex and baseurl is the path.
+# Internal links use relative_url/absolute_url, so baseurl must stay in sync
+# with the Worker's routes.
 url: "https://idct.tech"
 baseurl: "/helena"
 
@@ -35,7 +32,7 @@ sponsor: "https://github.com/sponsors/ideaconnect"
 coffee: "https://buymeacoffee.com/idct"
 
 # Pretty URLs: each page builds to <name>/index.html so the nav's "/features/",
-# "/contact/", … links resolve (GitHub Pages doesn't map "/x/" to "x.html").
+# "/contact/", … links resolve as directory indexes.
 permalink: pretty
 
 # Built with custom layouts under _layouts/; no remote theme.
@@ -44,6 +41,8 @@ exclude:
   - Gemfile.lock
   - README.md
   - vendor
+  - tools
+  - wrangler.jsonc
 
 # Nav order is defined here and rendered by _layouts/default.html.
 nav:

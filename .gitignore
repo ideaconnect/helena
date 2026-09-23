@@ -22,6 +22,9 @@ coverage.html
 /website/.jekyll-cache/
 /website/.bundle/
 /website/Gemfile.lock
+# Cloudflare Worker deploy tree (Jekyll + MkDocs under helena/) + wrangler state.
+/website/_dist/
+/website/.wrangler/
 
 # OS / editor
 .DS_Store

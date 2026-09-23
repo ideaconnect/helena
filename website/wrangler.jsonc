@@ -1,0 +1,29 @@
+// Cloudflare Worker that serves the public site at https://idct.tech/helena/.
+// Static assets only (no script): .github/workflows/website.yml builds the
+// Jekyll site into _dist/helena/ and the MkDocs docs into _dist/helena/docs/,
+// then runs `wrangler deploy` from this directory.
+//
+// The idct.tech zone is proxied by Cloudflare. These routes claim /helena and
+// everything under it; the rest of the domain keeps reaching its origin. A
+// route Worker sees the full request path and matches it against the assets
+// directory as-is, so the build nests under _dist/helena/ to mirror the path.
+{
+  "name": "helena-website",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./_dist",
+    // Pretty URLs: /helena/features/ -> features/index.html, and /helena/features
+    // redirects to the trailing-slash form (Jekyll `permalink: pretty` + MkDocs).
+    "html_handling": "auto-trailing-slash",
+    // Serve the nearest 404.html up the tree with a 404 status: Jekyll's for
+    // /helena/*, MkDocs' own for /helena/docs/*.
+    "not_found_handling": "404-page"
+  },
+  "routes": [
+    { "pattern": "idct.tech/helena", "zone_name": "idct.tech" },
+    { "pattern": "idct.tech/helena/*", "zone_name": "idct.tech" }
+  ],
+  // One canonical host: no *.workers.dev copy of the site, no preview URLs.
+  "workers_dev": false,
+  "preview_urls": false
+}

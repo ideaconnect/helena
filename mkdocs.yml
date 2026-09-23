@@ -9,10 +9,11 @@ edit_uri: edit/main/docs/
 copyright: Copyright &copy; Bartosz Pachołek / ideaconnect
 
 # Documentation lives in docs/. This config turns the existing guides plus the
-# per-feature pages into a searchable Material site, deployed to GitHub Pages by
-# .github/workflows/docs.yml. MkDocs Material was chosen as the de-facto standard
-# for developer-tool docs (config + Markdown, no changes to the Go app); swap the
-# theme here if you prefer another generator.
+# per-feature pages into a searchable Material site, served at /helena/docs/ by
+# the website's Cloudflare Worker (.github/workflows/website.yml). MkDocs
+# Material was chosen as the de-facto standard for developer-tool docs (config +
+# Markdown, no changes to the Go app); swap the theme here if you prefer another
+# generator.
 
 theme:
   name: material

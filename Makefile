@@ -160,4 +160,4 @@ tidy:
 	go mod tidy
 
 clean:
-	rm -rf bin dist $(COVERAGE_PROFILE) $(COVERAGE_HTML) $(WEBSITE_DIR)/_site $(WEBSITE_DIR)/.jekyll-cache
+	rm -rf bin dist $(COVERAGE_PROFILE) $(COVERAGE_HTML) $(WEBSITE_DIR)/_site $(WEBSITE_DIR)/_dist $(WEBSITE_DIR)/.wrangler $(WEBSITE_DIR)/.jekyll-cache
