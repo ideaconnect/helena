@@ -3,7 +3,7 @@ module github.com/idct/helena
 go 1.26.8
 
 require (
-	fyne.io/fyne/v2 v2.8.1
+	fyne.io/fyne/v2 v2.8.2
 	github.com/cucumber/godog v0.16.0
 	github.com/dop251/goja v0.0.0-20260911104922-fabc3b8078ad
 	github.com/dweymouth/fyne-tooltip v0.4.0
@@ -26,7 +26,7 @@ require (
 	github.com/fyne-io/gl-js v0.2.1-0.20260315212741-029c47fd27e8 // indirect
 	github.com/fyne-io/glfw-js v0.4.0 // indirect
 	github.com/fyne-io/image v0.1.1 // indirect
-	github.com/fyne-io/oksvg v0.2.0 // indirect
+	github.com/fyne-io/oksvg v0.2.1-0.20260918172519-a9af55fa95d9 // indirect
 	github.com/go-gl/gl v0.0.0-20260331235117-4566fea9a276 // indirect
 	github.com/go-gl/glfw/v3.4/glfw v0.1.0-pre.2 // indirect
 	github.com/go-openapi/jsonpointer v0.24.0 // indirect
