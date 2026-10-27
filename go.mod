@@ -7,7 +7,7 @@ require (
 	github.com/cucumber/godog v0.16.0
 	github.com/dop251/goja v0.0.0-20260911104922-fabc3b8078ad
 	github.com/dweymouth/fyne-tooltip v0.4.0
-	github.com/getkin/kin-openapi v0.149.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/ideaconnect/go-fyne-pretty-view/v2 v2.7.0
 	gopkg.in/yaml.v3 v3.0.1
 )
